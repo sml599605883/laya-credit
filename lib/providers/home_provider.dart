@@ -14,8 +14,10 @@ class HomeDataNotifier extends AsyncNotifier<HomeData> {
   Future<HomeData> build() => _fetch();
 
   /// 下拉刷新 / 从后台回到前台时重新拉取。
+  ///
+  /// 不切 Loading 态：刷新期间页面继续展示上一次的数据（下拉转圈由
+  /// `RefreshIndicator` 负责），否则额度头图会整块闪成加载态再跳回来。
   Future<void> refresh() async {
-    state = const AsyncLoading();
     state = await AsyncValue.guard(_fetch);
   }
 

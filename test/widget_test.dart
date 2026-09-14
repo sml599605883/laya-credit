@@ -192,6 +192,45 @@ void main() {
     expect(find.text('\u20b150,000'), findsOneWidget);
   });
 
+  testWidgets('首页额度头图渲染后端下发的产品、额度、期限与申请入口', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banner: null,
+          orders: [],
+          notices: [],
+          product: HomeProductCard(
+            productName: 'Pera Cash',
+            productLogo: '',
+            buttonText: 'Apply Now',
+            amountRange: '\u20b160,000',
+            amountRangeDes: 'Available up to',
+            termInfo: '180 Days',
+            termInfoDes: 'Loan terms',
+            loanRate: '\u2264 0.5% Day',
+            loanRateDes: 'Interest rate',
+            certifyFinished: false,
+            account: '',
+            accountText: '',
+            progressText: '',
+            steps: [],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Pera Cash'), findsOneWidget);
+    expect(find.text('\u20b160,000'), findsOneWidget);
+    expect(find.text('Available up to'), findsOneWidget);
+    expect(find.text('180 Days'), findsOneWidget);
+    expect(find.text('\u2264 0.5% Day'), findsOneWidget);
+    expect(find.text('Apply Now'), findsOneWidget);
+    expect(find.text('Confirm your loan\uFF0CCash hits fast.'), findsOneWidget);
+    // 申请入口在额度卡里，不再额外渲染兜底按钮。
+    expect(find.byKey(const Key('home-apply-button')), findsOneWidget);
+  });
+
   testWidgets('首页接口失败时展示错误态而不是闪退', (tester) async {
     await _pumpApp(
       tester,
@@ -210,7 +249,7 @@ void main() {
   testWidgets('未登录时点击受保护的 Tab 会跳转登录页', (tester) async {
     await _pumpApp(tester, repository: _StubAppRepository());
 
-    await tester.tap(find.text('Mine'));
+    await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
     expect(
@@ -223,7 +262,7 @@ void main() {
   testWidgets('未登录时统计 Tab 同样需要登录', (tester) async {
     await _pumpApp(tester, repository: _StubAppRepository());
 
-    await tester.tap(find.text('Stats'));
+    await tester.tap(find.byKey(const Key('tab-stats')));
     await tester.pumpAndSettle();
 
     expect(
@@ -235,7 +274,7 @@ void main() {
   testWidgets('登录页在未填手机号时禁用获取验证码与提交', (tester) async {
     await _pumpApp(tester, repository: _StubAppRepository());
 
-    await tester.tap(find.text('Mine'));
+    await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
     final sendCode = tester.widget<OutlinedButton>(
@@ -274,7 +313,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Mine'));
+    await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
     expect(find.text('9171234567'), findsOneWidget);

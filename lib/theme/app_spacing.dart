@@ -22,7 +22,13 @@ abstract final class AppSpacing {
   static const double pageHorizontal = 16;
 
   /// 圆角。
+  /// 取值来自蓝湖稿标注：2（产品图标）/ 4（额度条）/ 8 / 12（运营位）/
+  /// 16 / 20（胶囊按钮）/ 24。
+  static const double radiusXxs = 2;
+  static const double radiusXs = 4;
   static const double radiusSm = 8;
+  static const double radiusBanner = 12;
   static const double radiusMd = 16;
+  static const double radiusPill = 20;
   static const double radiusLg = 24;
 }

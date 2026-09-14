@@ -8,6 +8,7 @@ import 'pages/home_page.dart';
 import 'pages/mine_page.dart';
 import 'pages/stats_page.dart';
 import 'providers/session_provider.dart';
+import 'theme/theme.dart';
 import 'widgets/tab_bar/app_tab_bar.dart';
 
 /// 底部 Tab 容器（对应路由 `AppRoutes.root`）。
@@ -89,6 +90,8 @@ class _RootTabPageState extends ConsumerState<RootTabPage> {
     });
 
     return Scaffold(
+      // 底部导航只留出胶囊区域，其余底色与各 Tab 页面一致（设计稿 02-01 / 07-01）。
+      backgroundColor: AppColors.surfaceMint,
       body: IndexedStack(
         index: _currentIndex,
         children: [
