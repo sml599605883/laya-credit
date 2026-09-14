@@ -90,8 +90,11 @@ class _RootTabPageState extends ConsumerState<RootTabPage> {
     });
 
     return Scaffold(
-      // 底部导航只留出胶囊区域，其余底色与各 Tab 页面一致（设计稿 02-01 / 07-01）。
+      // 底色与各 Tab 页面一致（设计稿 02-01 / 07-01）。
       backgroundColor: AppColors.surfaceMint,
+      // 底部导航是浮层：页面内容铺到屏幕底部、从胶囊下方穿过，
+      // 各页自己用 `AppTabBar.overlapHeight` 预留底部内边距。
+      extendBody: true,
       body: IndexedStack(
         index: _currentIndex,
         children: [

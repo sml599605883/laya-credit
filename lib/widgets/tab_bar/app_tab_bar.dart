@@ -26,18 +26,32 @@ class AppTabBar extends StatelessWidget {
   /// 胶囊底边与安全区之间的间距。
   static const _bottomGap = 24.0;
 
+  /// 悬浮导航会盖住的高度：胶囊 + 胶囊与安全区之间的间距。
+  ///
+  /// 根 Scaffold 用 `extendBody: true`，页面内容一直铺到屏幕底部、从胶囊下方穿过，
+  /// 因此**每个 Tab 页的滚动容器都要把这个高度加到自己的底部内边距上**，
+  /// 否则最后一条内容会藏在胶囊后面滚不出来。
+  ///
+  /// 安全区高度取 `View.viewPadding`（物理像素换算成逻辑像素）而不是
+  /// `MediaQuery.viewPadding`：`extendBody` 下 Scaffold 会把 body 的底部内边距抹成 0，
+  /// 用 MediaQuery 会少算一个安全区高度。
+  static double overlapHeight(BuildContext context) {
+    final view = View.of(context);
+    final safeBottom = view.viewPadding.bottom / view.devicePixelRatio;
+    return AppLayout.of(context).px(_pillHeight + _bottomGap) + safeBottom;
+  }
+
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return SizedBox(
       key: const Key('app-tab-bar'),
-      // 只保留胶囊 + 下间距所需的高度，其余页面内容照常滚动到这条线以上。
-      height: layout.px(_pillHeight + _bottomGap) + bottomInset,
+      height: overlapHeight(context),
       child: Align(
         alignment: Alignment.topCenter,
         child: Container(
+          key: const Key('app-tab-bar-pill'),
           width: layout.px(_pillWidth),
           height: layout.px(_pillHeight),
           padding: layout.edgeInsets(left: _pillPadding, right: _pillPadding),

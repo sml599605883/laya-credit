@@ -10,6 +10,7 @@ import '../providers/personal_center_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/remote_image.dart';
+import '../widgets/tab_bar/app_tab_bar.dart';
 import '../widgets/state_views.dart';
 
 /// 个人中心（对应蓝湖稿 07-01）。
@@ -37,10 +38,10 @@ class MinePage extends ConsumerWidget {
           onRefresh: () => ref.read(personalCenterProvider.notifier).refresh(),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: layout.edgeInsets(
-              top: AppSpacing.xs,
-              bottom: AppSpacing.xl,
-            ),
+            padding: layout
+                .edgeInsets(top: AppSpacing.xs, bottom: AppSpacing.xl)
+                // 悬浮导航是浮层，让出它的高度，最后一条内容才能滚到胶囊上方。
+                .add(EdgeInsets.only(bottom: AppTabBar.overlapHeight(context))),
             children: [
               _ProfileHeader(
                 layout: layout,

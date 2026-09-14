@@ -15,9 +15,11 @@ import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/personal_center_data.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/main.dart';
+import 'package:laya_credit/pages/home_page.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
 import 'package:laya_credit/widgets/state_views.dart';
+import 'package:laya_credit/widgets/tab_bar/app_tab_bar.dart';
 
 /// 用桩仓库替掉真实网络请求，让页面测试可预期。
 /// HttpClient 只作为占位传入，桩方法不会真的发请求。
@@ -149,6 +151,56 @@ void main() {
 
     expect(find.text('Laya Credit'), findsOneWidget);
     expect(find.byKey(const Key('app-tab-bar')), findsOneWidget);
+  });
+
+  testWidgets('悬浮底部导航不遮挡首页内容', (tester) async {
+    const safeBottom = 34.0;
+    // 真机底部安全区（刘海屏 34pt）：底栏在安全区之上再让出胶囊的高度。
+    tester.view.padding = const FakeViewPadding(bottom: safeBottom * 3);
+    tester.view.viewPadding = const FakeViewPadding(bottom: safeBottom * 3);
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    final bar = find.byKey(const Key('app-tab-bar'));
+    final barRect = tester.getRect(bar);
+    final pillRect = tester.getRect(find.byKey(const Key('app-tab-bar-pill')));
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+    // 底栏自身高度就是页面要避让的遮挡高度（胶囊 + 下间距 + 安全区），
+    // 各 Tab 页照着这个值预留底部内边距，两边必须一致。
+    expect(
+      barRect.height,
+      moreOrLessEquals(AppTabBar.overlapHeight(tester.element(bar))),
+    );
+    expect(barRect.height, greaterThan(pillRect.height + safeBottom));
+    expect(pillRect.top, moreOrLessEquals(barRect.top));
+
+    // 内容铺到屏幕底部（extendBody），从胶囊下方穿过，而不是被截在胶囊顶边。
+    final listRect = tester.getRect(
+      find.descendant(
+        of: find.byType(HomePage),
+        matching: find.byType(ListView),
+      ),
+    );
+    expect(listRect.bottom, moreOrLessEquals(screenHeight));
+
+    // 滚到底后最后一条内容停在胶囊上方，不会被永久遮住。
+    final position = tester
+        .state<ScrollableState>(
+          find.descendant(
+            of: find.byType(HomePage),
+            matching: find.byType(Scrollable),
+          ),
+        )
+        .position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    final hint = find.text(
+      'Check your limit and submit an application in minutes.',
+    );
+    expect(tester.getRect(hint).bottom, lessThanOrEqualTo(pillRect.top));
   });
 
   testWidgets('首页无进行中订单时展示空态与申请入口', (tester) async {

@@ -10,6 +10,7 @@ import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/remote_image.dart';
+import '../widgets/tab_bar/app_tab_bar.dart';
 import '../widgets/state_views.dart';
 
 /// 额度卡底部的橙色提示文案（蓝湖稿 `02-01 - 首页-默认` / `text-wrapper_4`）。
@@ -53,12 +54,17 @@ class HomePage extends ConsumerWidget {
               notices: homeAsync.value?.notices ?? const [],
             ),
             Padding(
-              padding: layout.edgeInsets(
-                left: AppSpacing.pageHorizontal,
-                top: AppSpacing.sm,
-                right: AppSpacing.pageHorizontal,
-                bottom: AppSpacing.xl,
-              ),
+              padding: layout
+                  .edgeInsets(
+                    left: AppSpacing.pageHorizontal,
+                    top: AppSpacing.sm,
+                    right: AppSpacing.pageHorizontal,
+                    bottom: AppSpacing.xl,
+                  )
+                  // 悬浮导航是浮层，让出它的高度，最后一条内容才能滚到胶囊上方。
+                  .add(
+                    EdgeInsets.only(bottom: AppTabBar.overlapHeight(context)),
+                  ),
               child: homeAsync.when(
                 loading: () => SizedBox(
                   height: layout.px(160),
