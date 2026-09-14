@@ -6,7 +6,9 @@ import 'package:laya_credit/core/device/device_params.dart';
 import 'package:laya_credit/core/network/api_endpoints.dart';
 import 'package:laya_credit/core/network/api_exception.dart';
 import 'package:laya_credit/core/network/api_fields.dart';
+import 'package:laya_credit/core/network/api_protocol.dart';
 import 'package:laya_credit/core/network/api_response.dart';
+import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/home_data.dart';
@@ -311,6 +313,28 @@ void main() {
     expect(order.productLogo, 'https://cdn.example.com/logo.png');
     expect(order.displayAmount, '\u20b150,000');
     expect(order.status, HomeOrderCardStatus.toRepay);
+  });
+
+  test('加签覆盖的参数与实际下发的公共参数完全一致', () {
+    final common = CommonParams.create(
+      deviceId: 'device',
+      market: 'market',
+      appVersion: '1.0.0',
+      deviceName: 'iPhone 16 Pro',
+      osVersion: '18.2',
+      advertisingId: 'device',
+    );
+    final signInput = CommonParams.signable(common, '/outsulk/connectedly');
+
+    // 后端是拿收到的参数重算签名的：多签一个没下发的字段（曾经 gruelled
+    // 只在签名里出现）会被判成 code 400。
+    final signedKeys = signInput.keys.toSet()
+      ..remove(ApiProtocol.signaturePath);
+    expect(signedKeys, common.keys.toSet());
+    expect(common.containsKey(ApiProtocol.clientType), isTrue);
+    // stith 与签名本身不参与签名。
+    expect(signInput.containsKey(ApiProtocol.obfuscation), isFalse);
+    expect(signInput.containsKey(ApiProtocol.signature), isFalse);
   });
 
   test('banner 点击上报带的是文档字段 geheimrat', () async {

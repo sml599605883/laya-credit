@@ -82,7 +82,21 @@ lib/
 ### 6. 接口协议（已按接口文档核对）
 
 接口文档项目为蓝湖 `ph_laya_credit_ios`（`.codex/project.toml` 中的 `API_PREFIX`），
-通过已配置的 `api-doc` MCP 工具读取。报文协议已逐项核对，映射集中在下面几个文件：
+通过已配置的 `api-doc` MCP 工具读取。
+
+环境地址（在 `lib/core/config/api_environment.dart`）：
+
+| 环境 | 地址 |
+| --- | --- |
+| 接口（测试） | `http://8.220.190.152/whole/`（必须以 `/` 结尾） |
+| H5（测试） | `http://8.220.190.152` |
+
+⚠️ 测试环境是「IP + 明文 HTTP」，该地址没有 HTTPS 监听。iOS 模拟器实测 ATS 放行了
+明文 IP 请求，**但没有做任何 ATS 例外配置**；如果后续换到真机出现
+`App Transport Security policy requires the use of a secure connection`，
+说明该机器需要单独放行，届时优先找后端要 HTTPS 域名，而不是加 `NSAllowsArbitraryLoads`。
+
+报文协议已逐项核对，映射集中在下面几个文件：
 
 | 内容 | 位置 |
 | --- | --- |
@@ -94,8 +108,11 @@ lib/
 关键规则（改网络层之前先确认）：
 
 - 公共参数以 **URL 参数**方式传递；POST 的业务参数走 form body，公共参数与签名仍在 query。
-- 加签：`clientType(gruelled=ios)` + 公参 + 请求路径（`tarnhelm`），按参数名升序拼成 `key+value`，
-  再用 `verifySecretKey` 做 HMAC-SHA256。**公共混淆字段 `stith` 与签名本身不参与计算**；校验失败返回 `code 400`。
+- 加签：公参 + 请求路径（`tarnhelm`），按参数名升序拼成 `key+value`，再用 `verifySecretKey` 做
+  HMAC-SHA256（`RequestSigner`）。**公共混淆字段 `stith` 与签名本身不参与计算**；校验失败返回 `code 400`。
+- **签名覆盖的参数必须与实际下发的参数完全一致**（测试环境实测结论）：后端是拿收到的参数重算签名的，
+  多签一个没下发的字段会被判成 `code 400`。曾经 `gruelled` 只出现在签名里、不随请求下发，导致首页一直
+  400；现在按文档的加签示例「照发照签」。新增公共参数时务必同步两处，测试里已有对应的守门用例。
 - 响应固定三段：`crucians`(code) / `norseled`(message) / `connectedly`(data)；`0` 成功、`-2` 未登录。
 - 混淆字段每次请求随机生成，不参与签名，见 `lib/core/network/obfuscation_helper.dart`。
 - 后端字段名是混淆串，**写错不会报错、只会静默读到 `null`**：新增字段一律先查文档
@@ -105,13 +122,14 @@ lib/
 
 ## ⚠️ 待接入 / 待确认（下一步必做）
 
-1. **`apiBase` 仍是占位值（唯一阻塞联调项）**：文档「测试环境地址」一栏为空，需向后端要测试/生产域名后填入
-   `lib/core/config/api_environment.dart`。签名密钥与渠道标识已按文档填好，无需再确认。
-   QA 可用 `runtimeApiBaseProvider` 在运行时覆盖地址，不必重新打包。
+1. **测试环境已联调通过**：首页已在模拟器上拉到真实数据（banner + 空态），
+   签名（GET / POST）、`-2` 未登录、`400` 签名失败三条链路都实测过。
+   还缺**生产环境地址**，拿到后替换 `ApiEnvironment.apiBase` 即可。
+   QA 可用 `runtimeApiBaseProvider` 在运行时切环境，不必重新打包。
 2. **首页顶部 `orchel` 未接入**：文档首页响应根节点还有一组 `orchel`（`marantas` 图标 + `timeling` 跳转），
    与 `kneeing` 里的 `BANNER` 模块不是同一个东西，需要设计确认它在首页的位置。
-3. **已接入但未联调**：短信验证码 / 渠道查询 / 登录 / 退出登录 / 首页 / 个人中心 / banner 点击上报
-   的请求已按文档实现（`AuthRepository`、`AppRepository`），等 `apiBase` 到位后即可联调。
+3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
+   尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：认证项、订单、上报、H5 相关接口尚未落地。
 5. **页面视觉待补齐**：现有设计切图不完整（只有首页、首页空态、个人中心的部分元素），页面目前是结构骨架 + 真实切图，未做像素级还原。
 6. **底部导航的三段式（Home / Stats / Mine）** 依据切图推断得出，标签文案与 Stats 页定位需与设计确认。
