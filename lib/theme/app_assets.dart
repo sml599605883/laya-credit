@@ -17,21 +17,33 @@ abstract final class AppAssets {
   /// 授信进度卡：进度槽上的阶段金币（已到达阶段用原图，未到达阶段去色）。
   static const homeProgressCoin = 'assets/home/home_progress_coin.png';
 
-  // 个人中心
-  static const mineMessage = 'assets/mine/mine_message.png';
+  // 个人中心（蓝湖稿 `07-01 - 个人中心`）
+  /// 顶栏头像（设计稿 `label_1`，48x48）。圆角 8 与 1pt 白描边由代码补。
   static const mineAvatar = 'assets/mine/mine_avatar.png';
+
+  /// 订单入口整卡底图（设计稿 `section_2`，319x95）：
+  /// 圆角 12/12/0/0 + `rgba(13,72,80)` → `rgba(36,113,52)` 的横向渐变都在这张切图里。
   static const mineOrderCard = 'assets/mine/mine_order_card.png';
+
+  /// 订单入口卡片底部的薄荷色「肩线」（设计稿 `image_2`，375x28）：
+  /// 薄荷色斜切块 + 卡片背后那层 `rgba(51,65,65)` 深色衬底都在这一张切图里。
+  /// 顶边被订单卡压住 16pt，只露出卡片下方 12pt。
+  static const mineOrderCardShoulder = 'assets/mine/order_card_shoulder.png';
+
+  /// 订单入口图标（设计稿 `label_3`，35x35，纯白，直接压在渐变卡上）。
   static const orderAll = 'assets/mine/order_all.png';
   static const orderOutstanding = 'assets/mine/order_outstanding.png';
+  static const orderOverdue = 'assets/mine/order_overdue.png';
   static const orderSettled = 'assets/mine/order_settled.png';
+
+  /// 服务入口图标（设计稿 20x20；颜色是切图自带的 `rgba(102,102,102)`，不要再着色）。
   static const serviceCustomer = 'assets/mine/service_customer.png';
-  static const serviceAbout = 'assets/mine/service_about.png';
+  static const serviceWebsite = 'assets/mine/service_website.png';
+  static const serviceAppVersion = 'assets/mine/service_app_version.png';
   static const servicePrivacy = 'assets/mine/service_privacy.png';
-  static const serviceHelp = 'assets/mine/service_help.png';
-  static const serviceSettings = 'assets/mine/service_settings.png';
+  static const serviceAccount = 'assets/mine/service_account.png';
 
   // 底部导航
-  static const tabBarBackground = 'assets/navigation/tab_bar_background.png';
   static const tabHomeActive = 'assets/navigation/tab_home_active.png';
   static const tabHomeInactive = 'assets/navigation/tab_home_inactive.png';
   static const tabStatsActive = 'assets/navigation/tab_stats_active.png';

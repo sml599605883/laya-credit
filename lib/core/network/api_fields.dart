@@ -18,11 +18,6 @@ abstract final class ApiFields {
   static const channelVoice = 'agatize';
   static const channelViber = 'gaile';
 
-  // ---------- 个人中心 ----------
-  static const serviceList = 'metamitosis';
-  static const ifRedPoint = 'imtiaz';
-  static const redPointId = 'gaze';
-
   // ---------- 首页 ----------
   static const homeKneeing = 'kneeing';
   static const homeType = 'liquidators';
@@ -34,11 +29,7 @@ abstract final class ApiFields {
   // ---------- 卡片元素 ----------
   static const itemId = 'cussedly';
   static const itemTitle = 'upbear';
-  static const itemKey = 'lozenged';
-  static const iconUrl = 'marantas';
-  static const linkUrl = 'timeling';
   static const jumpUrl = 'superidealness';
-  static const isH5 = 'laparohysterectomy';
   static const imgUrl = 'avern';
 
   // ---------- 产品大卡 ----------
@@ -84,6 +75,5 @@ abstract final class ApiFields {
   static const obfuscateLogout2 = 'carline';
   static const obfuscateHome1 = 'inchoacy';
   static const obfuscateHome2 = 'trifanious';
-  static const obfuscatePersonalCenter = 'doulocracy';
   static const obfuscateBannerClick = 'callista';
 }

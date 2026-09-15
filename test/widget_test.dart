@@ -14,13 +14,13 @@ import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/login_result.dart';
 import 'package:laya_credit/data/models/sms_channel_options.dart';
-import 'package:laya_credit/data/models/personal_center_data.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/data/repositories/auth_repository.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/pages/home_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
+import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
 import 'package:laya_credit/widgets/state_views.dart';
@@ -29,11 +29,9 @@ import 'package:laya_credit/widgets/tab_bar/app_tab_bar.dart';
 /// 用桩仓库替掉真实网络请求，让页面测试可预期。
 /// HttpClient 只作为占位传入，桩方法不会真的发请求。
 class _StubAppRepository extends AppRepository {
-  _StubAppRepository({this.home, this.personalCenter, this.failure})
-    : super(_placeholderClient());
+  _StubAppRepository({this.home, this.failure}) : super(_placeholderClient());
 
   final HomeData? home;
-  final PersonalCenterData? personalCenter;
   final Object? failure;
 
   @override
@@ -45,22 +43,6 @@ class _StubAppRepository extends AppRepository {
       data:
           home ??
           const HomeData(banner: null, product: null, orders: [], notices: []),
-    );
-  }
-
-  @override
-  Future<ApiResponse<PersonalCenterData>> getPersonalCenter() async {
-    if (failure case final error?) throw error;
-    return ApiResponse(
-      code: 0,
-      message: 'success',
-      data:
-          personalCenter ??
-          const PersonalCenterData(
-            services: [],
-            hasRedPoint: false,
-            redPointId: '',
-          ),
     );
   }
 }
@@ -270,6 +252,18 @@ Future<void> _pumpApp(
   // override 落在子容器上，父容器里的 session 与仓库对不上，测试结论会失真。
   final container = ProviderContainer(
     overrides: [
+      // 测试进程里没有 device_info_plus / package_info_plus 的原生实现，
+      // 真跑 DeviceParamsLoader 会一直等插件回调、挂到 8 秒超时后留下未完成的定时器。
+      // 直接给一份固定设备信息，顺带让「APP Version」这类展示变得可断言。
+      deviceParamsProvider.overrideWith(
+        (ref) async => const DeviceParams(
+          deviceId: 'test-device',
+          appVersion: '1.0.0',
+          modelName: 'iPhone',
+          systemVersion: '18.2',
+          advertisingId: '',
+        ),
+      ),
       if (repository != null)
         appRepositoryProvider.overrideWith((ref) async => repository),
       if (authRepository != null)
@@ -822,38 +816,81 @@ void main() {
     );
   });
 
-  testWidgets('登录后个人中心展示手机号、服务入口与退出按钮', (tester) async {
+  testWidgets('登录后个人中心按蓝湖稿 07-01 展示头图与两组入口', (tester) async {
     await _pumpApp(
       tester,
       setUp: (container) => container
           .read(userSessionProvider.notifier)
           .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
-      repository: _StubAppRepository(
-        personalCenter: const PersonalCenterData(
-          services: [
-            ServiceEntry(
-              id: '15',
-              title: 'Layanan Online',
-              key: 'customer_service_center',
-              iconUrl: '',
-              linkUrl: '',
-              jumpUrl: '',
-              isH5: true,
-            ),
-          ],
-          hasRedPoint: true,
-          redPointId: '1394',
-        ),
-      ),
+      repository: _StubAppRepository(),
     );
 
     await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
-    expect(find.text('9171234567'), findsOneWidget);
-    expect(find.text('To repay'), findsOneWidget);
-    expect(find.text('Layanan Online'), findsOneWidget);
-    expect(find.byKey(const Key('mine-logout-button')), findsOneWidget);
+    // 头图：标题 + 手机号脱敏（设计稿 `962 **** 1300`）。
+    expect(find.text('Mine'), findsOneWidget);
+    expect(find.text('917 **** 4567'), findsOneWidget);
+
+    // 订单入口四个筛选项，顺序与设计稿 `list_3` 一致。
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Outstanding'), findsOneWidget);
+    expect(find.text('Overdue'), findsOneWidget);
+    expect(find.text('Settled'), findsOneWidget);
+
+    // 两组入口都是客户端固定内容，不依赖后端下发。
+    expect(find.text('Customer Service'), findsOneWidget);
+    expect(find.text('Smart customer service'), findsOneWidget);
+    expect(find.text('About Us'), findsOneWidget);
+    expect(find.text('Website'), findsOneWidget);
+    expect(find.text('APP Version'), findsOneWidget);
+    expect(find.text('Privacy Agreement'), findsOneWidget);
+    expect(find.text('Account'), findsOneWidget);
+
+    // 订单卡底部那块薄荷色「肩线」是设计稿 `image_2` 的切图，别退回手画。
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName ==
+                AppAssets.mineOrderCardShoulder,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('个人中心 Account 行弹出设计稿里的退出面板', (tester) async {
+    // 设计稿的面板画到 812pt 底边，没有留手势条的位置，真机上必须自己让开。
+    const safeBottom = 34.0;
+    tester.view.padding = const FakeViewPadding(bottom: safeBottom * 3);
+    tester.view.viewPadding = const FakeViewPadding(bottom: safeBottom * 3);
+
+    await _pumpApp(
+      tester,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+      repository: _StubAppRepository(),
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+
+    // 设计稿 `07-01 - 个人中心-退出` 的三个行动项。
+    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Delete Account'), findsOneWidget);
+    expect(find.text('Quit'), findsOneWidget);
+
+    // 面板背景铺到底，但最后一行要整个待在安全区之上。
+    final sheet = tester.getRect(find.byType(BottomSheet));
+    expect(
+      sheet.bottom - tester.getRect(find.text('Quit')).bottom,
+      greaterThanOrEqualTo(safeBottom),
+    );
   });
 
   // ---------- 接口文档字段契约 ----------

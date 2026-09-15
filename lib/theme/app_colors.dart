@@ -89,6 +89,32 @@ abstract final class AppColors {
   /// 未到达阶段的金额文字色。
   static const creditProgressAmount = Color(0xFF333333);
 
+  // ---------- 个人中心（蓝湖稿 `07-01 - 个人中心`） ----------
+
+  /// 个人中心顶部深色头图底色（设计稿 `box_1`）。
+  static const mineHeader = Color(0xFF0B2928);
+
+  /// 分组标题（Customer Service / About Us，设计稿 `text_4` / `text_5`）。
+  static const sectionTitle = Color(0xFF333333);
+
+  /// 列表项主文案（设计稿 `text-group_3/4/6`）。
+  static const listItemTitle = Color(0xFF080B15);
+
+  /// 列表项右侧说明文案（官网域名 / 版本号，设计稿 `text-group_5` / `text_6`）。
+  static const listItemValue = Color(0xFF5A5A5A);
+
+  /// 「Account」底部操作面板的分隔线（设计稿 `07-01 - 个人中心-退出`）。
+  static const actionSheetDivider = Color(0xFFF1F1F2);
+
+  /// 「Account」底部操作面板里分组之间的间隔带。
+  static const actionSheetGap = Color(0xFFF4F4F4);
+
+  /// 操作面板主行动文案（Log out / Delete Account）。
+  static const actionSheetText = Color(0xFF031A03);
+
+  /// 操作面板次要行动文案（Quit）。
+  static const actionSheetTextSecondary = Color(0xFF5A5A5A);
+
   // ---------- 登录页（蓝湖稿 `01-02 - 登录`） ----------
 
   /// 卡片内字段标题文字色（Please enter mobile number / Verify with SMS Code）。

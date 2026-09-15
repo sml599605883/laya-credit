@@ -4,9 +4,8 @@ import '../../core/network/api_response.dart';
 import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
 import '../models/home_data.dart';
-import '../models/personal_center_data.dart';
 
-/// 首页与个人中心相关接口。
+/// 首页相关接口。
 class AppRepository {
   const AppRepository(this._client);
 
@@ -27,23 +26,6 @@ class AppRepository {
               product: null,
               orders: [],
               notices: [],
-            ),
-    );
-  }
-
-  /// 个人中心。需要登录态。
-  Future<ApiResponse<PersonalCenterData>> getPersonalCenter() {
-    return _client.get<PersonalCenterData>(
-      ApiEndpoints.personalCenter,
-      params: {
-        ApiFields.obfuscatePersonalCenter: ObfuscationHelper.randomParam(),
-      },
-      parse: (data) => data is Map
-          ? PersonalCenterData.fromJson(data.cast<String, dynamic>())
-          : const PersonalCenterData(
-              services: [],
-              hasRedPoint: false,
-              redPointId: '',
             ),
     );
   }

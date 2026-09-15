@@ -17,9 +17,6 @@ abstract final class ApiEndpoints {
   /// APP 首页。GET
   static const homePage = '/outsulk/connectedly';
 
-  /// 个人中心。GET
-  static const personalCenter = '/outsulk/interoscillate';
-
   /// banner 点击记录上报。POST
   static const bannerClick = '/outsulk/gaile';
 }

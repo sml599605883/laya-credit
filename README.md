@@ -160,6 +160,41 @@ lib/
    头图里原来固定占位 16pt 的公告已按设计稿删掉（`HomeData.notices` 仍在解析、测试保留）。
    等设计给出公告的展示位置（或确认不做）后再接。
 
+10. **个人中心已按蓝湖稿 07-01 还原**（深色头图 + 订单入口渐变卡 + Customer Service / About Us 两组入口）。
+    卡片外的页面底色、卡片圆角 / 内边距 / 行高都取自设计稿 CSS 与 Design Tokens；
+    订单卡的圆角与渐变直接用整卡底图 `assets/mine/mine_order_card.png`（319x95）。
+    卡片底部的薄荷色「肩线」同样走切图 `assets/mine/order_card_shoulder.png`（设计稿 `image_2`，
+    375x28 通栏）：它顶边压在卡片底部 16pt，只露出 12pt；卡片左右各露出的那一角
+    `rgba(51,65,65)` 深色衬底也在切图里。原先用 `CustomPainter` 手画的薄荷色梯形已删除
+    （它漏掉了那圈深色衬底，且斜边不如切图准）。
+    差异与待确认项：
+    - **头图头像**：设计稿放的是 App 品牌图标，`assets/` 里没有这张切图，暂用
+      `assets/mine/mine_avatar.png`（黑色剪影）并反白渲染——不反白在深色头图上完全看不见。
+      拿到品牌图标后替换这一处即可。
+    - 设计稿 `Website` 行右侧的「复制」小图标同样不在 `assets/` 里，按仓库约定直接不渲染；
+      行本身仍响应点击（把域名写进剪贴板）。
+    - `Website` 的域名与 `APP Version` 的版本号在设计稿里是 `xxxxx.com` / `v1.00` 占位，
+      代码里分别取 `ApiEnvironment.h5Base` 的域名和安装包真实版本（`deviceParamsProvider`）。
+      官网正式域名待产品确认后换成独立配置项。
+    - 设计稿的订单入口是 All / Outstanding / Overdue / Settled，而订单筛选状态文档只有
+      4 全部 / 7 进行中 / 6 待还款 / 5 已结清：`Overdue` 没有对应取值，暂时不传状态值（只展示、不跳转）。
+    - 设计稿没有独立的「退出登录」按钮，退出入口挪到 About Us 的 `Account` 行，
+      弹出设计稿 `07-01 - 个人中心-退出` 的底部面板（Log out / Delete Account / Quit）。
+      `Delete Account` 尚未接入；`Quit` 按「关掉面板」处理。
+    - **个人中心不请求接口**：产品确认 `GET /outsulk/interoscillate` 用不到，Customer Service
+      那一行（`Smart customer service`）和 About Us 四项一样是客户端常量，文案与顺序取自设计稿。
+      随之删掉了 `PersonalCenterProvider` / `PersonalCenterData` / 仓库方法 / 接口路径与字段常量；
+      原本靠它下发的未读消息红点（`hasRedPoint` / `redPointId`）也一并下线，消息中心补齐时再加回。
+      页面因此没有 Loading / Error 态，下拉刷新（没有可刷新的数据）也去掉了。
+    - 蓝湖导出的切图文件名原本与设计稿元素错位了一格（`mine_message.png` 实际是订单「All」图标），
+      已按设计稿语义重命名（`order_all/outstanding/overdue/settled`、
+      `service_website/app_version/privacy/account`）；`pubspec.yaml` 按目录注册，无需同步改动。
+      另外 `assets/navigation/tab_bar_background.png` 其实是订单卡的肩线切图，已移到
+      `assets/mine/order_card_shoulder.png`（`AppAssets.mineOrderCardShoulder`）；
+      底部导航目前是代码画的悬浮胶囊，不需要背景切图。
+    - 设计稿的间距不全是 8pt 倍数（`block_2` 的 12/10、About Us 卡上方的 17、图标与文案之间的 6），
+      这里以设计稿数值为准，新增元素时请沿用同一套值而不是就近取整。
+
 ## 常用命令
 
 ```bash
