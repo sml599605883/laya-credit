@@ -22,7 +22,7 @@ class AppRepository {
       parse: (data) => data is Map
           ? HomeData.fromJson(data.cast<String, dynamic>())
           : const HomeData(
-              banner: null,
+              banners: [],
               product: null,
               orders: [],
               notices: [],

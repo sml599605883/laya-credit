@@ -6,7 +6,7 @@ import '../../core/network/api_fields.dart';
 /// AD_LIST ...），客户端按类型渲染，不要写死顺序。
 class HomeData {
   const HomeData({
-    required this.banner,
+    required this.banners,
     required this.product,
     required this.orders,
     required this.notices,
@@ -51,14 +51,15 @@ class HomeData {
     }
 
     return HomeData(
-      banner: banners.isEmpty ? null : banners.first,
+      banners: banners,
       product: products.isEmpty ? null : products.first,
       orders: orders,
       notices: notices,
     );
   }
 
-  final HomeBanner? banner;
+  /// 运营位（BANNER 模块）下发的横幅，按后端顺序排列，可多条轮播。
+  final List<HomeBanner> banners;
   final HomeProductCard? product;
 
   /// 进行中的借款订单（借款进度卡）。

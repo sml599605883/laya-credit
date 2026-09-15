@@ -42,7 +42,7 @@ class _StubAppRepository extends AppRepository {
       message: 'success',
       data:
           home ??
-          const HomeData(banner: null, product: null, orders: [], notices: []),
+          const HomeData(banners: [], product: null, orders: [], notices: []),
     );
   }
 }
@@ -301,7 +301,7 @@ void main() {
       tester,
       repository: _StubAppRepository(
         home: const HomeData(
-          banner: null,
+          banners: [],
           product: _productCard,
           notices: [],
           orders: [_orderCard, _orderCard],
@@ -365,7 +365,7 @@ void main() {
       tester,
       repository: _StubAppRepository(
         home: const HomeData(
-          banner: null,
+          banners: [],
           product: _productCard,
           orders: [],
           notices: [],
@@ -391,7 +391,7 @@ void main() {
       tester,
       repository: _StubAppRepository(
         home: const HomeData(
-          banner: null,
+          banners: [],
           product: null,
           notices: [],
           orders: [
@@ -425,7 +425,7 @@ void main() {
       tester,
       repository: _StubAppRepository(
         home: const HomeData(
-          banner: null,
+          banners: [],
           orders: [],
           notices: [],
           product: HomeProductCard(
@@ -457,6 +457,64 @@ void main() {
     expect(find.text('Confirm your loan\uFF0CCash hits fast.'), findsOneWidget);
     // 申请入口在额度卡里，不再额外渲染兜底按钮。
     expect(find.byKey(const Key('home-apply-button')), findsOneWidget);
+  });
+
+  testWidgets('首页额度大卡整块可点击：点空白区域同样进入申请流程', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+    );
+
+    // 点在卡片上的非按钮区域（期限文案），而不是 Apply 按钮。
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    // 游客点击整卡会走和按钮一致的登录引导。
+    expect(find.byType(LoginPage), findsOneWidget);
+  });
+
+  testWidgets('首页运营位多条 banner 自动轮播', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [
+            HomeBanner(
+              id: '1',
+              imageUrl: 'https://cdn.example.com/a.png',
+              jumpUrl: '',
+            ),
+            HomeBanner(
+              id: '2',
+              imageUrl: 'https://cdn.example.com/b.png',
+              jumpUrl: '',
+            ),
+          ],
+          product: null,
+          orders: [],
+          notices: [],
+        ),
+      ),
+    );
+
+    final controller = tester.widget<PageView>(find.byType(PageView)).controller!;
+    final start = controller.page!;
+
+    // 每 3 秒切到下一条：等一拍定时器 + 300ms 切换动画。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(controller.page, closeTo(start == 0 ? 1 : 0, 0.01));
+
+    // 卸载页面，取消轮播定时器，避免测试结束时留下 pending timer。
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('首页接口失败时展示错误态而不是闪退', (tester) async {
@@ -975,7 +1033,7 @@ void main() {
       ],
     });
 
-    expect(home.banner?.imageUrl, 'https://cdn.example.com/banner.png');
+    expect(home.banners.first.imageUrl, 'https://cdn.example.com/banner.png');
     expect(home.product?.productName, 'Pera Cash');
     expect(home.product?.termInfo, '180 Days');
     expect(home.product?.steps.map((step) => step.title), [

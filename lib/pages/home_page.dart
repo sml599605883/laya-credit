@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -77,7 +79,11 @@ class HomePage extends ConsumerWidget {
                         ref.read(homeDataProvider.notifier).refresh(),
                   ),
                 ),
-                data: (home) => _HomeContent(layout: layout, home: home),
+                data: (home) => _HomeContent(
+                  layout: layout,
+                  home: home,
+                  isActive: isActive,
+                ),
               ),
             ),
           ],
@@ -298,7 +304,7 @@ class _Amount extends StatelessWidget {
 /// 额度条 + 白色额度卡（设计稿 `block_6` / `block_7`）。
 ///
 /// 额度卡比额度条左右各内缩 12pt、上下各内缩 7pt，压出「卡片嵌在凹槽里」的效果。
-class _LimitCard extends StatelessWidget {
+class _LimitCard extends ConsumerWidget {
   const _LimitCard({required this.layout, required this.product});
 
   final AppLayout layout;
@@ -322,7 +328,16 @@ class _LimitCard extends StatelessWidget {
   static const _dividerHeight = 22.0;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 整张大卡都可点击：点卡片空白处同样进入申请流程；按钮仍是独立热区。
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openApply(ref),
+      child: _card(),
+    );
+  }
+
+  Widget _card() {
     return Stack(
       children: [
         Padding(
@@ -497,10 +512,17 @@ class _CardMetric extends StatelessWidget {
 }
 
 class _HomeContent extends StatelessWidget {
-  const _HomeContent({required this.layout, required this.home});
+  const _HomeContent({
+    required this.layout,
+    required this.home,
+    required this.isActive,
+  });
 
   final AppLayout layout;
   final HomeData home;
+
+  /// 当前 Tab 是否为前台，透传给轮播控制自动播放。
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -515,7 +537,7 @@ class _HomeContent extends StatelessWidget {
           SizedBox(height: layout.px(AppSpacing.sm)),
         ],
         // 运营位（设计稿 02-01 / 02-02 的第二块）。
-        _Banner(layout: layout, banner: home.banner),
+        _Banner(layout: layout, banners: home.banners, isActive: isActive),
         // 进行中的借款订单：设计稿没给位置，只在后端真的下发时追加在最下面。
         if (home.hasOrders) ...[
           SizedBox(height: layout.px(AppSpacing.sm)),
@@ -774,37 +796,129 @@ class _ProductProgress extends StatelessWidget {
   }
 }
 
-/// 运营横幅。文案与图片都由后端下发。
-class _Banner extends ConsumerWidget {
-  const _Banner({required this.layout, required this.banner});
+/// 运营横幅。图片与跳转链接都由后端下发，多条时轮播（参考 peso_shield）。
+///
+/// 轮播规则：
+/// - 每 3 秒自动切到下一条并循环；
+/// - 只有一条 / 空列表时不轮播；
+/// - 用户正在滑动时跳过这一拍，不争抢手势；
+/// - App 退到后台或当前 Tab 不在前台（[isActive] 为 false）时暂停。
+class _Banner extends ConsumerStatefulWidget {
+  const _Banner({
+    required this.layout,
+    required this.banners,
+    required this.isActive,
+  });
 
   final AppLayout layout;
-  final HomeBanner? banner;
+  final List<HomeBanner> banners;
+  final bool isActive;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final banner = this.banner;
-    return GestureDetector(
-      key: const Key('home-banner'),
-      onTap: banner == null ? null : () => _openBanner(ref, banner),
-      child: ClipRRect(
-        borderRadius: layout.radius(AppSpacing.radiusBanner),
-        // 设计稿 343x120，写死比例避免图片解码前后高度跳变。
-        child: AspectRatio(
-          aspectRatio: 343 / 120,
-          child: banner == null
-              ? Image.asset(AppAssets.homeBanner, fit: BoxFit.cover)
-              : RemoteImage(
-                  url: banner.imageUrl,
-                  fit: BoxFit.cover,
-                  fallbackAsset: AppAssets.homeBanner,
-                ),
+  ConsumerState<_Banner> createState() => _BannerState();
+}
+
+class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
+  static const _interval = Duration(seconds: 3);
+  static const _scrollDuration = Duration(milliseconds: 300);
+
+  final _controller = PageController();
+  Timer? _timer;
+  int _page = 0;
+  bool _foreground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(_Banner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 条数变化（下拉刷新）后回到第一条，避免停在一个已不存在的页码。
+    if (oldWidget.banners.length != widget.banners.length &&
+        _controller.hasClients) {
+      _page = 0;
+      _controller.jumpToPage(0);
+    }
+    // 条数或前台状态变化都要重算：1 条 -> 多条要起定时器，反过来要停。
+    _syncTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    _timer?.cancel();
+    final count = widget.banners.length;
+    if (!widget.isActive || !_foreground || count < 2) return;
+    _timer = Timer.periodic(_interval, (_) {
+      if (!mounted ||
+          !_controller.hasClients ||
+          _controller.position.isScrollingNotifier.value) {
+        return;
+      }
+      unawaited(
+        _controller.animateToPage(
+          (_page + 1) % count,
+          duration: _scrollDuration,
+          curve: Curves.easeOut,
         ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final banners = widget.banners;
+    // 设计稿 343x120，写死比例避免图片解码前后高度跳变。
+    return AspectRatio(
+      key: const Key('home-banner'),
+      aspectRatio: 343 / 120,
+      child: ClipRRect(
+        borderRadius: widget.layout.radius(AppSpacing.radiusBanner),
+        child: banners.isEmpty
+            ? Image.asset(AppAssets.homeBanner, fit: BoxFit.cover)
+            : banners.length == 1
+            ? _item(banners.single)
+            : PageView.builder(
+                controller: _controller,
+                itemCount: banners.length,
+                onPageChanged: (page) => _page = page,
+                itemBuilder: (_, index) => _item(banners[index]),
+              ),
       ),
     );
   }
 
-  Future<void> _openBanner(WidgetRef ref, HomeBanner banner) async {
+  Widget _item(HomeBanner banner) => GestureDetector(
+    key: ValueKey('home-banner-${banner.id}'),
+    behavior: HitTestBehavior.opaque,
+    onTap: () => _openBanner(banner),
+    child: RemoteImage(
+      url: banner.imageUrl,
+      fit: BoxFit.cover,
+      fallbackAsset: AppAssets.homeBanner,
+    ),
+  );
+
+  Future<void> _openBanner(HomeBanner banner) async {
     // 文档场景：有登录态且跳转链接不为空时才上报点击记录。
     if (banner.jumpUrl.isEmpty) return;
 
@@ -923,15 +1037,7 @@ class _ApplyButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return FilledButton(
       key: const Key('home-apply-button'),
-      onPressed: () async {
-        // TODO(埋点): 「立即申请」点击需要在 Firebase Analytics 上报事件。
-        if (!ref.read(userSessionProvider).isLoggedIn) {
-          await AppNavigator.toLogin();
-          return;
-        }
-        // TODO(接入): 走点击申请 `/outsulk/weaken` + 产品详情/认证流程。
-        ToastHelper.showMessage('Application flow is not wired up yet');
-      },
+      onPressed: () => _openApply(ref),
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.actionLime,
         foregroundColor: AppColors.cardValue,
@@ -953,4 +1059,17 @@ class _ApplyButton extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 「立即申请」入口：未登录先跳登录页，已登录走申请流程。
+///
+/// 额度卡整块与卡内按钮共用这一处逻辑，避免两套热区行为不一致。
+Future<void> _openApply(WidgetRef ref) async {
+  // TODO(埋点): 「立即申请」点击需要在 Firebase Analytics 上报事件。
+  if (!ref.read(userSessionProvider).isLoggedIn) {
+    await AppNavigator.toLogin();
+    return;
+  }
+  // TODO(接入): 走点击申请 `/outsulk/weaken` + 产品详情/认证流程。
+  ToastHelper.showMessage('Application flow is not wired up yet');
 }
