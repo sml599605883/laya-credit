@@ -4,9 +4,11 @@ import '../device/device_params.dart';
 import 'api_exception.dart';
 import 'api_protocol.dart';
 import 'api_response.dart';
+import 'capture_proxy.dart';
 import 'common_params.dart';
 import 'network_config.dart';
 import 'obfuscation_helper.dart';
+import 'proxy_configurer.dart';
 import 'request_signer.dart';
 import 'response_protocol.dart';
 
@@ -20,23 +22,10 @@ class HttpClient {
     required this._device,
     required this._getUserToken,
     required this._onAuthExpired,
+    CaptureProxySettings? systemProxy,
   }) : _config = config,
        _signer = RequestSigner(config.signSecret) {
-    _dio =
-        Dio(
-            BaseOptions(
-              baseUrl: config.apiBase.toString(),
-              connectTimeout: config.connectionTimeout,
-              receiveTimeout: config.responseTimeout,
-              sendTimeout: config.requestTimeout,
-              contentType: Headers.formUrlEncodedContentType,
-              // 4xx 也交给业务层解析，只有 5xx 当成传输层错误。
-              validateStatus: (status) => status != null && status < 500,
-            ),
-          )
-          ..interceptors.add(
-            InterceptorsWrapper(onRequest: _onRequest, onError: _onError),
-          );
+    _dio = _createDio(systemProxy);
   }
 
   final NetworkConfig _config;
@@ -48,6 +37,44 @@ class HttpClient {
   late final Dio _dio;
 
   Dio get dio => _dio;
+
+  Dio _createDio(CaptureProxySettings? systemProxy) {
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: _config.apiBase.toString(),
+        connectTimeout: _config.connectionTimeout,
+        receiveTimeout: _config.responseTimeout,
+        sendTimeout: _config.requestTimeout,
+        contentType: Headers.formUrlEncodedContentType,
+        // 4xx 也交给业务层解析，只有 5xx 当成传输层错误。
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+
+    // `dart:io` 默认不读系统代理，必须显式写进 findProxy 才能被 Charles/Proxyman 抓到。
+    // 优先用运行时探测到的系统代理，其次退回编译期配置的固定代理。
+    if (systemProxy != null && systemProxy.isValid) {
+      ProxyConfigurer.configure(
+        dio,
+        host: systemProxy.host,
+        port: systemProxy.port,
+        allowInsecure: true,
+      );
+    } else if (_config.proxyHost.isNotEmpty && _config.proxyPort != null) {
+      ProxyConfigurer.configure(
+        dio,
+        host: _config.proxyHost,
+        port: _config.proxyPort!,
+        allowInsecure: _config.allowInsecureProxy,
+      );
+    }
+
+    dio.interceptors.add(
+      InterceptorsWrapper(onRequest: _onRequest, onError: _onError),
+    );
+
+    return dio;
+  }
 
   void _onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     final commonParams = CommonParams.create(

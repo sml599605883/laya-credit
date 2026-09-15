@@ -36,15 +36,24 @@ final deviceParamsProvider = FutureProvider<DeviceParams>((ref) {
   return DeviceParamsLoader().load();
 });
 
+/// 系统抓包代理（QA 在手机 Wi-Fi 里配好即可生效，不需要重新打包）。
+///
+/// 读不到时返回 null，网络层会退回到 [NetworkConfig] 里的固定代理。
+final systemProxyProvider = FutureProvider<CaptureProxySettings?>((ref) {
+  return CaptureProxyDiscovery.systemSettings();
+});
+
 /// 全局 HTTP 客户端。业务仓库通过 `ref.watch(httpClientProvider.future)` 获取。
 final httpClientProvider = FutureProvider<HttpClient>((ref) async {
   final config = ref.watch(networkConfigProvider);
   final device = await ref.watch(deviceParamsProvider.future);
+  final systemProxy = await ref.watch(systemProxyProvider.future);
 
   return HttpClient(
     config: config,
     device: device,
     getUserToken: () => ref.read(userSessionProvider).accessToken,
+    systemProxy: systemProxy,
     onAuthExpired: () {
       ref.read(userSessionProvider.notifier).clearSession();
       ref.read(sessionExpirySignalProvider).notifyExpired();

@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import CFNetwork
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -12,5 +13,38 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    // 抓包代理通道：读 iOS 系统代理设置下发给 Dart 侧（dart:io 不会自动读系统代理）。
+    guard
+      let registrar = engineBridge.pluginRegistry.registrar(
+        forPlugin: "LayaCreditCaptureProxy"
+      )
+    else {
+      return
+    }
+
+    let channel = FlutterMethodChannel(
+      name: "laya_credit/capture_proxy",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "getSystemProxy" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard
+        let settings = CFNetworkCopySystemProxySettings()?.takeRetainedValue()
+          as? [String: Any],
+        (settings[kCFNetworkProxiesHTTPEnable as String] as? NSNumber)?.boolValue == true,
+        let host = settings[kCFNetworkProxiesHTTPProxy as String] as? String,
+        let port = (settings[kCFNetworkProxiesHTTPPort as String] as? NSNumber)?.intValue,
+        !host.isEmpty,
+        port > 0
+      else {
+        result(nil as Any?)
+        return
+      }
+      result(["host": host, "port": port])
+    }
   }
 }

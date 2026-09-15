@@ -12,6 +12,9 @@ class NetworkConfig {
     this.connectionTimeout = const Duration(seconds: 30),
     this.requestTimeout = const Duration(seconds: 30),
     this.responseTimeout = const Duration(seconds: 30),
+    this.proxyHost = '',
+    this.proxyPort,
+    this.allowInsecureProxy = false,
   });
 
   final Uri apiBase;
@@ -22,4 +25,12 @@ class NetworkConfig {
   final Duration connectionTimeout;
   final Duration requestTimeout;
   final Duration responseTimeout;
+
+  /// 固定抓包代理。系统代理读不到时（如 Android）才会用到；
+  /// iOS 下通常留空，交给 [CaptureProxyDiscovery] 动态发现。
+  final String proxyHost;
+  final int? proxyPort;
+
+  /// 是否放行自签名证书。走抓包代理做 HTTPS 中间人时需要开启。
+  final bool allowInsecureProxy;
 }

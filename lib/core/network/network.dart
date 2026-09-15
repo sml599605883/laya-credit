@@ -4,6 +4,8 @@ export 'api_exception.dart';
 export 'api_fields.dart';
 export 'api_protocol.dart';
 export 'api_response.dart';
+export 'capture_proxy.dart';
 export 'http_client.dart';
 export 'network_config.dart';
 export 'obfuscation_helper.dart';
+export 'proxy_configurer.dart';
