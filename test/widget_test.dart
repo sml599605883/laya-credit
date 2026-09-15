@@ -112,6 +112,59 @@ class _RecordingClient extends HttpClient {
   }
 }
 
+/// 首页额度大卡 + 授信进度阶段（蓝湖稿 02-01 / 02-02 的 LARGE_CARD）。
+const _productCard = HomeProductCard(
+  productName: 'Pera Cash',
+  productLogo: '',
+  buttonText: 'Apply Now',
+  amountRange: '\u20b160,000',
+  amountRangeDes: 'Available up to',
+  termInfo: '180 Days',
+  termInfoDes: 'Loan terms',
+  loanRate: '\u2264 0.5% Day',
+  loanRateDes: 'Interest rate',
+  certifyFinished: false,
+  account: '',
+  accountText: '',
+  progressText: 'Credit activation progress',
+  steps: [
+    HomeProgressStep(
+      title: 'Identity',
+      amount: '\u20b1 30,000',
+      selected: true,
+    ),
+    HomeProgressStep(title: 'Living', amount: '\u20b1 40,000', selected: false),
+    HomeProgressStep(
+      title: 'Basic information',
+      amount: '\u20b150,000',
+      selected: false,
+    ),
+    HomeProgressStep(
+      title: 'Bank Card',
+      amount: '\u20b160,000',
+      selected: false,
+    ),
+  ],
+);
+
+/// 进行中的借款订单卡。
+const _orderCard = HomeOrderCard(
+  orderNo: '39236372837263237',
+  productId: 1,
+  productName: 'Pera Agad(AA)',
+  productLogo: '',
+  title: 'Already in default, please repay',
+  displayAmount: '\u20b150,000',
+  amountText: 'Loan Amount',
+  date: '28-12-2022',
+  dateText: 'Application date',
+  orderStatusText: 'To repay',
+  status: HomeOrderCardStatus.toRepay,
+  progressText: '',
+  steps: [],
+  jumpUrl: '',
+);
+
 void _usePhoneSurface(WidgetTester tester) {
   // 默认的 800x600 测试窗口会把页面下半部分裁掉，断言会失真。
   tester.view.physicalSize = const Size(1206, 2622);
@@ -158,7 +211,18 @@ void main() {
     // 真机底部安全区（刘海屏 34pt）：底栏在安全区之上再让出胶囊的高度。
     tester.view.padding = const FakeViewPadding(bottom: safeBottom * 3);
     tester.view.viewPadding = const FakeViewPadding(bottom: safeBottom * 3);
-    await _pumpApp(tester, repository: _StubAppRepository());
+    // 内容必须比屏幕高，才能验证「滚到底之后不被胶囊挡住」。
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banner: null,
+          product: _productCard,
+          notices: [],
+          orders: [_orderCard, _orderCard],
+        ),
+      ),
+    );
 
     final bar = find.byKey(const Key('app-tab-bar'));
     final barRect = tester.getRect(bar);
@@ -197,16 +261,43 @@ void main() {
     position.jumpTo(position.maxScrollExtent);
     await tester.pumpAndSettle();
 
-    final hint = find.text(
-      'Check your limit and submit an application in minutes.',
-    );
-    expect(tester.getRect(hint).bottom, lessThanOrEqualTo(pillRect.top));
+    final lastCard = find.text('Already in default, please repay').last;
+    expect(tester.getRect(lastCard).bottom, lessThanOrEqualTo(pillRect.top));
   });
 
-  testWidgets('首页无进行中订单时展示空态与申请入口', (tester) async {
+  testWidgets('首页没有产品大卡时只渲染运营位，不出现设计稿以外的空态卡', (tester) async {
     await _pumpApp(tester, repository: _StubAppRepository());
 
-    expect(find.text('No loan in progress'), findsOneWidget);
+    expect(find.byKey(const Key('home-banner')), findsOneWidget);
+    // 设计稿 02-01 只有「额度头图 + 运营位」，没有空态卡与兜底申请按钮
+    // （02-03 的进度空态属于进度页）。
+    expect(find.text('No loan in progress'), findsNothing);
+    expect(find.byKey(const Key('home-apply-button')), findsNothing);
+  });
+
+  testWidgets('首页按设计稿 02-02 渲染授信进度卡', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banner: null,
+          product: _productCard,
+          orders: [],
+          notices: [],
+        ),
+      ),
+    );
+
+    // 卡片视觉是设计稿导出的整卡底图（标题文字烘焙在底图里），页面只叠三行内容。
+    expect(find.byKey(const Key('home-progress-card')), findsOneWidget);
+    expect(find.text('Credit activation progress'), findsNothing);
+    expect(find.text('\u20b1 30,000'), findsOneWidget);
+    // \u20b160,000 在额度头图里也有一份，进度卡里是第 4 个阶段。
+    expect(find.text('\u20b150,000'), findsOneWidget);
+    expect(find.text('Identity'), findsOneWidget);
+    expect(find.text('Basic information'), findsOneWidget);
+    expect(find.text('Bank Card'), findsOneWidget);
+    // 申请入口在额度卡里，只此一处。
     expect(find.byKey(const Key('home-apply-button')), findsOneWidget);
   });
 
@@ -404,6 +495,67 @@ void main() {
     expect(order.productLogo, 'https://cdn.example.com/logo.png');
     expect(order.displayAmount, '\u20b150,000');
     expect(order.status, HomeOrderCardStatus.toRepay);
+  });
+
+  test('首页 kneeing 用测试环境下发的混淆模块名解析', () {
+    // 文档 `7.map.html` 写的是 BANNER / LARGE_CARD / AD_LIST，
+    // 测试环境下发的却是混淆串，两种都要能解析。
+    final home = HomeData.fromJson(const {
+      'kneeing': [
+        {
+          'liquidators': 'MalvernePlucked',
+          'stabiliment': [
+            {
+              'cussedly': '1',
+              'avern': 'https://cdn.example.com/banner.png',
+              'superidealness': 'ph://banner',
+            },
+          ],
+        },
+        {
+          'liquidators': 'LupusesWheelrace',
+          'stabiliment': [
+            {
+              'heartfelt': 'Pera Cash',
+              'bathtubs': 'https://cdn.example.com/logo.png',
+              'curitiba': 'Apply Now',
+              'wastefulnesses': '\u20b160,000',
+              'octodentate': 'Available up to',
+              'gundy': '180 Days',
+              'solomon': 'Loan terms',
+              'antibilious': '\u2264 0.5% Day',
+              'mesometral': 'Interest rate',
+              'vesperal': 'Credit activation progress',
+              'kailua': 0,
+              'unobtrusiveness': [
+                {
+                  'upbear': 'Identity',
+                  'beingless': '\u20b1 30,000',
+                  'estamp': 1,
+                },
+                {'upbear': 'Living', 'beingless': '\u20b1 40,000', 'estamp': 0},
+              ],
+            },
+          ],
+        },
+        {
+          'liquidators': 'BelliferousOverfertilizing',
+          'stabiliment': [
+            {'upbear': '<span>2,000 pesos</span>'},
+          ],
+        },
+      ],
+    });
+
+    expect(home.banner?.imageUrl, 'https://cdn.example.com/banner.png');
+    expect(home.product?.productName, 'Pera Cash');
+    expect(home.product?.termInfo, '180 Days');
+    expect(home.product?.steps.map((step) => step.title), [
+      'Identity',
+      'Living',
+    ]);
+    expect(home.product?.steps.first.selected, isTrue);
+    expect(home.notices, hasLength(1));
   });
 
   test('加签覆盖的参数与实际下发的公共参数完全一致', () {

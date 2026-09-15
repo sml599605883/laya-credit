@@ -21,7 +21,9 @@ class HomeData {
 
     if (sections is List) {
       for (final section in sections.whereType<Map>()) {
-        final type = section[ApiFields.homeType]?.toString() ?? '';
+        final type = _canonicalSectionType(
+          section[ApiFields.homeType]?.toString() ?? '',
+        );
         final items = section[ApiFields.homeItems];
         if (items is! List) continue;
         final maps = items.whereType<Map>().map(
@@ -69,6 +71,9 @@ class HomeData {
 }
 
 /// 首页模块类型（文档 `7.map.html#首页元素`）。
+///
+/// ⚠️ 文档里写的是下面这些可读名，但测试环境实际下发的是混淆串
+/// （实测 2026-09-14 的 `kneeing[].liquidators`），映射见 [_canonicalSectionType]。
 abstract final class HomeSectionType {
   static const banner = 'BANNER';
   static const largeCard = 'LARGE_CARD';
@@ -82,6 +87,18 @@ abstract final class HomeSectionType {
   /// 首页滚动条。
   static const adList = 'AD_LIST';
 }
+
+/// 把 `kneeing[].liquidators` 的实际取值归一成 [HomeSectionType] 常量。
+///
+/// 测试环境只实测到下面四种（BANNER / LARGE_CARD / AD_LIST / PROCESS_LIST），
+/// 其余类型等后端下发后再补登记；没登记的取值原样返回，由调用方忽略。
+String _canonicalSectionType(String type) => switch (type) {
+  'MalvernePlucked' => HomeSectionType.banner,
+  'LupusesWheelrace' => HomeSectionType.largeCard,
+  'BelliferousOverfertilizing' => HomeSectionType.adList,
+  'Broadtoothed' => HomeSectionType.process,
+  _ => type,
+};
 
 /// 借款进度卡状态（文档 satin 字段）。
 enum HomeOrderCardStatus {

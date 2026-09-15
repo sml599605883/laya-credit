@@ -75,6 +75,20 @@ abstract final class AppColors {
   /// 额度卡底部橙色提示文案。
   static const hintOrange = Color(0xFFFF660E);
 
+  // ---------- 首页授信进度卡（蓝湖稿 02-02 - 首页-有进度） ----------
+
+  /// 进度条底槽色。
+  static const creditProgressTrack = Color(0xFFFFFFFF);
+
+  /// 已完成进度条的填充色。
+  static const creditProgressFill = Color(0xFFFADD25);
+
+  /// 当前阶段的金额文字色。
+  static const creditProgressAmountCurrent = Color(0xFFFE295C);
+
+  /// 未到达阶段的金额文字色。
+  static const creditProgressAmount = Color(0xFF333333);
+
   /// 弹窗遮罩。
   static const dialogBarrier = Color(0x73000000);
 

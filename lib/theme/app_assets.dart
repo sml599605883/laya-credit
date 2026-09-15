@@ -10,6 +10,13 @@ abstract final class AppAssets {
   static const homeMoneyBag = 'assets/home/home_money_bag.png';
   static const homeProgressEmpty = 'assets/home/home_progress_empty.png';
 
+  /// 授信进度卡整卡底图（蓝湖稿 02-02）：白描边 / 深色标题条 / 左侧金币 /
+  /// 金色光晕 / 标题文字 / 柠檬绿卡身都在这一张合并位图里。
+  static const homeProgressCard = 'assets/home/home_progress_card.png';
+
+  /// 授信进度卡：进度槽上的阶段金币（已到达阶段用原图，未到达阶段去色）。
+  static const homeProgressCoin = 'assets/home/home_progress_coin.png';
+
   // 个人中心
   static const mineMessage = 'assets/mine/mine_message.png';
   static const mineAvatar = 'assets/mine/mine_avatar.png';

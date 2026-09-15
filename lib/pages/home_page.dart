@@ -48,11 +48,7 @@ class HomePage extends ConsumerWidget {
           // 顶部深色头图需要通栏，页面左右边距交给各子块自己控制。
           padding: EdgeInsets.zero,
           children: [
-            _Hero(
-              layout: layout,
-              product: homeAsync.value?.product,
-              notices: homeAsync.value?.notices ?? const [],
-            ),
+            _Hero(layout: layout, product: homeAsync.value?.product),
             Padding(
               padding: layout
                   .edgeInsets(
@@ -96,27 +92,16 @@ class HomePage extends ConsumerWidget {
 /// 问候语、产品名走正常流式布局，额度数字 / 金币 / 额度条 / 额度卡按设计稿的
 /// 绝对坐标摆放，保证和切图对齐。
 class _Hero extends StatelessWidget {
-  const _Hero({
-    required this.layout,
-    required this.product,
-    required this.notices,
-  });
+  const _Hero({required this.layout, required this.product});
 
   final AppLayout layout;
 
   /// 后端下发的产品大卡（LARGE_CARD）。未下发时只渲染问候语。
   final HomeProductCard? product;
 
-  /// 首页公告（AD_LIST）。
-  final List<String> notices;
-
   /// 设计稿头图总高与状态栏高度（iPhone X 口径）。
   static const _designHeight = 347.0;
   static const _designStatusBar = 44.0;
-
-  /// 公告槽位高度：设计稿里问候语与产品名之间是空白，这里固定占位，
-  /// 保证有无公告时产品名 / 额度数字的位置都不变。
-  static const _noticeHeight = 16.0;
 
   @override
   Widget build(BuildContext context) {
@@ -158,27 +143,9 @@ class _Hero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _Greeting(layout: layout),
-                SizedBox(
-                  height: layout.px(_noticeHeight),
-                  child: notices.isEmpty
-                      ? null
-                      : Center(
-                          child: Text(
-                            notices.first,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.surfaceMint.withValues(
-                                alpha: 0.72,
-                              ),
-                              fontSize: layout.px(11),
-                            ),
-                          ),
-                        ),
-                ),
                 if (product != null) ...[
-                  SizedBox(height: layout.px(AppSpacing.xs)),
+                  // 设计稿 `box_4` 与问候语之间是 22pt 空白，取 8 的整数倍。
+                  SizedBox(height: layout.px(AppSpacing.md)),
                   _ProductTag(layout: layout, product: product),
                   SizedBox(height: layout.px(AppSpacing.xs)),
                   Text(
@@ -269,13 +236,8 @@ class _ProductTag extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          width: layout.px(14),
-          height: layout.px(14),
-          decoration: BoxDecoration(
-            borderRadius: layout.radius(AppSpacing.radiusXxs),
-            border: Border.all(color: AppColors.white, width: layout.px(0.3)),
-          ),
+        ClipRRect(
+          borderRadius: layout.radius(AppSpacing.radiusXxs),
           child: RemoteImage(
             url: product.productLogo,
             fit: BoxFit.contain,
@@ -546,24 +508,21 @@ class _HomeContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 授信进度（设计稿 02-02「Credit activation progress」）。
+        // 授信进度卡（设计稿 02-02 - 首页-有进度）。
+        // 后端没下发阶段数据时设计稿上这一块不存在，整卡不渲染。
         if (product != null && product.steps.isNotEmpty) ...[
           _ProductProgress(layout: layout, product: product),
           SizedBox(height: layout.px(AppSpacing.sm)),
         ],
+        // 运营位（设计稿 02-01 / 02-02 的第二块）。
         _Banner(layout: layout, banner: home.banner),
-        SizedBox(height: layout.px(AppSpacing.sm)),
-        if (home.hasOrders)
+        // 进行中的借款订单：设计稿没给位置，只在后端真的下发时追加在最下面。
+        if (home.hasOrders) ...[
+          SizedBox(height: layout.px(AppSpacing.sm)),
           for (final order in home.orders) ...[
             _OrderProgressCard(layout: layout, order: order),
             SizedBox(height: layout.px(AppSpacing.sm)),
-          ]
-        else
-          _LoanProgressEmpty(layout: layout),
-        // 后端没下发产品大卡时，额度卡里的申请入口不存在，这里补一个兜底入口。
-        if (product == null) ...[
-          SizedBox(height: layout.px(AppSpacing.sm)),
-          _ApplyButton(layout: layout, label: ''),
+          ],
         ],
       ],
     );
@@ -571,42 +530,245 @@ class _HomeContent extends StatelessWidget {
 }
 
 /// 授信进度卡（设计稿 `02-02 - 首页-有进度`）。
+///
+/// 整卡视觉（白描边 / 深色标题条 / 左侧金币 / 金色光晕 / 标题文字 / 柠檬绿卡身）
+/// 都用设计稿导出的整卡底图 [AppAssets.homeProgressCard]，页面只在卡身上叠三行内容：
+/// 金额行 / 进度槽 / 阶段文案行；进度槽上的阶段金币用 [AppAssets.homeProgressCoin]。
+///
+/// 阶段文案、金额、选中态都由后端下发，长度不可控，文本行按容器等比缩小。
 class _ProductProgress extends StatelessWidget {
   const _ProductProgress({required this.layout, required this.product});
 
   final AppLayout layout;
   final HomeProductCard product;
 
+  // 卡片几何（设计稿 375pt 基准，坐标都相对卡片左上角）。
+  static const _cardWidth = 343.0;
+  static const _cardHeight = 119.0;
+
+  /// 金额行（设计稿 `text-wrapper_6` margin: 18px 4px 0 3px）。
+  static const _amountTop = 49.0;
+  static const _amountLeft = 15.0;
+  static const _amountRight = 16.0;
+  static const _amountFontSize = 10.0;
+
+  /// 进度槽（设计稿 `group_3`：白槽 6pt，金色填充上下各内缩 1pt）。
+  static const _trackTop = 77.0;
+  static const _trackLeft = 13.0;
+  static const _trackRight = 12.0;
+  static const _trackHeight = 6.0;
+  static const _trackInset = 1.0;
+
+  /// 阶段文案行（设计稿 `text-wrapper_7` margin: 16px 5px 0 11px）。
+  static const _labelTop = 99.0;
+  static const _labelLeft = 23.0;
+  static const _labelRight = 17.0;
+  static const _labelFontSize = 8.0;
+
+  /// 进度槽上的阶段金币（设计稿实测：第一枚距卡左边缘 24pt，间距 90.5pt）。
+  static const _coinTop = 72.0;
+  static const _coinWidth = 21.7;
+  static const _coinHeight = 16.0;
+  static const _coinLeft = 24.0;
+  static const _coinStride = 90.5;
+
+  /// 进度槽净宽（343 - 13 - 12）。
+  static const _trackWidth = _cardWidth - _trackLeft - _trackRight;
+
+  // 设计稿是固定 4 个阶段、行内固定间距（不是等分）。
+  // 阶段数超过 4 时沿用最后一档间距，保证不溢出、不闪退。
+  static const _amountGaps = [48.0, 51.0, 51.0];
+  static const _labelGaps = [66.0, 49.0, 40.0];
+
+  /// 未到达阶段的金币：同一张切图按亮度去色，与设计稿的银币一致。
+  static const _silverFilter = ColorFilter.matrix(<double>[
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0, 0, 0, 1, 0, //
+  ]);
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: layout.edgeInsets(
-        left: AppSpacing.sm,
-        top: AppSpacing.sm,
-        right: AppSpacing.sm,
-        bottom: AppSpacing.sm,
+    final steps = product.steps;
+    final currentIndex = _currentStepIndex(steps);
+    return AspectRatio(
+      key: const Key('home-progress-card'),
+      aspectRatio: _cardWidth / _cardHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 卡内坐标按卡片实际宽度等比换算（设计稿基准宽 343pt）。
+          final factor = constraints.maxWidth / _cardWidth;
+          double at(num value) => value * factor;
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: Image.asset(
+                  AppAssets.homeProgressCard,
+                  fit: BoxFit.fill,
+                ),
+              ),
+              Positioned(
+                left: at(_amountLeft),
+                top: at(_amountTop),
+                right: at(_amountRight),
+                child: _buildRow(children: _buildAmounts(steps, currentIndex)),
+              ),
+              Positioned(
+                left: at(_trackLeft),
+                top: at(_trackTop),
+                right: at(_trackRight),
+                height: at(_trackHeight),
+                child: _buildTrack(steps, currentIndex, factor),
+              ),
+              Positioned(
+                left: at(_labelLeft),
+                top: at(_labelTop),
+                right: at(_labelRight),
+                child: _buildRow(children: _buildLabels(steps)),
+              ),
+            ],
+          );
+        },
       ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: layout.radius(AppSpacing.radiusBanner),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (product.progressText.isNotEmpty) ...[
-            Text(
-              product.progressText,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: layout.px(16),
-                fontWeight: FontWeight.w600,
+    );
+  }
+
+  /// 金额行：当前阶段是玫红，其余是深灰。
+  List<Widget> _buildAmounts(List<HomeProgressStep> steps, int currentIndex) {
+    return [
+      for (final (index, step) in steps.indexed) ...[
+        if (index > 0) _gap(_amountGaps, index - 1),
+        Text(
+          step.amount,
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            color: index == currentIndex
+                ? AppColors.creditProgressAmountCurrent
+                : AppColors.creditProgressAmount,
+            fontSize: layout.px(_amountFontSize),
+            fontWeight: FontWeight.w700,
+            // 设计稿行高 12pt。
+            height: 12 / 10,
+          ),
+        ),
+      ],
+    ];
+  }
+
+  /// 阶段文案行。
+  List<Widget> _buildLabels(List<HomeProgressStep> steps) {
+    return [
+      for (final (index, step) in steps.indexed) ...[
+        if (index > 0) _gap(_labelGaps, index - 1),
+        Text(
+          step.title,
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            color: AppColors.cardValue,
+            fontSize: layout.px(_labelFontSize),
+            // 设计稿行高 10pt。
+            height: 10 / 8,
+          ),
+        ),
+      ],
+    ];
+  }
+
+  /// 进度槽：白色底槽 + 已完成阶段的金色填充，各阶段金币压在槽上。
+  Widget _buildTrack(
+    List<HomeProgressStep> steps,
+    int currentIndex,
+    double factor,
+  ) {
+    final total = steps.length;
+    final filled = total == 0 ? 0 : currentIndex + 1;
+    double at(num value) => value * factor;
+    // 设计稿只标了 4 档金币位置；档位更多时把间距压到放得下，避免金币跑出卡片。
+    final evenStride = total > 1
+        ? (_trackWidth - _coinWidth * 2) / (total - 1)
+        : _coinStride;
+    final coinStride = evenStride < _coinStride ? evenStride : _coinStride;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final trackWidth = constraints.maxWidth;
+        return Stack(
+          // 金币比进度槽高，允许溢出绘制。
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.creditProgressTrack,
+                  borderRadius: layout.radius(_trackHeight / 2),
+                ),
               ),
             ),
-            SizedBox(height: layout.px(AppSpacing.sm)),
+            if (total > 0)
+              Positioned(
+                left: 0,
+                top: at(_trackInset),
+                bottom: at(_trackInset),
+                width: trackWidth * filled / total,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.creditProgressFill,
+                    borderRadius: layout.radius(_trackHeight / 2),
+                  ),
+                ),
+              ),
+            for (final (index, _) in steps.indexed)
+              Positioned(
+                left: at(_coinLeft + index * coinStride - _trackLeft),
+                top: at(_coinTop - _trackTop),
+                child: _buildCoin(
+                  reached: index <= currentIndex,
+                  factor: factor,
+                ),
+              ),
           ],
-          _ProgressSteps(layout: layout, steps: product.steps),
-        ],
+        );
+      },
+    );
+  }
+
+  /// 阶段金币：已到达用金色原图，未到达用同一张图去色（设计稿的银币）。
+  Widget _buildCoin({required bool reached, required double factor}) {
+    final coin = Image.asset(
+      AppAssets.homeProgressCoin,
+      width: _coinWidth * factor,
+      height: _coinHeight * factor,
+      fit: BoxFit.fill,
+    );
+    return reached
+        ? coin
+        : ColorFiltered(colorFilter: _silverFilter, child: coin);
+  }
+
+  /// 当前阶段下标：后端没标选中态时按第一个阶段处理。
+  int _currentStepIndex(List<HomeProgressStep> steps) {
+    final index = steps.indexWhere((step) => step.selected);
+    return index < 0 ? 0 : index;
+  }
+
+  /// 设计稿只标了 4 个阶段的间距，阶段更多时沿用最后一档。
+  Widget _gap(List<double> gaps, int index) {
+    final gap = gaps[index.clamp(0, gaps.length - 1)];
+    return SizedBox(width: layout.px(gap));
+  }
+
+  /// 金额 / 阶段文案行：按设计稿的固定间距左排。
+  ///
+  /// 后端文案比设计稿宽时整行等比缩小，既不省略号截断也不会撑破卡片。
+  Widget _buildRow({required List<Widget> children}) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(mainAxisSize: MainAxisSize.min, children: children),
       ),
     );
   }
@@ -623,6 +785,7 @@ class _Banner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final banner = this.banner;
     return GestureDetector(
+      key: const Key('home-banner'),
       onTap: banner == null ? null : () => _openBanner(ref, banner),
       child: ClipRRect(
         borderRadius: layout.radius(AppSpacing.radiusBanner),
@@ -657,57 +820,6 @@ class _Banner extends ConsumerWidget {
 
     // TODO(页面): banner 跳转目标可能是 H5 或原生路由，等 WebView / 详情页补齐后接入。
     ToastHelper.showMessage('Banner target: ${banner.jumpUrl}');
-  }
-}
-
-/// 授信/还款进度条（横向步骤）。
-class _ProgressSteps extends StatelessWidget {
-  const _ProgressSteps({required this.layout, required this.steps});
-
-  final AppLayout layout;
-  final List<HomeProgressStep> steps;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final (index, step) in steps.indexed) ...[
-          if (index > 0)
-            Expanded(
-              child: Container(
-                height: layout.px(2),
-                margin: layout.edgeInsets(left: 4, right: 4),
-                color: steps[index - 1].selected
-                    ? AppColors.primary
-                    : AppColors.divider,
-              ),
-            ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: layout.px(10),
-                height: layout.px(10),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: step.selected ? AppColors.primary : AppColors.divider,
-                ),
-              ),
-              SizedBox(height: layout.px(AppSpacing.xs / 2)),
-              Text(
-                step.title,
-                style: TextStyle(
-                  color: step.selected
-                      ? AppColors.textPrimary
-                      : AppColors.textHint,
-                  fontSize: layout.px(10),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
   }
 }
 
@@ -792,56 +904,6 @@ class _OrderProgressCard extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// 无进行中订单时的空态（对应蓝湖稿 02-03）。
-class _LoanProgressEmpty extends StatelessWidget {
-  const _LoanProgressEmpty({required this.layout});
-
-  final AppLayout layout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: layout.edgeInsets(
-        left: AppSpacing.sm,
-        top: AppSpacing.lg,
-        right: AppSpacing.sm,
-        bottom: AppSpacing.lg,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: layout.radius(AppSpacing.radiusLg),
-      ),
-      child: Column(
-        children: [
-          Image.asset(
-            AppAssets.homeProgressEmpty,
-            width: layout.px(120),
-            height: layout.px(102),
-          ),
-          SizedBox(height: layout.px(AppSpacing.sm)),
-          Text(
-            'No loan in progress',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: layout.px(16),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: layout.px(AppSpacing.xs)),
-          Text(
-            'Check your limit and submit an application in minutes.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: layout.px(12),
-            ),
-          ),
         ],
       ),
     );
