@@ -9,7 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
+import '../providers/home_provider.dart';
 import '../providers/login_provider.dart';
+import '../providers/session_provider.dart';
 import '../theme/theme.dart';
 
 /// 登录页（蓝湖稿 `01-02 - 登录`）。
@@ -115,11 +117,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// 验证码位数上限。
   static const _codeMaxLength = 6;
 
+  /// 发码按钮转圈尺寸。
+  static const _spinnerSize = 16.0;
+
   /// 提示条停留时长，与全局 Toast 保持一致。
   static const _warningDuration = Duration(seconds: 2);
 
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  final _codeFocusNode = FocusNode();
 
   Timer? _countdownTimer;
   Timer? _warningTimer;
@@ -129,13 +135,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _agreed = true;
   bool _showAgreementWarning = false;
 
+  /// 只为「Get it」按钮转圈：请求态本身由 [loginControllerProvider] 承载。
+  bool _requestingCode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedPhone();
+  }
+
   @override
   void dispose() {
     _countdownTimer?.cancel();
     _warningTimer?.cancel();
     _phoneController.dispose();
     _codeController.dispose();
+    _codeFocusNode.dispose();
     super.dispose();
+  }
+
+  /// 回填上次登录的手机号（退出登录也会保留 session 里的手机号）。
+  void _loadRememberedPhone() {
+    final phone = ref.read(userSessionProvider).phone;
+    if (phone == null || phone.isEmpty) return;
+    if (_phoneController.text.isNotEmpty) return;
+    _phoneController.text = phone;
   }
 
   bool get _phoneValid {
@@ -145,7 +169,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         int.tryParse(phone) != null;
   }
 
-  bool get _codeValid => _codeController.text.trim().length >= 4;
+  /// 验证码必须填满 6 位才算有效（对齐 peso_shield 的口径）。
+  bool get _codeValid => _codeController.text.trim().length == _codeMaxLength;
 
   bool get _canSendCode => _phoneValid && _secondsLeft == 0;
 
@@ -163,14 +188,39 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _sendCode() async {
-    final sent = await ref
-        .read(loginControllerProvider.notifier)
-        .sendCode(phone: _phoneController.text.trim());
-    if (!mounted) return;
-    if (sent) {
-      _startCountdown();
-      ToastHelper.showMessage('Verification code sent');
+    // 倒计时中 / 上一次请求还没回来，直接忽略。
+    if (_requestingCode || _secondsLeft > 0) return;
+
+    setState(() => _requestingCode = true);
+    ToastHelper.showLoading();
+    try {
+      final sent = await ref
+          .read(loginControllerProvider.notifier)
+          .sendCode(phone: _phoneController.text.trim());
+      if (!mounted) return;
+      ToastHelper.hideLoading();
+      if (sent) {
+        _startCountdown();
+        ToastHelper.showMessage('Verification code sent.');
+        // 发码成功直接把光标送到验证码框。
+        _codeFocusNode.requestFocus();
+      }
+    } finally {
+      if (mounted) setState(() => _requestingCode = false);
     }
+  }
+
+  /// 验证码填满自动提交；失败时清空并回焦，用户直接重输即可。
+  Future<void> _onCodeChanged() async {
+    setState(() {});
+    if (_codeController.text.trim().length != _codeMaxLength) return;
+
+    final agreedBeforeSubmit = _agreed;
+    final submitted = await _submit(showAgreementTip: false);
+    if (submitted || !agreedBeforeSubmit || !mounted) return;
+
+    _codeController.clear();
+    _codeFocusNode.requestFocus();
   }
 
   /// 浮出「未勾选协议」提示条。
@@ -191,28 +241,57 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     ToastHelper.showMessage('$title is not available');
   }
 
-  Future<void> _submit() async {
+  Future<bool> _submit({bool showAgreementTip = true}) async {
     if (!_agreed) {
-      _showAgreementTip();
-      return;
+      if (showAgreementTip) {
+        _showAgreementTip();
+      }
+      return false;
+    }
+    // 自动提交 + 手动点击可能撞在一起，这里兜一层。
+    if (!_canSubmit || ref.read(loginControllerProvider).isLoading) {
+      return false;
     }
 
-    final result = await ref
-        .read(loginControllerProvider.notifier)
-        .login(
-          phone: _phoneController.text.trim(),
-          code: _codeController.text.trim(),
-        );
-    if (!mounted || result == null) return;
+    // 提交即收起键盘：否则键盘一直挡着下半屏，用户看不到反馈。
+    _dismissKeyboard();
+    ToastHelper.showLoading();
+    try {
+      final result = await ref
+          .read(loginControllerProvider.notifier)
+          .login(
+            phone: _phoneController.text.trim(),
+            code: _codeController.text.trim(),
+          );
+      if (!mounted || result == null) return false;
 
-    // TODO(埋点): 登录成功需要上报 Firebase Analytics 事件。
-    final onLoginSuccess = widget.onLoginSuccess;
-    if (onLoginSuccess != null) await onLoginSuccess();
-    if (mounted) AppNavigator.pop(true);
+      // TODO(埋点): 登录成功需要在跳转前上报（Firebase Analytics + 风控场景）。
+      // 登录后首页数据（额度/订单）会变，先刷一遍。
+      unawaited(ref.read(homeDataProvider.notifier).refresh());
+      final onLoginSuccess = widget.onLoginSuccess;
+      if (onLoginSuccess != null) await onLoginSuccess();
+      if (mounted) AppNavigator.pop(true);
+      return true;
+    } finally {
+      ToastHelper.hideLoading();
+    }
   }
 
   /// 点空白处收起键盘。Flutter 默认只在桌面端这么做，移动端要自己挂。
   void _dismissKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
+
+  /// 错误分级：会话过期静默（网络层会清 session 并弹登录页），
+  /// 其余优先用后端文案，兜底给一句通用的。返回空串表示不提示。
+  String _errorMessage(Object error) {
+    switch (error) {
+      case ApiException(type: ApiFailureType.authentication):
+        return '';
+      case ApiException(:final message) when message.isNotEmpty:
+        return message;
+      default:
+        return 'Unable to complete the request.';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -233,10 +312,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     ref.listen(loginControllerProvider, (previous, next) {
       final error = next.error;
       if (error == null || next.isLoading) return;
-      ToastHelper.showError(switch (error) {
-        ApiException(:final message) when message.isNotEmpty => message,
-        _ => 'Request failed, please try again',
-      });
+      final message = _errorMessage(error);
+      // 空串表示不该提示（会话过期由全局登出流程接管）。
+      if (message.isNotEmpty) ToastHelper.showError(message);
     });
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -364,7 +442,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               children: [
                 Text(_phoneLabel, style: _labelStyle(layout)),
                 SizedBox(height: layout.px(_cardLabelGap)),
-                _phoneField(layout, busy: busy),
+                _phoneField(layout),
                 SizedBox(height: layout.px(_cardBlockGap)),
                 Text(_smsLabel, style: _labelStyle(layout)),
                 SizedBox(height: layout.px(_cardLabelGap)),
@@ -395,7 +473,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   /// 手机号输入：`+63 | 号码`。
-  Widget _phoneField(AppLayout layout, {required bool busy}) {
+  Widget _phoneField(AppLayout layout) {
     return _fieldShell(
       layout,
       Row(
@@ -419,7 +497,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             child: TextField(
               key: const Key('login-phone-field'),
               controller: _phoneController,
-              enabled: !busy,
               keyboardType: TextInputType.phone,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
@@ -451,13 +528,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             child: TextField(
               key: const Key('login-code-field'),
               controller: _codeController,
-              enabled: !busy,
+              focusNode: _codeFocusNode,
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(_codeMaxLength),
               ],
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => unawaited(_onCodeChanged()),
               cursorColor: AppColors.primary,
               style: _fieldStyle(layout, color: AppColors.fieldText),
               decoration: InputDecoration.collapsed(
@@ -480,13 +557,24 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               // 设计稿默认态（手机号还没填）里 `Get it` 也是深色，不置灰。
               disabledForegroundColor: AppColors.cardValue,
             ),
-            child: Text(
-              counting ? '$_secondsLeft S' : _sendCodeLabel,
-              style: _fieldStyle(
-                layout,
-                color: counting ? AppColors.hintOrange : AppColors.cardValue,
-              ),
-            ),
+            // 请求中换成转圈，避免用户以为没点上。
+            child: _requestingCode
+                ? SizedBox.square(
+                    dimension: layout.px(_spinnerSize),
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.cardValue,
+                    ),
+                  )
+                : Text(
+                    counting ? '$_secondsLeft S' : _sendCodeLabel,
+                    style: _fieldStyle(
+                      layout,
+                      color: counting
+                          ? AppColors.hintOrange
+                          : AppColors.cardValue,
+                    ),
+                  ),
           ),
         ],
       ),

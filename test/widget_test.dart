@@ -12,8 +12,11 @@ import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/home_data.dart';
+import 'package:laya_credit/data/models/login_result.dart';
+import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/models/personal_center_data.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
+import 'package:laya_credit/data/repositories/auth_repository.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/pages/home_page.dart';
@@ -58,6 +61,51 @@ class _StubAppRepository extends AppRepository {
             hasRedPoint: false,
             redPointId: '',
           ),
+    );
+  }
+}
+
+/// 登录/发码仓库桩：只记录调用，不发网络。
+class _StubAuthRepository extends AuthRepository {
+  _StubAuthRepository({this.failure, this.delay}) : super(_placeholderClient());
+
+  final Object? failure;
+
+  /// 模拟慢请求，用来观察请求进行中的 UI。
+  final Duration? delay;
+
+  int sendCodeCalls = 0;
+  int loginCalls = 0;
+
+  @override
+  Future<ApiResponse<void>> sendSmsCode({
+    required String phone,
+    required SmsChannel channel,
+  }) async {
+    sendCodeCalls++;
+    if (delay case final wait?) await Future<void>.delayed(wait);
+    if (failure case final error?) throw error;
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
+  }
+
+  @override
+  Future<ApiResponse<LoginResult>> login({
+    required String phone,
+    required String code,
+  }) async {
+    loginCalls++;
+    if (delay case final wait?) await Future<void>.delayed(wait);
+    if (failure case final error?) throw error;
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: LoginResult(
+        sessionId: 'test-session',
+        phone: phone,
+        realName: '',
+        isOldUser: true,
+        smsMaxId: '1',
+      ),
     );
   }
 }
@@ -193,6 +241,11 @@ Finder _loginBanner() => find.byWidgetPredicate(
       (widget.image as AssetImage).assetName == AppAssets.loginBanner,
 );
 
+/// 登录输入框当前的文本。
+String _loginFieldValue(WidgetTester tester, Key fieldKey) {
+  return tester.widget<TextField>(find.byKey(fieldKey)).controller!.text;
+}
+
 /// 某个登录输入框当前是否持有焦点（有焦点即键盘会弹出）。
 bool _loginFieldFocused(WidgetTester tester, Key fieldKey) {
   final editable = tester.widget<EditableText>(
@@ -207,6 +260,7 @@ bool _loginFieldFocused(WidgetTester tester, Key fieldKey) {
 Future<void> _pumpApp(
   WidgetTester tester, {
   AppRepository? repository,
+  AuthRepository? authRepository,
   Future<void> Function(ProviderContainer container)? setUp,
 }) async {
   _usePhoneSurface(tester);
@@ -218,6 +272,8 @@ Future<void> _pumpApp(
     overrides: [
       if (repository != null)
         appRepositoryProvider.overrideWith((ref) async => repository),
+      if (authRepository != null)
+        authRepositoryProvider.overrideWith((ref) async => authRepository),
     ],
   );
   addTearDown(container.dispose);
@@ -460,8 +516,13 @@ void main() {
     expect(submit.onPressed, isNull);
   });
 
-  testWidgets('登录页两位都填了才放开提交，未勾选协议时给提示条', (tester) async {
-    await _pumpApp(tester, repository: _StubAppRepository());
+  testWidgets('登录页手机号或验证码没填完时不发登录请求', (tester) async {
+    final auth = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
 
     await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
@@ -470,22 +531,218 @@ void main() {
       find.byKey(const Key('login-phone-field')),
       '9171234567',
     );
-    await tester.enterText(find.byKey(const Key('login-code-field')), '1234');
+    // 差一位：按钮保持禁用，也不会触发自动登录。
+    await tester.enterText(find.byKey(const Key('login-code-field')), '12345');
     await tester.pump();
 
-    final submit = tester.widget<FilledButton>(
-      find.byKey(const Key('login-submit-button')),
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('login-submit-button')))
+          .onPressed,
+      isNull,
     );
-    expect(submit.onPressed, isNotNull);
+    expect(auth.loginCalls, 0);
+  });
+
+  testWidgets('登录页验证码填满 6 位自动提交，登录成功后关掉登录页', (tester) async {
+    final auth = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await tester.pumpAndSettle();
+
+    expect(auth.loginCalls, 1);
+    expect(find.byKey(const Key('login-phone-field')), findsNothing);
+  });
+
+  testWidgets('提交登录时收起键盘并显示全屏 loading', (tester) async {
+    final auth = _StubAuthRepository(delay: const Duration(milliseconds: 300));
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    // 填满 6 位触发自动提交。
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // 请求进行中：键盘收起 + 整屏 loading。
+    expect(_loginFieldFocused(tester, const Key('login-code-field')), isFalse);
+    // 两个转圈：提交按钮内嵌的那个 + 全屏 loading 的那个。
+    expect(find.byType(CircularProgressIndicator), findsNWidgets(2));
+
+    await tester.pumpAndSettle();
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byKey(const Key('login-phone-field')), findsNothing);
+  });
+
+  testWidgets('自动登录失败会清空验证码并回焦，错误走通用文案', (tester) async {
+    final auth = _StubAuthRepository(
+      failure: const ApiException(
+        type: ApiFailureType.noConnection,
+        message: '网络连接失败，请检查网络设置',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await tester.pumpAndSettle();
+
+    expect(find.text('网络连接失败，请检查网络设置'), findsOneWidget);
+    expect(_loginFieldValue(tester, const Key('login-code-field')), isEmpty);
+    expect(_loginFieldFocused(tester, const Key('login-code-field')), isTrue);
+
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('登录态失效不弹错误提示，交给全局登出流程', (tester) async {
+    final auth = _StubAuthRepository(
+      failure: const ApiException(
+        type: ApiFailureType.authentication,
+        message: '登录已过期',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await tester.pumpAndSettle();
+
+    expect(find.text('登录已过期'), findsNothing);
+    expect(find.text('Unable to complete the request.'), findsNothing);
+  });
+
+  testWidgets('发码成功后进入倒计时并聚焦验证码框', (tester) async {
+    final auth = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('login-send-code-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(auth.sendCodeCalls, 1);
+    expect(find.text('Verification code sent.'), findsOneWidget);
+    expect(find.text('60 S'), findsOneWidget);
+    expect(_loginFieldFocused(tester, const Key('login-code-field')), isTrue);
+
+    // 收掉倒计时，避免测试结束时还有未完成的计时器。
+    await tester.pump(const Duration(seconds: 61));
+  });
+
+  testWidgets('退出登录后登录页回填上次的手机号', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      setUp: (container) async {
+        final session = container.read(userSessionProvider.notifier);
+        await session.setSession(
+          token: 'test-session',
+          userId: '1',
+          phone: '9171234567',
+        );
+        // 退出登录只清 token，手机号留着给下次登录回填。
+        await session.clearSession();
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    expect(
+      _loginFieldValue(tester, const Key('login-phone-field')),
+      '9171234567',
+    );
+    // 手机号回填后「Get it」直接可用。
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('login-send-code-button')))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('未勾选协议时不发请求，点提交浮出提示条', (tester) async {
+    final auth = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
 
     // 设计稿默认态协议就是勾上的。
     expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxChecked);
 
-    // 取消勾选后提交：不发请求，只浮出设计稿里的提示条。
+    // 先取消勾选再填验证码：自动提交静默失败，不发请求。
     await tester.tap(find.byKey(const Key('login-agreement-checkbox')));
     await tester.pump();
     expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxUnchecked);
 
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await tester.pumpAndSettle();
+    expect(auth.loginCalls, 0);
+    expect(find.byKey(const Key('login-phone-field')), findsOneWidget);
+
+    // 手动提交才浮出设计稿里的提示条。
     await tester.tap(find.byKey(const Key('login-submit-button')));
     await tester.pump();
     expect(
@@ -499,17 +756,7 @@ void main() {
       find.text('Please read and agree to the Privacy Agreement'),
       findsNothing,
     );
-
-    // 勾选协议只是提交的前置校验，不影响按钮可用状态。
-    await tester.tap(find.byKey(const Key('login-agreement-checkbox')));
-    await tester.pump();
-    expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxChecked);
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('login-submit-button')))
-          .onPressed,
-      isNotNull,
-    );
+    expect(auth.loginCalls, 0);
   });
 
   testWidgets('登录页协议里的链接响应点击，不会连带切换勾选态', (tester) async {
