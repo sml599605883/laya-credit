@@ -14,8 +14,10 @@ import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/personal_center_data.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
+import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/pages/home_page.dart';
+import 'package:laya_credit/pages/login_page.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
 import 'package:laya_credit/widgets/state_views.dart';
@@ -172,6 +174,36 @@ void _usePhoneSurface(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// 读取登录页协议行的勾选切图，用来判断当前是否勾选。
+String _loginCheckboxAsset(WidgetTester tester) {
+  final image = tester.widget<Image>(
+    find.descendant(
+      of: find.byKey(const Key('login-agreement-checkbox')),
+      matching: find.byType(Image),
+    ),
+  );
+  return (image.image as AssetImage).assetName;
+}
+
+/// 登录页底部运营 Banner（文案已含在切图里）。
+Finder _loginBanner() => find.byWidgetPredicate(
+  (widget) =>
+      widget is Image &&
+      widget.image is AssetImage &&
+      (widget.image as AssetImage).assetName == AppAssets.loginBanner,
+);
+
+/// 某个登录输入框当前是否持有焦点（有焦点即键盘会弹出）。
+bool _loginFieldFocused(WidgetTester tester, Key fieldKey) {
+  final editable = tester.widget<EditableText>(
+    find.descendant(
+      of: find.byKey(fieldKey),
+      matching: find.byType(EditableText),
+    ),
+  );
+  return editable.focusNode.hasFocus;
+}
+
 Future<void> _pumpApp(
   WidgetTester tester, {
   AppRepository? repository,
@@ -197,6 +229,9 @@ Future<void> _pumpApp(
   );
   await tester.pumpAndSettle();
 }
+
+/// 假装弹出的键盘高度（pt）。
+const _keyboard = 330.0;
 
 void main() {
   testWidgets('首页渲染标题与底部导航', (tester) async {
@@ -395,10 +430,7 @@ void main() {
     await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Log in or sign up with your mobile number'),
-      findsOneWidget,
-    );
+    expect(find.text('Please enter mobile number'), findsOneWidget);
     expect(find.byKey(const Key('login-phone-field')), findsOneWidget);
   });
 
@@ -408,10 +440,7 @@ void main() {
     await tester.tap(find.byKey(const Key('tab-stats')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Log in or sign up with your mobile number'),
-      findsOneWidget,
-    );
+    expect(find.text('Please enter mobile number'), findsOneWidget);
   });
 
   testWidgets('登录页在未填手机号时禁用获取验证码与提交', (tester) async {
@@ -420,7 +449,7 @@ void main() {
     await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
-    final sendCode = tester.widget<OutlinedButton>(
+    final sendCode = tester.widget<TextButton>(
       find.byKey(const Key('login-send-code-button')),
     );
     final submit = tester.widget<FilledButton>(
@@ -429,6 +458,121 @@ void main() {
 
     expect(sendCode.onPressed, isNull);
     expect(submit.onPressed, isNull);
+  });
+
+  testWidgets('登录页两位都填了才放开提交，未勾选协议时给提示条', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '1234');
+    await tester.pump();
+
+    final submit = tester.widget<FilledButton>(
+      find.byKey(const Key('login-submit-button')),
+    );
+    expect(submit.onPressed, isNotNull);
+
+    // 设计稿默认态协议就是勾上的。
+    expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxChecked);
+
+    // 取消勾选后提交：不发请求，只浮出设计稿里的提示条。
+    await tester.tap(find.byKey(const Key('login-agreement-checkbox')));
+    await tester.pump();
+    expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxUnchecked);
+
+    await tester.tap(find.byKey(const Key('login-submit-button')));
+    await tester.pump();
+    expect(
+      find.text('Please read and agree to the Privacy Agreement'),
+      findsOneWidget,
+    );
+
+    // 提示条 2 秒后自动收起。
+    await tester.pump(const Duration(seconds: 3));
+    expect(
+      find.text('Please read and agree to the Privacy Agreement'),
+      findsNothing,
+    );
+
+    // 勾选协议只是提交的前置校验，不影响按钮可用状态。
+    await tester.tap(find.byKey(const Key('login-agreement-checkbox')));
+    await tester.pump();
+    expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxChecked);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('login-submit-button')))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('登录页协议里的链接响应点击，不会连带切换勾选态', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    // 点 `Privacy Policy` 只走链接回调，勾选态保持默认的已勾选。
+    await tester.tapOnText(find.textRange.ofSubstring('Privacy Policy'));
+    await tester.pump();
+    expect(_loginCheckboxAsset(tester), AppAssets.loginCheckboxChecked);
+
+    // 放掉链接回调里的 Toast 动画，避免测试结束时有未完成的计时器。
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('登录页点击空白处收起键盘', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    const phoneField = Key('login-phone-field');
+    await tester.tap(find.byKey(phoneField));
+    await tester.pumpAndSettle();
+    expect(_loginFieldFocused(tester, phoneField), isTrue);
+
+    // 点标题下方的空白背景（品牌行左侧）。
+    await tester.tapAt(const Offset(10, 100));
+    await tester.pumpAndSettle();
+    expect(_loginFieldFocused(tester, phoneField), isFalse);
+  });
+
+  testWidgets('键盘弹出时底部 Banner 不被顶起，只有表单区让位', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    final formArea = find.descendant(
+      of: find.byType(LoginPage),
+      matching: find.byType(SingleChildScrollView),
+    );
+    final bannerBefore = tester.getRect(_loginBanner());
+    final formBefore = tester.getRect(formArea);
+    final screenBottom =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+    // Banner 下方的留白（Banner + 间距 + 安全区）不算被键盘盖住。
+    final bottomBlock = screenBottom - formBefore.bottom;
+
+    // 测试面是 3 倍图，990 物理像素 = 330pt 键盘。
+    tester.view.viewInsets = const FakeViewPadding(bottom: _keyboard * 3);
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(_loginBanner()), bannerBefore);
+    // 表单区底部正好停在键盘上沿，中间不留空白。
+    expect(tester.getRect(formArea).bottom, screenBottom - _keyboard);
+    expect(
+      tester.getRect(formArea).height,
+      formBefore.height - (_keyboard - bottomBlock),
+    );
   });
 
   testWidgets('登录后个人中心展示手机号、服务入口与退出按钮', (tester) async {

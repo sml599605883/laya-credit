@@ -39,6 +39,27 @@ abstract final class AppAssets {
   static const tabMineActive = 'assets/navigation/tab_mine_active.png';
   static const tabMineInactive = 'assets/navigation/tab_mine_inactive.png';
 
+  // 登录（蓝湖稿 `01-02 - 登录`）
+  /// 整页深色底 + 金色光晕（设计稿「位图 + 编组 2蒙版」，375x812 通栏）。
+  static const loginBackground = 'assets/login/login_background.png';
+
+  /// 顶部产品 Logo（设计稿「矩形」，48x48，圆角与白描边已含在切图里）。
+  static const loginLogo = 'assets/login/login_logo.png';
+
+  /// 表单卡底图（设计稿「编组 8」，339x333）：半透明玻璃层 + 白色卡身，
+  /// 白卡相对底图内缩 10pt，所以卡内 padding 按 22/21/21/22 摆放即可。
+  static const loginCard = 'assets/login/login_card.png';
+
+  /// 底部运营 Banner（设计稿「编组 4备份 2」，343x120，文案已含在切图里）。
+  static const loginBanner = 'assets/login/login_banner.png';
+
+  /// 协议勾选框：已勾选（柠檬绿底 + 深色对勾）。
+  static const loginCheckboxChecked = 'assets/login/login_checkbox_checked.png';
+
+  /// 协议勾选框：未勾选（灰色圆环）。
+  static const loginCheckboxUnchecked =
+      'assets/login/login_checkbox_unchecked.png';
+
   // 通用
   static const chevronRight = 'assets/common/chevron_right.png';
 }

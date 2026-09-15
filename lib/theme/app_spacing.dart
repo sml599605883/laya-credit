@@ -31,4 +31,8 @@ abstract final class AppSpacing {
   static const double radiusMd = 16;
   static const double radiusPill = 20;
   static const double radiusLg = 24;
+
+  /// 6pt —— 登录页未勾选协议提示条的圆角
+  /// （蓝湖稿 `01-02 - 登录-已输入-勾选` 的「形状结合」实测）。
+  static const double radiusToast = 6;
 }

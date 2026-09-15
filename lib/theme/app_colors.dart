@@ -89,6 +89,29 @@ abstract final class AppColors {
   /// 未到达阶段的金额文字色。
   static const creditProgressAmount = Color(0xFF333333);
 
+  // ---------- 登录页（蓝湖稿 `01-02 - 登录`） ----------
+
+  /// 卡片内字段标题文字色（Please enter mobile number / Verify with SMS Code）。
+  static const loginLabel = Color(0xFF031A03);
+
+  /// 输入框描边色。
+  static const fieldBorder = Color(0xFFEBF0F7);
+
+  /// 输入框占位文字色。
+  static const fieldHint = Color(0xFFCCCCCC);
+
+  /// 输入框正文色（含 `+63` 前缀）。
+  static const fieldText = Color(0xFF333333);
+
+  /// 协议文案颜色。
+  static const agreementText = Color(0xFF666666);
+
+  /// 协议里的可点击链接色（Privacy Policy）。
+  static const agreementLink = Color(0xFF131313);
+
+  /// 未勾选协议时的提示条底色（设计稿 `形状结合` rgba(0,0,0,0.7)）。
+  static const warningBar = Color(0xB3000000);
+
   /// 弹窗遮罩。
   static const dialogBarrier = Color(0x73000000);
 
