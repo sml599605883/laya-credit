@@ -3,6 +3,7 @@ import '../../data/models/product_detail.dart';
 import '../../data/repositories/product_repository.dart';
 import '../navigation/app_deep_link.dart';
 import '../navigation/app_navigator.dart';
+import '../navigation/app_route_generator.dart';
 import '../navigation/app_routes.dart';
 import '../network/api_exception.dart';
 import '../ui/toast_helper.dart';
@@ -151,10 +152,12 @@ class ProductApplicationFlow {
   /// `TrussvilleUninstructively`=工作 / `Thriftiness`=紧急联系人 / `Bespattered`=绑卡。
   void _openCertificationStep(ProductNextStep step, String productId) {
     // 身份认证：证件选择页已按蓝湖稿 `03 - 认证流程模块` 落地。
-    // 证件类型是客户端固定清单，页面不再请求接口，所以这里不需要下发数据；
-    // 选中证件后的上传页要按产品维度取资料，补齐时再把 productId 透传过去。
+    // 证件类型由后端按产品下发（`GET /outsulk/gaonate`），页面自己按 productId 拉。
     if (step.taskType == _taskTypeIdentity) {
-      AppNavigator.push(AppRoutes.idVerification);
+      AppNavigator.push(
+        AppRoutes.idVerification,
+        arguments: IdVerificationPageArguments(productId: productId),
+      );
       return;
     }
 

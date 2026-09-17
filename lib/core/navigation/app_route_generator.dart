@@ -8,6 +8,13 @@ import '../../pages/stats_page.dart';
 import '../../root_tab_page.dart';
 import 'app_routes.dart';
 
+/// 证件选择页入参。认证项按产品下发，必须带上产品 id。
+class IdVerificationPageArguments {
+  const IdVerificationPageArguments({required this.productId});
+
+  final String productId;
+}
+
 /// 登录页入参。跳转方可以传入回调，在登录成功后继续未完成的动作。
 class LoginPageArguments {
   const LoginPageArguments({this.onLoginSuccess});
@@ -37,7 +44,11 @@ class AppRouteGenerator {
         return _route<void>(settings, (_) => const MinePage());
 
       case AppRoutes.idVerification:
-        return _route<void>(settings, (_) => const IdVerificationPage());
+        final args = settings.arguments as IdVerificationPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => IdVerificationPage(productId: args?.productId ?? ''),
+        );
 
       case AppRoutes.login:
         final args = settings.arguments as LoginPageArguments?;

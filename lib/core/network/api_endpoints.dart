@@ -28,4 +28,7 @@ abstract final class ApiEndpoints {
 
   /// 跟进订单号获取跳转地址（认证完成后进借款确认页）。POST
   static const productPush = '/outsulk/octodentate';
+
+  /// 获取用户身份信息（认证第一项）：证件类型列表。GET
+  static const identityInfo = '/outsulk/gaonate';
 }

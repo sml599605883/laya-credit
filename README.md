@@ -137,13 +137,13 @@ lib/
    与 `kneeing` 里的 `BANNER` 模块不是同一个东西，需要设计确认它在首页的位置。
 3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
-4. **其余接口未接入**：认证项、订单、上报、H5 相关接口尚未落地。
+4. **其余接口未接入**：订单、上报、H5 相关接口尚未落地。
    「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
    H5 地址需要 WebView、认证项需要活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡页、
    原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
-   认证项里的身份认证（`Kegful`）已接上证件选择页（见第 12 条），
-   证件上传页仍然缺。
+   认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
+   证件上传 / 保存接口（`/outsulk/fashioned`、`/outsulk/wardmote`）仍然缺。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -230,6 +230,28 @@ lib/
     返回按钮走 `assets/common/back.png`（用户提供的 `返回@3x.png`，24x24，两个素材都已按用途改名）。
     两张卡（`Recommended ID Type` / `Other Options`）的白底、圆角 12、标题 16pt/700、
     行高 46、行间虚线（实 4 空 4、`rgba(189,189,162)`）都取自设计稿 CSS 与 Design Tokens。
+    数据来自接口，不是客户端写死的清单：
+    - 进页面用路由入参 `IdVerificationPageArguments.productId` 调
+      `GET /outsulk/gaonate`（认证第一项），走 `CertificationRepository.getIdentityInfo`
+      → `idVerificationProvider(productId)`。取 `wollongong[0].unconversational` /
+      `drumfish` 两组，行文案就是 `partridge` 原样展示，前端**不维护**「短码 → 文案」映射。
+      `wollongong` 是数组、文档示例只有一组，客户端取第一组。
+      ⚠️ 待联调确认：文档示例里 `partridge` 是 `DRIVINGLICENSE` / `TIN` 这种短码，
+      设计稿行文案却是 `DRIVER'S LICENSE` / `TIN  ID`。真机联调时先确认后端下发哪一种，
+      如果下发短码要由后端补展示文案（`PHILIPPINE PASSPORT`、
+      `UMID(Unified Multi-Purpose ID)` 这种文案前端推不出来）。
+    - 三种状态齐全：请求中给 `LoadingView`；失败给 `ErrorView` + `Retry`
+      （`ref.invalidate(idVerificationProvider(productId))`）；后端不下发证件
+      （低版本 / 未灰度用户）时给空态文案，而不是画两张空卡片。
+      Provider 按产品 id 缓存，同一产品反复进出页面不会重复请求。
+    - 响应里这些字段暂未解析，等对应页面落地再接：`ceratin` / `acquirements`
+      （已上传的身份证正面 / 活体）、`nonbuoyantly`、`magisterial`（客户端写死的示例证件图）、
+      `befleas`（引导文案，低版本不下发）。卡片项里的 `woodshock` / `indecisively`
+      （正确 / 错误示范图）已经解析进 `IdCardType`，但这一页设计稿没有展示位置，留给上传页用。
+    - ⚠️ Riverpod 3 默认对失败的 Provider 做指数退避重试（最多 10 次、单次最长 6.4s，
+      见 `ProviderContainer.defaultRetry`）。这是**全 App 的容器级默认行为**（首页也一样），
+      不是本页特有。要不要对业务失败关掉（`retry: (count, error) => null`）需要整体定，
+      要改就统一改，别只改这一个 Provider。
     要点与已知差异：
     - 设计稿把卡片标题块和卡身拆成两个绝对定位元素，标题块底边压在卡身上 19pt
       （`text-wrapper_4` 的 `top: -19`）。代码按「标题块 + 卡身」竖排叠出同样效果，
@@ -239,17 +261,15 @@ lib/
       是个人中心那套灰色箭头（7x11、`rgba(153,153,153)`），和设计稿的 `rgba(38,65,7)` 对不上，
       按仓库约定「没有的素材直接忽略也不硬凑」，改用 `CustomPainter` 按设计稿尺寸画，
       颜色走 `AppColors.idVerifyRowText`。行间虚线同理（Flutter 没有虚线边框）。
-    - 证件清单是客户端固定文案（设计稿写死的），不请求接口，所以页面没有
-      Loading / Error / Empty 态，与个人中心同一套判断。
     - 选中证件后的上传页（正面 / 反面 + 拍摄引导）尚未搭建，点击先给占位提示；
-      `product_application_flow.dart` 里 `taskType == 'Kegful'` 会直接压栈这一页。
-      上传接口按产品维度取资料，补齐时再把 `productId` 透传过来，现在页面不吃参数。
+      `product_application_flow.dart` 里 `taskType == 'Kegful'` 会带上 `productId` 压栈这一页，
+      上传页要用的卡类型就是行文案 `partridge`，示范图从同一个卡片项里取。
     - 导航浮层固定在头图上、不随内容滚动：设计稿内容正好 812pt 一屏放得下，
       但小屏（< 812pt）滚动时返回按钮不能滚出屏幕。真机安全区比设计稿的
       状态栏（17pt + 21pt 间距）高，返回按钮落在「安全区 + 10pt」处，
       点击热区补到 40x40（设计稿只标了 24pt 图标）。
-    - 证件文案里的 `POSTAL  ID` / `TIN  ID` 是两个空格，来自设计稿的 `&nbsp;&nbsp;`，
-      不要顺手改成一个空格。
+    - 设计稿里 `POSTAL  ID` / `TIN  ID` 是两个空格（`&nbsp;&nbsp;`）。文案现在由后端下发，
+      前端不要做 `trim` / 空格替换，否则和设计稿对不上。
 
 ## 常用命令
 

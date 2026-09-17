@@ -1,10 +1,15 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/navigation/navigation.dart';
+import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
+import '../data/models/id_verification_data.dart';
+import '../providers/id_verification_provider.dart';
 import '../theme/theme.dart';
+import '../widgets/state_views.dart';
 
 /// 顶部导航标题（设计稿 `text_3`）。
 const _navTitle = 'ID Verification';
@@ -14,27 +19,6 @@ const _recommendedTitle = 'Recommended ID Type';
 
 /// 其他证件分组标题（设计稿 `text_5`）。
 const _otherOptionsTitle = 'Other Options';
-
-/// 推荐证件类型（设计稿 `section_3`，顺序与文案都与设计稿一致）。
-///
-/// `POSTAL  ID` 的两个空格来自设计稿（`POSTAL&nbsp;&nbsp;ID`），不要顺手改成
-/// 一个空格；`UMID(...)` 的括号内外也没有多余空格。
-const _recommendedIdTypes = <String>[
-  'PRC ID',
-  'SSS ID',
-  'PHILIPPINE PASSPORT',
-  'POSTAL  ID',
-  'UMID(Unified Multi-Purpose ID)',
-];
-
-/// 其他证件类型（设计稿 `section_4`）。
-const _otherIdTypes = <String>[
-  "DRIVER'S LICENSE",
-  'STUDENT CARD',
-  'TIN  ID',
-  "Voter's ID",
-  'PhilHealth ID',
-];
 
 /// 头图高度（设计稿 `section_1`，375x213）。
 const _headerHeight = 213.0;
@@ -49,30 +33,40 @@ const _groupGap = 12.0;
 /// 页面底部留白（设计稿卡片底边 784 -> 页面底边 812）。
 const _pageBottom = 28.0;
 
+/// Loading / Error / Empty 态的高度（头图下方那块内容区，避免状态视图撑不满）。
+const _stateHeight = 160.0;
+
 /// 证件选择页（蓝湖稿 `03 - 认证流程模块`），认证流程第一步。
 ///
 /// 页面分三段，与设计稿一一对应：
 /// 1. 通栏头图（`section_1`）：绿色渐变 + 「ID Verification」大标题 + 吉祥物，
 ///    全部烘焙在切图 `id_verify_header.png` 里；返回按钮与导航标题浮在头图上。
-/// 2. `Recommended ID Type` 卡片（`section_3`）：5 个推荐证件。
-/// 3. `Other Options` 卡片（`section_4`）：5 个备选证件。
+/// 2. `Recommended ID Type` 卡片（`section_3`）：后端下发的推荐证件。
+/// 3. `Other Options` 卡片（`section_4`）：后端下发的备选证件。
 ///
-/// 证件类型是客户端固定清单（设计稿写死的文案），不请求接口，因此页面没有
-/// Loading / Error / Empty 态；选中证件后的上传页尚未搭建，点击先给占位提示。
-class IdVerificationPage extends StatelessWidget {
-  const IdVerificationPage({super.key});
+/// 证件类型不是客户端写死的：进页面用 [productId] 拉 `GET /outsulk/gaonate`
+/// （认证第一项），后端按产品下发两组卡片；没下发（低版本 / 未灰度用户）时走空态。
+/// 选中证件后的上传页尚未搭建，点击先给占位提示。
+class IdVerificationPage extends ConsumerWidget {
+  const IdVerificationPage({super.key, required this.productId});
+
+  /// 产品 id：证件类型按产品下发，对应接口的 `tartarizing`。
+  final String productId;
 
   /// 选中证件类型。
   ///
   /// TODO(页面): 证件上传页（正面 / 反面 + 拍摄引导）尚未搭建，先弹占位提示。
+  /// 上传页需要带上 [productId]、选中的卡类型（`partridge`）以及这个卡类型自己的
+  /// 示范图 / 错误示范图（`woodshock` / `indecisively`）。
   /// TODO(埋点): 选择证件类型需要在 Firebase Analytics 上报事件。
-  void _onIdTypeSelected(String idType) {
-    ToastHelper.showMessage('$idType is not available yet');
+  void _onIdTypeSelected(IdCardType card) {
+    ToastHelper.showMessage('${card.name} is not available yet');
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final layout = AppLayout.of(context);
+    final idVerification = ref.watch(idVerificationProvider(productId));
 
     return Scaffold(
       // 设计稿 `page` 底色 `rgba(245,245,245)`。
@@ -104,23 +98,28 @@ class IdVerificationPage extends StatelessWidget {
                         right: AppSpacing.pageHorizontal,
                         bottom: _pageBottom,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _IdTypeGroup(
-                            layout: layout,
-                            title: _recommendedTitle,
-                            types: _recommendedIdTypes,
-                            onSelected: _onIdTypeSelected,
+                      child: idVerification.when(
+                        loading: () => SizedBox(
+                          height: layout.px(_stateHeight),
+                          child: const LoadingView(),
+                        ),
+                        error: (error, _) => SizedBox(
+                          height: layout.px(_stateHeight),
+                          child: ErrorView(
+                            message: switch (error) {
+                              ApiException(:final message) => message,
+                              _ => 'Failed to load, please try again',
+                            },
+                            onRetry: () => ref.invalidate(
+                              idVerificationProvider(productId),
+                            ),
                           ),
-                          SizedBox(height: layout.px(_groupGap)),
-                          _IdTypeGroup(
-                            layout: layout,
-                            title: _otherOptionsTitle,
-                            types: _otherIdTypes,
-                            onSelected: _onIdTypeSelected,
-                          ),
-                        ],
+                        ),
+                        data: (data) => _IdTypeGroups(
+                          layout: layout,
+                          data: data,
+                          onSelected: _onIdTypeSelected,
+                        ),
                       ),
                     ),
                   ],
@@ -212,6 +211,68 @@ class _NavBar extends StatelessWidget {
   }
 }
 
+/// 接口下发的两组证件类型。
+///
+/// 后端只下发一组（或其中一组为空）时，只渲染有内容的那张卡；
+/// 两组都空时给空态文案，而不是画两张空卡片。
+class _IdTypeGroups extends StatelessWidget {
+  const _IdTypeGroups({
+    required this.layout,
+    required this.data,
+    required this.onSelected,
+  });
+
+  final AppLayout layout;
+  final IdVerificationData data;
+  final ValueChanged<IdCardType> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = <Widget>[
+      if (data.recommended.isNotEmpty)
+        _IdTypeGroup(
+          layout: layout,
+          title: _recommendedTitle,
+          cards: data.recommended,
+          onSelected: onSelected,
+        ),
+      if (data.other.isNotEmpty)
+        _IdTypeGroup(
+          layout: layout,
+          title: _otherOptionsTitle,
+          cards: data.other,
+          onSelected: onSelected,
+        ),
+    ];
+
+    if (groups.isEmpty) {
+      return SizedBox(
+        height: layout.px(_stateHeight),
+        child: Center(
+          child: Text(
+            'No ID types available yet',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: layout.px(14),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < groups.length; i++) ...[
+          if (i > 0) SizedBox(height: layout.px(_groupGap)),
+          groups[i],
+        ],
+      ],
+    );
+  }
+}
+
 /// 一组证件类型：白色标题块 + 卡片本体（设计稿 `text-wrapper_4` + `section_3`）。
 ///
 /// 设计稿把标题块和卡片拆成两个绝对定位元素，标题块底边压在卡片顶边上，
@@ -221,14 +282,14 @@ class _IdTypeGroup extends StatelessWidget {
   const _IdTypeGroup({
     required this.layout,
     required this.title,
-    required this.types,
+    required this.cards,
     required this.onSelected,
   });
 
   final AppLayout layout;
   final String title;
-  final List<String> types;
-  final ValueChanged<String> onSelected;
+  final List<IdCardType> cards;
+  final ValueChanged<IdCardType> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +301,9 @@ class _IdTypeGroup extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: layout.radius(AppSpacing.radiusBanner),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(layout.px(AppSpacing.radiusBanner)),
+            ),
           ),
           child: Padding(
             padding: layout.edgeInsets(
@@ -276,12 +339,12 @@ class _IdTypeGroup extends StatelessWidget {
                 height: layout.px(1),
                 child: const ColoredBox(color: AppColors.idVerifyDivider),
               ),
-              for (var i = 0; i < types.length; i++) ...[
+              for (var i = 0; i < cards.length; i++) ...[
                 if (i > 0) _DashedDivider(layout: layout),
                 _IdTypeRow(
                   layout: layout,
-                  idType: types[i],
-                  onTap: () => onSelected(types[i]),
+                  card: cards[i],
+                  onTap: () => onSelected(cards[i]),
                 ),
               ],
               // 设计稿 `section_3` / `section_4` 的 `padding-bottom: 12px`。
@@ -301,12 +364,12 @@ class _IdTypeGroup extends StatelessWidget {
 class _IdTypeRow extends StatelessWidget {
   const _IdTypeRow({
     required this.layout,
-    required this.idType,
+    required this.card,
     required this.onTap,
   });
 
   final AppLayout layout;
-  final String idType;
+  final IdCardType card;
   final VoidCallback onTap;
 
   static const _designHeight = 46.0;
@@ -324,7 +387,7 @@ class _IdTypeRow extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  idType,
+                  card.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

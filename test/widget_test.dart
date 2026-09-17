@@ -12,10 +12,12 @@ import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/home_data.dart';
+import 'package:laya_credit/data/models/id_verification_data.dart';
 import 'package:laya_credit/data/models/login_result.dart';
 import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/data/repositories/auth_repository.dart';
+import 'package:laya_credit/data/repositories/certification_repository.dart';
 import 'package:laya_credit/data/repositories/product_repository.dart';
 import 'package:laya_credit/data/models/product_apply_result.dart';
 import 'package:laya_credit/data/models/product_detail.dart';
@@ -94,6 +96,47 @@ class _StubAuthRepository extends AuthRepository {
         smsMaxId: '1',
       ),
     );
+  }
+}
+
+/// 认证项仓库桩：默认下发设计稿那两组证件，可改成失败 / 慢请求 / 空数据。
+class _StubCertificationRepository extends CertificationRepository {
+  _StubCertificationRepository({this.data, this.failure, this.delay})
+    : super(_placeholderClient());
+
+  final IdVerificationData? data;
+  final Object? failure;
+  final Duration? delay;
+
+  /// 记录每次请求的产品 id。
+  final List<String> identityInfoCalls = [];
+
+  /// 接口文档示例的文案口径（`partridge` 就是页面展示文案）。
+  static const _defaultData = IdVerificationData(
+    recommended: [
+      IdCardType(name: 'PRC ID'),
+      IdCardType(name: 'SSS ID'),
+      IdCardType(name: 'PHILIPPINE PASSPORT'),
+      IdCardType(name: 'POSTAL  ID'),
+      IdCardType(name: 'UMID(Unified Multi-Purpose ID)'),
+    ],
+    other: [
+      IdCardType(name: "DRIVER'S LICENSE"),
+      IdCardType(name: 'STUDENT CARD'),
+      IdCardType(name: 'TIN  ID'),
+      IdCardType(name: "Voter's ID"),
+      IdCardType(name: 'PhilHealth ID'),
+    ],
+  );
+
+  @override
+  Future<ApiResponse<IdVerificationData>> getIdentityInfo({
+    required String productId,
+  }) async {
+    identityInfoCalls.add(productId);
+    if (delay case final wait?) await Future<void>.delayed(wait);
+    if (failure case final error?) throw error;
+    return ApiResponse(code: 0, message: 'success', data: data ?? _defaultData);
   }
 }
 
@@ -186,6 +229,16 @@ class _RecordingClient extends HttpClient {
     required T Function(Object? data) parse,
   }) async {
     calls.add((path, params));
+    return ApiResponse<T>(code: 0, message: 'success', data: parse(null));
+  }
+
+  @override
+  Future<ApiResponse<T>> get<T>(
+    String path, {
+    Map<String, Object?>? params,
+    required T Function(Object? data) parse,
+  }) async {
+    calls.add((path, params ?? const {}));
     return ApiResponse<T>(code: 0, message: 'success', data: parse(null));
   }
 }
@@ -314,6 +367,7 @@ Future<void> _pumpApp(
   AppRepository? repository,
   AuthRepository? authRepository,
   ProductRepository? productRepository,
+  CertificationRepository? certificationRepository,
   Future<void> Function(ProviderContainer container)? setUp,
 }) async {
   _usePhoneSurface(tester);
@@ -342,6 +396,10 @@ Future<void> _pumpApp(
       if (productRepository != null)
         productRepositoryProvider.overrideWith(
           (ref) async => productRepository,
+        ),
+      if (certificationRepository != null)
+        certificationRepositoryProvider.overrideWith(
+          (ref) async => certificationRepository,
         ),
     ],
   );
@@ -1350,6 +1408,9 @@ void main() {
         ),
       ),
       productRepository: productRepository,
+      // 默认详情里的下一步是身份认证，准入成功后会压栈证件选择页，
+      // 这一条不需要验证那一页，给个桩仓库避免真发请求。
+      certificationRepository: _StubCertificationRepository(),
       setUp: (container) async {
         await container
             .read(userSessionProvider.notifier)
@@ -1436,11 +1497,23 @@ void main() {
     expect(find.text('Please complete Informasi bank'), findsOneWidget);
   });
 
-  testWidgets('证件选择页按蓝湖稿 03 展示两组证件类型', (tester) async {
-    await _pumpApp(tester, repository: _StubAppRepository());
+  testWidgets('证件选择页展示接口下发的证件类型', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
 
-    AppNavigator.push(AppRoutes.idVerification);
+    // 申请流程里「身份认证」这一项跳的就是这个路由，这里直接按同样的方式打开。
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
     await tester.pumpAndSettle();
+
+    // 证件类型必须来自接口，不能在客户端写死。
+    expect(certificationRepository.identityInfoCalls, ['7']);
 
     // 头图与返回按钮都是设计稿切图，不要在代码里重画。
     expect(_assetImage(AppAssets.idVerifyHeader), findsOneWidget);
@@ -1451,14 +1524,14 @@ void main() {
     expect(find.text('Recommended ID Type'), findsOneWidget);
     expect(find.text('Other Options'), findsOneWidget);
 
-    // 推荐证件 5 项，顺序与设计稿 `section_3` 一致（`POSTAL  ID` 的空格也照搬）。
+    // 推荐证件 5 项，顺序与后端下发一致。
     expect(find.text('PRC ID'), findsOneWidget);
     expect(find.text('SSS ID'), findsOneWidget);
     expect(find.text('PHILIPPINE PASSPORT'), findsOneWidget);
     expect(find.text('POSTAL  ID'), findsOneWidget);
     expect(find.text('UMID(Unified Multi-Purpose ID)'), findsOneWidget);
 
-    // 其他证件 5 项（设计稿 `section_4`）。
+    // 其他证件 5 项。
     expect(find.text("DRIVER'S LICENSE"), findsOneWidget);
     expect(find.text('STUDENT CARD'), findsOneWidget);
     expect(find.text('TIN  ID'), findsOneWidget);
@@ -1484,9 +1557,91 @@ void main() {
     expect(find.text('PRC ID is not available yet'), findsOneWidget);
   });
 
-  testWidgets('身份认证项直接进入证件选择页', (tester) async {
+  testWidgets('证件选择页请求中显示 Loading，失败可重试', (tester) async {
+    final certificationRepository = _StubCertificationRepository(
+      delay: const Duration(seconds: 1),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // 请求还没回来：头图 + Loading，不能是白屏。
+    expect(_assetImage(AppAssets.idVerifyHeader), findsOneWidget);
+    expect(find.byType(LoadingView), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingView), findsNothing);
+    expect(find.text('PRC ID'), findsOneWidget);
+  });
+
+  testWidgets('证件选择页接口失败给错误态与重试入口', (tester) async {
+    final certificationRepository = _StubCertificationRepository(
+      failure: const ApiException(
+        type: ApiFailureType.noConnection,
+        message: 'Network unreachable',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ErrorView), findsOneWidget);
+    expect(find.text('Network unreachable'), findsOneWidget);
+
+    // 重试会按同一个产品 id 再请求一次。
+    // 注意 Riverpod 3 默认会对失败的 provider 做指数退避重试（最多 10 次），
+    // 这里只推一帧，断言「确实又发起了请求」，不去和自动重试的次数较劲。
+    final callsBeforeRetry = certificationRepository.identityInfoCalls.length;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(
+      certificationRepository.identityInfoCalls.length,
+      greaterThan(callsBeforeRetry),
+    );
+  });
+
+  testWidgets('证件选择页在后端不下发证件时走空态', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(
+        data: const IdVerificationData(recommended: [], other: []),
+      ),
+    );
+
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
+    await tester.pumpAndSettle();
+
+    // 空态：给文案，而不是两张没有内容的空卡片。
+    expect(find.text('No ID types available yet'), findsOneWidget);
+    expect(find.text('Recommended ID Type'), findsNothing);
+    expect(find.text('Other Options'), findsNothing);
+  });
+
+  testWidgets('身份认证项直接进入证件选择页并带上产品 id', (tester) async {
     // 桩仓库默认的下一步认证项就是身份认证（`taskType = Kegful`）。
     final productRepository = _StubProductRepository();
+    final certificationRepository = _StubCertificationRepository();
     await _pumpApp(
       tester,
       repository: _StubAppRepository(
@@ -1498,6 +1653,7 @@ void main() {
         ),
       ),
       productRepository: productRepository,
+      certificationRepository: certificationRepository,
       setUp: (container) async {
         await container
             .read(userSessionProvider.notifier)
@@ -1510,5 +1666,59 @@ void main() {
 
     expect(find.byType(IdVerificationPage), findsOneWidget);
     expect(find.text('Recommended ID Type'), findsOneWidget);
+    // 认证项按产品下发：大卡的产品 id 必须传到证件选择页。
+    expect(certificationRepository.identityInfoCalls, ['1']);
+  });
+
+  test('获取身份信息接口带产品 id 与业务混淆字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).getIdentityInfo(productId: '7');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.identityInfo);
+    expect(params[ApiFields.productId], '7');
+    expect(params.containsKey(ApiFields.obfuscateIdentityInfo), isTrue);
+  });
+
+  test('身份信息解析 wollongong 里的推荐 / 其他两组证件', () {
+    final data = IdVerificationData.fromJson({
+      ApiFields.idCardGroups: [
+        {
+          ApiFields.idCardRecommended: [
+            {
+              ApiFields.idCardName: 'PRC',
+              ApiFields.idCardSampleUrls: ['https://cdn.example.com/ok.png'],
+              ApiFields.idCardWrongSampleUrls: [
+                'https://cdn.example.com/bad.png',
+              ],
+            },
+          ],
+          ApiFields.idCardOthers: [
+            {ApiFields.idCardName: 'TIN'},
+            // 没有名字的脏数据直接丢掉，不要渲染出一行空文案。
+            {ApiFields.idCardName: ''},
+          ],
+        },
+      ],
+    });
+
+    expect(data.recommended.map((card) => card.name), ['PRC']);
+    expect(data.recommended.single.sampleUrls, [
+      'https://cdn.example.com/ok.png',
+    ]);
+    expect(data.recommended.single.wrongSampleUrls, [
+      'https://cdn.example.com/bad.png',
+    ]);
+    expect(data.other.map((card) => card.name), ['TIN']);
+    expect(data.isEmpty, isFalse);
+  });
+
+  test('身份信息没有下发证件配置时按空处理', () {
+    // 低版本 / 未灰度用户：`wollongong` 缺失或为空。
+    expect(IdVerificationData.fromJson(const {}).isEmpty, isTrue);
+    expect(
+      IdVerificationData.fromJson(const {ApiFields.idCardGroups: []}).isEmpty,
+      isTrue,
+    );
   });
 }
