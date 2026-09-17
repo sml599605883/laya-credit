@@ -233,21 +233,25 @@ lib/
     数据来自接口，不是客户端写死的清单：
     - 进页面用路由入参 `IdVerificationPageArguments.productId` 调
       `GET /outsulk/gaonate`（认证第一项），走 `CertificationRepository.getIdentityInfo`
-      → `idVerificationProvider(productId)`。取 `wollongong[0].unconversational` /
-      `drumfish` 两组，行文案就是 `partridge` 原样展示，前端**不维护**「短码 → 文案」映射。
-      `wollongong` 是数组、文档示例只有一组，客户端取第一组。
-      ⚠️ 待联调确认：文档示例里 `partridge` 是 `DRIVINGLICENSE` / `TIN` 这种短码，
-      设计稿行文案却是 `DRIVER'S LICENSE` / `TIN  ID`。真机联调时先确认后端下发哪一种，
-      如果下发短码要由后端补展示文案（`PHILIPPINE PASSPORT`、
-      `UMID(Unified Multi-Purpose ID)` 这种文案前端推不出来）。
+      → `idVerificationProvider(productId)`。
+    - 列表取响应里的 **`magisterial`**：两段字符串数组 `[[推荐...], [其他...]]`
+      （文档示例 6 + 5 项），第一段对应设计稿 `Recommended ID Type`、第二段对应
+      `Other Options`。划分依据是同一响应里 `wollongong` 的
+      `unconversational` / `drumfish`（推荐 / 其他）示例用的就是同一批短码
+      （`DRIVINGLICENSE` 在推荐、`TIN` 在其他）。**不要**改成从 `wollongong` 取列表。
+    - 卡片文案**原样展示，客户端不做「短码 → 文案」映射**。
+      ⚠️ 待联调确认：文档示例里 `magisterial` 是 `DRIVINGLICENSE` / `POSTALID` /
+      `VOTERID` 这种短码，设计稿画的是 `DRIVER'S LICENSE` / `POSTAL  ID` / `Voter's ID`，
+      而 `PHILIPPINE PASSPORT`、`UMID(Unified Multi-Purpose ID)` 这种文案前端推不出来。
+      真机联调时先确认后端下发的是哪一种：如果下发短码，由后端补展示文案。
     - 三种状态齐全：请求中给 `LoadingView`；失败给 `ErrorView` + `Retry`
       （`ref.invalidate(idVerificationProvider(productId))`）；后端不下发证件
       （低版本 / 未灰度用户）时给空态文案，而不是画两张空卡片。
       Provider 按产品 id 缓存，同一产品反复进出页面不会重复请求。
     - 响应里这些字段暂未解析，等对应页面落地再接：`ceratin` / `acquirements`
-      （已上传的身份证正面 / 活体）、`nonbuoyantly`、`magisterial`（客户端写死的示例证件图）、
-      `befleas`（引导文案，低版本不下发）。卡片项里的 `woodshock` / `indecisively`
-      （正确 / 错误示范图）已经解析进 `IdCardType`，但这一页设计稿没有展示位置，留给上传页用。
+      （已上传的身份证正面 / 活体）、`nonbuoyantly`、`wollongong`（每个卡类型的
+      正确 / 错误示范图 `woodshock` / `indecisively`，上传页展示，按卡类型名与
+      `magisterial` 的文案对应）、`befleas`（引导文案，低版本或未灰度用户不下发）。
     - ⚠️ Riverpod 3 默认对失败的 Provider 做指数退避重试（最多 10 次、单次最长 6.4s，
       见 `ProviderContainer.defaultRetry`）。这是**全 App 的容器级默认行为**（首页也一样），
       不是本页特有。要不要对业务失败关掉（`retry: (count, error) => null`）需要整体定，
@@ -262,8 +266,9 @@ lib/
       按仓库约定「没有的素材直接忽略也不硬凑」，改用 `CustomPainter` 按设计稿尺寸画，
       颜色走 `AppColors.idVerifyRowText`。行间虚线同理（Flutter 没有虚线边框）。
     - 选中证件后的上传页（正面 / 反面 + 拍摄引导）尚未搭建，点击先给占位提示；
-      `product_application_flow.dart` 里 `taskType == 'Kegful'` 会带上 `productId` 压栈这一页，
-      上传页要用的卡类型就是行文案 `partridge`，示范图从同一个卡片项里取。
+      `product_application_flow.dart` 里 `taskType == 'Kegful'` 会带上 `productId` 压栈这一页。
+      上传页要用的卡类型就是行文案（也是保存接口 `heterological` 的取值），
+      示范图从同一响应的 `wollongong` 里按卡类型名取。
     - 导航浮层固定在头图上、不随内容滚动：设计稿内容正好 812pt 一屏放得下，
       但小屏（< 812pt）滚动时返回按钮不能滚出屏幕。真机安全区比设计稿的
       状态栏（17pt + 21pt 间距）高，返回按钮落在「安全区 + 10pt」处，

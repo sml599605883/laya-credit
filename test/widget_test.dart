@@ -111,22 +111,17 @@ class _StubCertificationRepository extends CertificationRepository {
   /// 记录每次请求的产品 id。
   final List<String> identityInfoCalls = [];
 
-  /// 接口文档示例的文案口径（`partridge` 就是页面展示文案）。
+  /// 接口文档 `magisterial` 示例的数据口径（客户端原样展示，不做文案映射）。
   static const _defaultData = IdVerificationData(
     recommended: [
-      IdCardType(name: 'PRC ID'),
-      IdCardType(name: 'SSS ID'),
-      IdCardType(name: 'PHILIPPINE PASSPORT'),
-      IdCardType(name: 'POSTAL  ID'),
-      IdCardType(name: 'UMID(Unified Multi-Purpose ID)'),
+      'DRIVINGLICENSE',
+      'PRC',
+      'SSS',
+      'PASSPORT',
+      'POSTALID',
+      'UMID',
     ],
-    other: [
-      IdCardType(name: "DRIVER'S LICENSE"),
-      IdCardType(name: 'STUDENT CARD'),
-      IdCardType(name: 'TIN  ID'),
-      IdCardType(name: "Voter's ID"),
-      IdCardType(name: 'PhilHealth ID'),
-    ],
+    other: ['TIN', 'VOTERID', 'NATIONALID', 'PAGIBIG', 'HEALTHCARD'],
   );
 
   @override
@@ -1524,19 +1519,20 @@ void main() {
     expect(find.text('Recommended ID Type'), findsOneWidget);
     expect(find.text('Other Options'), findsOneWidget);
 
-    // 推荐证件 5 项，顺序与后端下发一致。
-    expect(find.text('PRC ID'), findsOneWidget);
-    expect(find.text('SSS ID'), findsOneWidget);
-    expect(find.text('PHILIPPINE PASSPORT'), findsOneWidget);
-    expect(find.text('POSTAL  ID'), findsOneWidget);
-    expect(find.text('UMID(Unified Multi-Purpose ID)'), findsOneWidget);
+    // 推荐证件：`magisterial[0]`，顺序与后端下发一致，文案原样展示。
+    expect(find.text('DRIVINGLICENSE'), findsOneWidget);
+    expect(find.text('PRC'), findsOneWidget);
+    expect(find.text('SSS'), findsOneWidget);
+    expect(find.text('PASSPORT'), findsOneWidget);
+    expect(find.text('POSTALID'), findsOneWidget);
+    expect(find.text('UMID'), findsOneWidget);
 
-    // 其他证件 5 项。
-    expect(find.text("DRIVER'S LICENSE"), findsOneWidget);
-    expect(find.text('STUDENT CARD'), findsOneWidget);
-    expect(find.text('TIN  ID'), findsOneWidget);
-    expect(find.text("Voter's ID"), findsOneWidget);
-    expect(find.text('PhilHealth ID'), findsOneWidget);
+    // 其他证件：`magisterial[1]`。
+    expect(find.text('TIN'), findsOneWidget);
+    expect(find.text('VOTERID'), findsOneWidget);
+    expect(find.text('NATIONALID'), findsOneWidget);
+    expect(find.text('PAGIBIG'), findsOneWidget);
+    expect(find.text('HEALTHCARD'), findsOneWidget);
 
     // 卡片比头图底边高 19pt，白色标题块压在头图下沿上（设计稿 `top: -19`）。
     final headerRect = tester.getRect(_assetImage(AppAssets.idVerifyHeader));
@@ -1552,9 +1548,9 @@ void main() {
     expect(headerRect.bottom - cardRect.top, greaterThan(0));
 
     // 上传页没搭建前，选中证件只给占位提示。
-    await tester.tap(find.text('PRC ID'));
+    await tester.tap(find.text('PRC'));
     await tester.pumpAndSettle();
-    expect(find.text('PRC ID is not available yet'), findsOneWidget);
+    expect(find.text('PRC is not available yet'), findsOneWidget);
   });
 
   testWidgets('证件选择页请求中显示 Loading，失败可重试', (tester) async {
@@ -1580,7 +1576,7 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(find.byType(LoadingView), findsNothing);
-    expect(find.text('PRC ID'), findsOneWidget);
+    expect(find.text('PRC'), findsOneWidget);
   });
 
   testWidgets('证件选择页接口失败给错误态与重试入口', (tester) async {
@@ -1680,37 +1676,30 @@ void main() {
     expect(params.containsKey(ApiFields.obfuscateIdentityInfo), isTrue);
   });
 
-  test('身份信息解析 wollongong 里的推荐 / 其他两组证件', () {
-    final data = IdVerificationData.fromJson({
+  test('身份信息解析 magisterial 的推荐 / 其他两段证件', () {
+    final data = IdVerificationData.fromJson(const {
       ApiFields.idCardGroups: [
-        {
-          ApiFields.idCardRecommended: [
-            {
-              ApiFields.idCardName: 'PRC',
-              ApiFields.idCardSampleUrls: ['https://cdn.example.com/ok.png'],
-              ApiFields.idCardWrongSampleUrls: [
-                'https://cdn.example.com/bad.png',
-              ],
-            },
-          ],
-          ApiFields.idCardOthers: [
-            {ApiFields.idCardName: 'TIN'},
-            // 没有名字的脏数据直接丢掉，不要渲染出一行空文案。
-            {ApiFields.idCardName: ''},
-          ],
-        },
+        ['DRIVINGLICENSE', 'PRC', 'SSS'],
+        ['TIN', 'VOTERID'],
       ],
     });
 
-    expect(data.recommended.map((card) => card.name), ['PRC']);
-    expect(data.recommended.single.sampleUrls, [
-      'https://cdn.example.com/ok.png',
-    ]);
-    expect(data.recommended.single.wrongSampleUrls, [
-      'https://cdn.example.com/bad.png',
-    ]);
-    expect(data.other.map((card) => card.name), ['TIN']);
+    // 第一段是推荐、第二段是其他，顺序照抄，文案不做映射。
+    expect(data.recommended, ['DRIVINGLICENSE', 'PRC', 'SSS']);
+    expect(data.other, ['TIN', 'VOTERID']);
     expect(data.isEmpty, isFalse);
+  });
+
+  test('身份信息丢掉 magisterial 里的空文案', () {
+    final data = IdVerificationData.fromJson(const {
+      ApiFields.idCardGroups: [
+        ['PRC', '', null],
+        ['TIN'],
+      ],
+    });
+
+    expect(data.recommended, ['PRC']);
+    expect(data.other, ['TIN']);
   });
 
   test('身份信息没有下发证件配置时按空处理', () {

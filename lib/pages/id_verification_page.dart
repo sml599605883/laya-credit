@@ -45,8 +45,8 @@ const _stateHeight = 160.0;
 /// 3. `Other Options` 卡片（`section_4`）：后端下发的备选证件。
 ///
 /// 证件类型不是客户端写死的：进页面用 [productId] 拉 `GET /outsulk/gaonate`
-/// （认证第一项），后端按产品下发两组卡片；没下发（低版本 / 未灰度用户）时走空态。
-/// 选中证件后的上传页尚未搭建，点击先给占位提示。
+/// （认证第一项），后端按产品下发两组卡片（响应里的 `magisterial`）；
+/// 没下发（低版本 / 未灰度用户）时走空态。选中证件后的上传页尚未搭建，点击先给占位提示。
 class IdVerificationPage extends ConsumerWidget {
   const IdVerificationPage({super.key, required this.productId});
 
@@ -56,11 +56,12 @@ class IdVerificationPage extends ConsumerWidget {
   /// 选中证件类型。
   ///
   /// TODO(页面): 证件上传页（正面 / 反面 + 拍摄引导）尚未搭建，先弹占位提示。
-  /// 上传页需要带上 [productId]、选中的卡类型（`partridge`）以及这个卡类型自己的
-  /// 示范图 / 错误示范图（`woodshock` / `indecisively`）。
+  /// 上传页要带上 [productId] 与选中的证件类型（就是这里的文案，也是保存接口的
+  /// `heterological` 取值），以及这项证件自己的正确 / 错误示范图
+  /// （同一响应里的 `wollongong`，按卡类型名匹配）。
   /// TODO(埋点): 选择证件类型需要在 Firebase Analytics 上报事件。
-  void _onIdTypeSelected(IdCardType card) {
-    ToastHelper.showMessage('${card.name} is not available yet');
+  void _onIdTypeSelected(String idType) {
+    ToastHelper.showMessage('$idType is not available yet');
   }
 
   @override
@@ -224,7 +225,7 @@ class _IdTypeGroups extends StatelessWidget {
 
   final AppLayout layout;
   final IdVerificationData data;
-  final ValueChanged<IdCardType> onSelected;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -233,14 +234,14 @@ class _IdTypeGroups extends StatelessWidget {
         _IdTypeGroup(
           layout: layout,
           title: _recommendedTitle,
-          cards: data.recommended,
+          types: data.recommended,
           onSelected: onSelected,
         ),
       if (data.other.isNotEmpty)
         _IdTypeGroup(
           layout: layout,
           title: _otherOptionsTitle,
-          cards: data.other,
+          types: data.other,
           onSelected: onSelected,
         ),
     ];
@@ -282,14 +283,16 @@ class _IdTypeGroup extends StatelessWidget {
   const _IdTypeGroup({
     required this.layout,
     required this.title,
-    required this.cards,
+    required this.types,
     required this.onSelected,
   });
 
   final AppLayout layout;
   final String title;
-  final List<IdCardType> cards;
-  final ValueChanged<IdCardType> onSelected;
+
+  /// 后端 `magisterial` 下发的证件文案，顺序照抄。
+  final List<String> types;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -339,12 +342,12 @@ class _IdTypeGroup extends StatelessWidget {
                 height: layout.px(1),
                 child: const ColoredBox(color: AppColors.idVerifyDivider),
               ),
-              for (var i = 0; i < cards.length; i++) ...[
+              for (var i = 0; i < types.length; i++) ...[
                 if (i > 0) _DashedDivider(layout: layout),
                 _IdTypeRow(
                   layout: layout,
-                  card: cards[i],
-                  onTap: () => onSelected(cards[i]),
+                  idType: types[i],
+                  onTap: () => onSelected(types[i]),
                 ),
               ],
               // 设计稿 `section_3` / `section_4` 的 `padding-bottom: 12px`。
@@ -364,12 +367,12 @@ class _IdTypeGroup extends StatelessWidget {
 class _IdTypeRow extends StatelessWidget {
   const _IdTypeRow({
     required this.layout,
-    required this.card,
+    required this.idType,
     required this.onTap,
   });
 
   final AppLayout layout;
-  final IdCardType card;
+  final String idType;
   final VoidCallback onTap;
 
   static const _designHeight = 46.0;
@@ -387,7 +390,7 @@ class _IdTypeRow extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  card.name,
+                  idType,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

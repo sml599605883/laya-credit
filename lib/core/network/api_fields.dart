@@ -118,23 +118,8 @@ abstract final class ApiFields {
   static const detailTaskType = 'catholical';
 
   // ---------- 认证项：获取用户身份信息（第一项）（`/outsulk/gaonate`）----------
-  /// 证件类型分组列表（数组，文档示例只有一组，客户端取第一组）。
-  static const idCardGroups = 'wollongong';
-
-  /// 分组里的推荐选项（设计稿 `Recommended ID Type`）。
-  static const idCardRecommended = 'unconversational';
-
-  /// 分组里的其他选项（设计稿 `Other Options`）。
-  static const idCardOthers = 'drumfish';
-
-  /// 证件名称。既是页面展示文案，也是上传 / 保存接口的卡类型取值。
-  static const idCardName = 'partridge';
-
-  /// 正确示范图 url 数组（证件上传页用）。
-  static const idCardSampleUrls = 'woodshock';
-
-  /// 错误示范图 url 数组（证件上传页用）。
-  static const idCardWrongSampleUrls = 'indecisively';
+  /// 证件类型分组：两段字符串数组，`[[推荐...], [其他...]]`。
+  static const idCardGroups = 'magisterial';
 
   /// 该接口的业务混淆字段（「获取用户身份信息」请求参数里的混淆字段）。
   static const obfuscateIdentityInfo = 'disemboguement';
