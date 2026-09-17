@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../pages/home_page.dart';
+import '../../pages/id_upload_page.dart';
 import '../../pages/id_verification_page.dart';
 import '../../pages/login_page.dart';
 import '../../pages/mine_page.dart';
@@ -13,6 +14,20 @@ class IdVerificationPageArguments {
   const IdVerificationPageArguments({required this.productId});
 
   final String productId;
+}
+
+/// 证件上传页入参。
+///
+/// [cardType] 是证件选择页的行文案，也是上传 / 保存接口的卡类型取值，
+/// 必须原样带下去，不能在这里 trim 或改大小写。
+class IdUploadPageArguments {
+  const IdUploadPageArguments({
+    required this.productId,
+    required this.cardType,
+  });
+
+  final String productId;
+  final String cardType;
 }
 
 /// 登录页入参。跳转方可以传入回调，在登录成功后继续未完成的动作。
@@ -48,6 +63,16 @@ class AppRouteGenerator {
         return _route<void>(
           settings,
           (_) => IdVerificationPage(productId: args?.productId ?? ''),
+        );
+
+      case AppRoutes.idUpload:
+        final uploadArgs = settings.arguments as IdUploadPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => IdUploadPage(
+            productId: uploadArgs?.productId ?? '',
+            cardType: uploadArgs?.cardType ?? '',
+          ),
         );
 
       case AppRoutes.login:

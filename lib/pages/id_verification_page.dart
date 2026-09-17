@@ -5,11 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
-import '../core/ui/toast_helper.dart';
 import '../data/models/id_verification_data.dart';
 import '../providers/id_verification_provider.dart';
 import '../theme/theme.dart';
-import '../widgets/state_views.dart';
+import '../widgets/widgets.dart';
 
 /// 顶部导航标题（设计稿 `text_3`）。
 const _navTitle = 'ID Verification';
@@ -53,15 +52,15 @@ class IdVerificationPage extends ConsumerWidget {
   /// 产品 id：证件类型按产品下发，对应接口的 `tartarizing`。
   final String productId;
 
-  /// 选中证件类型。
+  /// 选中证件类型后进上传页。
   ///
-  /// TODO(页面): 证件上传页（正面 / 反面 + 拍摄引导）尚未搭建，先弹占位提示。
-  /// 上传页要带上 [productId] 与选中的证件类型（就是这里的文案，也是保存接口的
-  /// `heterological` 取值），以及这项证件自己的正确 / 错误示范图
-  /// （同一响应里的 `wollongong`，按卡类型名匹配）。
+  /// 卡类型原样带下去（就是这里的文案，也是保存接口 `heterological` 的取值）。
   /// TODO(埋点): 选择证件类型需要在 Firebase Analytics 上报事件。
   void _onIdTypeSelected(String idType) {
-    ToastHelper.showMessage('$idType is not available yet');
+    AppNavigator.push(
+      AppRoutes.idUpload,
+      arguments: IdUploadPageArguments(productId: productId, cardType: idType),
+    );
   }
 
   @override
@@ -130,83 +129,12 @@ class IdVerificationPage extends ConsumerWidget {
           ),
           // 导航浮层固定在头图上：设计稿内容正好一屏放得下，小屏滚动时返回按钮
           // 也不能跟着滚出屏幕，否则用户没有出口。
-          _NavBar(layout: layout, onBack: () => AppNavigator.pop()),
+          BackNavBar(
+            layout: layout,
+            title: _navTitle,
+            onBack: () => AppNavigator.pop(),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-/// 顶部返回按钮 + 导航标题（设计稿 `block_2`）。
-class _NavBar extends StatelessWidget {
-  const _NavBar({required this.layout, required this.onBack});
-
-  final AppLayout layout;
-  final VoidCallback onBack;
-
-  /// 图标 24x24（设计稿 `label_1`）。
-  static const _iconSize = 24.0;
-
-  /// 点击热区：设计稿只标了 24pt 图标，真机上太小，热区补到 40x40。
-  static const _tapSize = 40.0;
-
-  /// 图标相对安全区的位置（设计稿 `label_1`：x=16，y=54；
-  /// 状态栏 `block_1` 占 16+17，导航 `block_2` 再下移 21）。
-  static const _iconLeft = 16.0;
-  static const _iconTop = 10.0;
-
-  /// 导航行高度：热区不能超出父容器（超出后收不到点击），这里按热区算。
-  static const _height = _iconTop + (_tapSize + _iconSize) / 2;
-
-  @override
-  Widget build(BuildContext context) {
-    // 热区以图标为中心，左右各多出 (_tapSize - _iconSize) / 2。
-    final inset = (_tapSize - _iconSize) / 2;
-
-    return SafeArea(
-      bottom: false,
-      child: SizedBox(
-        height: layout.px(_height),
-        child: Stack(
-          children: [
-            // 标题居中于整页宽度（设计稿 `text_3` 居中，左右并不跟随返回按钮）。
-            Center(
-              child: Text(
-                _navTitle,
-                style: TextStyle(
-                  color: AppColors.sectionTitle,
-                  fontSize: layout.px(17),
-                  fontWeight: FontWeight.w600,
-                  // 设计稿：`font-size: 17px; line-height: 24px`。
-                  height: 24 / 17,
-                ),
-              ),
-            ),
-            Positioned(
-              left: layout.px(_iconLeft - inset),
-              top: layout.px(_iconTop - inset),
-              child: SizedBox(
-                width: layout.px(_tapSize),
-                height: layout.px(_tapSize),
-                child: Semantics(
-                  button: true,
-                  label: 'Back',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onBack,
-                    child: Center(
-                      child: Image.asset(
-                        AppAssets.back,
-                        width: layout.px(_iconSize),
-                        height: layout.px(_iconSize),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

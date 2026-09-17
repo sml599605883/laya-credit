@@ -25,7 +25,8 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 - 侧滑返回保持 Flutter 默认（iOS 可返回）。若某个流程需要禁止中途返回，只改该路由对应的 Route 实现，不要全局关闭。
 
 目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`，
-以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）。
+以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）、
+`/id-upload`（证件上传，见第 13 条）。
 
 ### 2. 状态管理用什么
 
@@ -143,7 +144,8 @@ lib/
    原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
-   证件上传 / 保存接口（`/outsulk/fashioned`、`/outsulk/wardmote`）仍然缺。
+   第二项（证件上传页）已按设计稿落地（见第 13 条），
+   但证件上传 / 保存接口（`/outsulk/fashioned`、`/outsulk/wardmote`）仍然缺。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -265,16 +267,50 @@ lib/
       是个人中心那套灰色箭头（7x11、`rgba(153,153,153)`），和设计稿的 `rgba(38,65,7)` 对不上，
       按仓库约定「没有的素材直接忽略也不硬凑」，改用 `CustomPainter` 按设计稿尺寸画，
       颜色走 `AppColors.idVerifyRowText`。行间虚线同理（Flutter 没有虚线边框）。
-    - 选中证件后的上传页（正面 / 反面 + 拍摄引导）尚未搭建，点击先给占位提示；
-      `product_application_flow.dart` 里 `taskType == 'Kegful'` 会带上 `productId` 压栈这一页。
-      上传页要用的卡类型就是行文案（也是保存接口 `heterological` 的取值），
-      示范图从同一响应的 `wollongong` 里按卡类型名取。
+    - 选中证件后进上传页（`/id-upload`，见第 13 条）：压栈时带上 `productId` 与
+      行文案（卡类型，也是保存接口 `heterological` 的取值）。
+      这一页自己的正确 / 错误示范图暂时用的是设计稿切图；响应里 `wollongong` 的
+      `woodshock` / `indecisively` 还没解析，等接口联调确认口径后再决定要不要改成下发。
     - 导航浮层固定在头图上、不随内容滚动：设计稿内容正好 812pt 一屏放得下，
       但小屏（< 812pt）滚动时返回按钮不能滚出屏幕。真机安全区比设计稿的
       状态栏（17pt + 21pt 间距）高，返回按钮落在「安全区 + 10pt」处，
       点击热区补到 40x40（设计稿只标了 24pt 图标）。
     - 设计稿里 `POSTAL  ID` / `TIN  ID` 是两个空格（`&nbsp;&nbsp;`）。文案现在由后端下发，
       前端不要做 `trim` / 空格替换，否则和设计稿对不上。
+
+13. **证件上传页已按蓝湖稿 `03-01 - 身份认证-上传身份证` 还原**
+    （认证流程第二步，`/id-upload`，`IdUploadPage`）。
+    - 页面三段与设计稿一一对应：通栏头图（`section_1`，375x213）、上传引导整块
+      （`section_3` + `group_1` 合起来 343x420）、底部 `Upload` 主按钮
+      （`text-wrapper_4`，343x48 柠檬绿胶囊）。
+    - 三个新素材都已按用途改名并登记到 `AppAssets`（`assets/id_verify/`）：
+      `id_verify_header_blank.png`（用户提供的 `位图@3x.png`，和证件选择页的
+      `id_verify_header.png` 是同一张渐变 + 吉祥物，**但没烘焙标题文字**，
+      所以能复用给别的二级页；导航标题与引导段落由页面叠上去）、
+      `id_verify_upload_demo.png`（`编组 14@3x.png`，`Demonstration` /
+      `Wrong Demonstration` 两张白卡与三张错误示例全在这一张里）、
+      `id_verify_upload_button.png`（`矩形@3x.png`，按钮底图）。
+      返回按钮复用证件选择页的 `assets/common/back.png`。
+    - `Upload` 按钮点击后从底部弹出上传方式面板（同一张蓝湖稿的
+      `03-01 - 身份认证-选择上传方式`），`UploadMethodSheet`：`Camera` / `Album`
+      两行各 57pt、中间 1pt 分隔线（`AppColors.actionSheetDivider`），`Quit` 前面垫
+      8pt 灰色分组间隔带（`AppColors.actionSheetGap`）、行高 59pt
+      （上下各 20pt 内边距 + 19pt 行高），面板通栏直角白底、遮罩
+      `AppColors.dialogBarrier`。底部那 20pt 是真机上最容易漏掉的留白，
+      所以面板包了 `SafeArea(top: false)` 补手势条、行高按 59 而不是 57 摆。
+    - `Camera` / `Album` 目前只给占位提示，两个缺口都在页面的 TODO 里：
+      取图要新增 `image_picker` / `permission_handler` / `flutter_image_compress`
+      （peso_shield 用的就是这三个）并补相册的 `NSPhotoLibraryUsageDescription`；
+      上传接口 `/outsulk/fashioned` 的混淆字段映射还没拿到，混淆字段名写错不会报错、
+      只会静默读到 null，所以拿到 `7.map.html` 之前不要猜字段名。
+      接的时候照 peso_shield 的 `IdentityUploadPage._pickCompressAndUpload`：
+      权限 -> 取图 -> 压缩到 500KB -> multipart 上传（卡类型 = `cardType`，
+      来源：相册 1 / 相机 2）-> 成功后进证件确认页。
+    - 引导段落（`text_4`）按设计稿写死四行换行：204pt 宽下 Helvetica-Bold 16 的断行结果，
+      换成系统字体后断点会漂移（「avoid rejection and quickly」正好卡在边界上）。
+      响应里那组 `befleas`（引导文案）还没确认属于哪一页，联调确认后再改成下发。
+    - 二级页的返回按钮 + 居中标题抽成了 `BackNavBar`（`lib/widgets/back_nav_bar.dart`），
+      证件选择页与上传页共用，避免两份实现各自漂移。
 
 ## 常用命令
 

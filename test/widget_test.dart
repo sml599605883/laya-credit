@@ -25,11 +25,13 @@ import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/home_page.dart';
+import 'package:laya_credit/pages/id_upload_page.dart';
 import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
 import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
+import 'package:laya_credit/widgets/back_nav_bar.dart';
 import 'package:laya_credit/widgets/state_views.dart';
 import 'package:laya_credit/widgets/tab_bar/app_tab_bar.dart';
 
@@ -312,6 +314,22 @@ void _usePhoneSurface(WidgetTester tester) {
   tester.view.physicalSize = const Size(1206, 2622);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
+}
+
+/// 上传页 / 上传方式面板按 375pt 设计稿等比换算的缩放系数
+/// （测试机宽 402pt，`AppLayout` 上限 1.2 倍还没触顶）。
+const _designScale = 402 / 375;
+
+/// 直接打开证件上传页（走和证件选择页一样的路由与入参）。
+void _openIdUploadPage(
+  WidgetTester tester, {
+  String productId = '7',
+  String cardType = 'PRC',
+}) {
+  AppNavigator.push(
+    AppRoutes.idUpload,
+    arguments: IdUploadPageArguments(productId: productId, cardType: cardType),
+  );
 }
 
 /// 读取登录页协议行的勾选切图，用来判断当前是否勾选。
@@ -1547,10 +1565,154 @@ void main() {
     // 设计稿 `section_3` 顶边 237 与 `text-wrapper_4` 的 `top: -19`：白卡压住头图 19pt。
     expect(headerRect.bottom - cardRect.top, greaterThan(0));
 
-    // 上传页没搭建前，选中证件只给占位提示。
+    // 选中证件后进上传页：卡类型原样带下去（也是上传 / 保存接口的取值）。
     await tester.tap(find.text('PRC'));
     await tester.pumpAndSettle();
-    expect(find.text('PRC is not available yet'), findsOneWidget);
+
+    expect(find.byType(IdUploadPage), findsOneWidget);
+    final uploadPage = tester.widget<IdUploadPage>(find.byType(IdUploadPage));
+    expect(uploadPage.productId, '7');
+    expect(uploadPage.cardType, 'PRC');
+  });
+
+  testWidgets('证件上传页按蓝湖稿 03-01 渲染头图、引导块与 Upload 按钮', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openIdUploadPage(tester);
+    await tester.pumpAndSettle();
+
+    // 头图 / 返回按钮 / 引导块 / 按钮底图都是设计稿切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadDemo), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+    expect(find.text('ID Verification'), findsOneWidget);
+
+    // 引导段落按设计稿的四行断行，不跟着系统字体漂。
+    expect(
+      find.text(
+        'Valid official credentials\n'
+        'avoid rejection and\n'
+        'quickly unlock your loan\n'
+        'service access.',
+      ),
+      findsOneWidget,
+    );
+    // 设计稿 `text_4 { width: 204px }`。
+    expect(
+      tester
+          .getSize(
+            find
+                .ancestor(
+                  of: find.text(
+                    'Valid official credentials\n'
+                    'avoid rejection and\n'
+                    'quickly unlock your loan\n'
+                    'service access.',
+                  ),
+                  matching: find.byType(SizedBox),
+                )
+                .first,
+          )
+          .width,
+      closeTo(204 * _designScale, 0.5),
+    );
+
+    // 引导块顶边比头图底边高 19pt（设计稿 `text-wrapper_5 { top: 194 }`）。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    final demoRect = tester.getRect(_assetImage(AppAssets.idVerifyUploadDemo));
+
+    expect(headerRect.bottom - demoRect.top, closeTo(19 * _designScale, 0.5));
+    // 引导块与按钮之间的间距（设计稿 614 -> 714）。
+    expect(
+      tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).top -
+          demoRect.bottom,
+      closeTo(100 * _designScale, 0.5),
+    );
+  });
+
+  testWidgets('上传页点 Upload 弹出选择上传方式面板，底部按设计稿留距', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openIdUploadPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UploadMethodSheet), findsOneWidget);
+    expect(find.text('Camera'), findsOneWidget);
+    expect(find.text('Album'), findsOneWidget);
+    expect(find.text('Quit'), findsOneWidget);
+    // 面板是盖在上传页上的，页面本身不跳走。
+    expect(find.byType(IdUploadPage), findsOneWidget);
+
+    // 设计稿：Camera / Album 行高各 57、中间 1pt 分隔线；Quit 前面 8pt 间隔带、
+    // 行高 59，所以两段行距是 58 与 66。
+    double centerY(Finder finder) => tester.getCenter(finder).dy;
+    expect(
+      centerY(find.text('Album')) - centerY(find.text('Camera')),
+      closeTo(58 * _designScale, 0.5),
+    );
+    expect(
+      centerY(find.text('Quit')) - centerY(find.text('Album')),
+      closeTo(66 * _designScale, 0.5),
+    );
+    // Quit 行比 Camera 行高（59 vs 57）：上下各 20pt 内边距 + 19pt 行高。
+    expect(
+      tester.getSize(find.text('Quit')).height,
+      greaterThan(tester.getSize(find.text('Camera')).height),
+    );
+  });
+
+  testWidgets('上传方式面板点 Quit 关掉面板，点 Camera / Album 先给占位提示', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openIdUploadPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quit'));
+    await tester.pumpAndSettle();
+    expect(find.byType(UploadMethodSheet), findsNothing);
+
+    // 相机 / 相册取图与上传接口都还没接（见 README「其余接口未接入」）。
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Camera'));
+    await tester.pumpAndSettle();
+    expect(find.byType(UploadMethodSheet), findsNothing);
+    expect(find.text('Camera is not available yet'), findsOneWidget);
+  });
+
+  testWidgets('证件上传页返回按钮回到证件选择页', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('PRC'));
+    await tester.pumpAndSettle();
+    expect(find.byType(IdUploadPage), findsOneWidget);
+
+    // 返回热区 40x40 在导航行左端，点图标本身即可命中。
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BackNavBar),
+        matching: _assetImage(AppAssets.back),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IdUploadPage), findsNothing);
+    expect(find.byType(IdVerificationPage), findsOneWidget);
   });
 
   testWidgets('证件选择页请求中显示 Loading，失败可重试', (tester) async {

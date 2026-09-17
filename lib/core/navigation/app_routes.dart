@@ -21,6 +21,9 @@ abstract final class AppRoutes {
   /// 证件选择页（认证流程第一步）。
   static const idVerification = '/id-verification';
 
+  /// 证件上传页（认证流程第二步）。
+  static const idUpload = '/id-upload';
+
   /// 全部路由（用于启动自检与埋点白名单）。
   static const List<String> all = [
     root,
@@ -29,6 +32,7 @@ abstract final class AppRoutes {
     mine,
     login,
     idVerification,
+    idUpload,
   ];
 
   /// 路由名是否已注册。

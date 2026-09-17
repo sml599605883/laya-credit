@@ -29,6 +29,24 @@ abstract final class AppAssets {
   /// 顶部头图（375x213）：绿色渐变 + 大标题 + 吉祥物，整块切图。
   static const idVerifyHeader = 'assets/id_verify/id_verify_header.png';
 
+  // 证件上传页（蓝湖稿 `03-01 - 身份认证-上传身份证`）
+  /// 顶部头图（375x213）：同一张绿色渐变 + 吉祥物，但**不带标题文字**，
+  /// 标题由页面按各页文案叠上去（用户提供的 `位图@3x.png`）。
+  static const idVerifyHeaderBlank =
+      'assets/id_verify/id_verify_header_blank.png';
+
+  /// 上传引导整块底图（343x420，用户提供的 `编组 14@3x.png`）：
+  /// `Demonstration` / `Wrong Demonstration` 两张白卡、示范证件图、
+  /// 三张错误示范缩略图与 `Unclear` / `With reflection` / `Incomplete`
+  /// 标注全部烘焙在这一张里。
+  static const idVerifyUploadDemo =
+      'assets/id_verify/id_verify_upload_demo.png';
+
+  /// `Upload` 主按钮底图（343x48，用户提供的 `矩形@3x.png`）：
+  /// 柠檬绿胶囊 + 24 圆角，文案由代码叠加。
+  static const idVerifyUploadButton =
+      'assets/id_verify/id_verify_upload_button.png';
+
   /// 二级页返回按钮（24x24）。
   static const back = 'assets/common/back.png';
 

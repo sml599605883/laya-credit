@@ -117,6 +117,12 @@ abstract final class AppColors {
   /// 卡片标题与证件列表之间的 1pt 分隔线（设计稿 `box_1` / `section_5` rgba(238,238,238)）。
   static const idVerifyDivider = Color(0xFFEEEEEE);
 
+  /// 证件上传页头图上的引导段落文案色（设计稿 `text_4` rgba(12,14,2)）。
+  static const idVerifyHeaderText = Color(0xFF0C0E02);
+
+  /// 证件上传页 `Upload` 主按钮的文案色（设计稿 `text_6` rgba(19,19,19)）。
+  static const idVerifyUploadButtonText = Color(0xFF131313);
+
   // ---------- 个人中心（蓝湖稿 `07-01 - 个人中心`） ----------
 
   /// 个人中心顶部深色头图底色（设计稿 `box_1`）。
