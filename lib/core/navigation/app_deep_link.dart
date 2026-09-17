@@ -32,20 +32,64 @@ enum OrderFilterStatus {
   }
 }
 
+/// 解析后的深链目标类型。
+///
+/// 准入接口下发 `superidealness` 时，用 `liquidators` 区分原生（0）与 H5（1）；
+/// 原生的再按这里的别名分到具体页面。
+enum AppDeepLinkKind {
+  /// H5 链接，需要 WebView 打开。
+  webView,
+
+  /// 首页。
+  home,
+
+  /// 设置页。
+  settings,
+
+  /// 登录页。
+  login,
+
+  /// 订单列表页。
+  order,
+
+  /// 产品详情 / 继续认证流程。
+  productDetail,
+
+  /// 重新授信 loading 页。
+  recredit,
+
+  /// 准入流程。
+  admission,
+
+  /// 无法识别的地址。
+  unsupported,
+}
+
 /// 解析后的深链目标。
 class AppDeepLink {
   const AppDeepLink({
-    required this.route,
+    required this.kind,
+    this.route,
     this.orderStatus,
     this.productId = '',
+    this.url = '',
     this.raw = '',
   });
 
-  /// 目标路由名，见 [AppRoutes]。
-  final String route;
+  /// 目标类型。
+  final AppDeepLinkKind kind;
+
+  /// 可直接跳转的路由名，见 [AppRoutes]；不需要路由时为 null。
+  final String? route;
 
   final OrderFilterStatus? orderStatus;
+
+  /// 地址里携带的产品 id（可能为空）。
   final String productId;
+
+  /// H5 链接（仅 [AppDeepLinkKind.webView] 有值）。
+  final String url;
+
   final String raw;
 }
 
@@ -59,33 +103,78 @@ class AppDeepLinkParser {
   static const _scheme = 'ph';
   static const _host = 'laya-credit';
 
-  AppDeepLink? parse(String rawTarget) {
-    final uri = Uri.tryParse(rawTarget.trim());
-    if (uri == null || uri.scheme != _scheme || uri.host != _host) return null;
+  AppDeepLink parse(String rawTarget) {
+    final trimmed = rawTarget.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) {
+      return AppDeepLink(kind: AppDeepLinkKind.unsupported, raw: rawTarget);
+    }
+
+    // H5 链接直接交给 WebView（页面补齐前由调用方兜底提示）。
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      return AppDeepLink(
+        kind: AppDeepLinkKind.webView,
+        url: trimmed,
+        productId: uri.queryParameters['productId'] ?? '',
+        raw: rawTarget,
+      );
+    }
+
+    if (uri.scheme != _scheme || uri.host != _host) {
+      return AppDeepLink(kind: AppDeepLinkKind.unsupported, raw: rawTarget);
+    }
 
     final segments = uri.pathSegments;
     // 文档路径为 /ios/<别名>。
-    if (segments.length < 2 || segments.first != 'ios') return null;
+    if (segments.length < 2 || segments.first != 'ios') {
+      return AppDeepLink(kind: AppDeepLinkKind.unsupported, raw: rawTarget);
+    }
 
     final alias = segments.last;
+    final productId =
+        uri.queryParameters['productId'] ??
+        uri.queryParameters[AppDeepLinkAlias.admission] ??
+        '';
+
     return switch (alias) {
       AppDeepLinkAlias.home => AppDeepLink(
+        kind: AppDeepLinkKind.home,
         route: AppRoutes.root,
         raw: rawTarget,
       ),
+      AppDeepLinkAlias.settings => AppDeepLink(
+        kind: AppDeepLinkKind.settings,
+        raw: rawTarget,
+      ),
       AppDeepLinkAlias.login => AppDeepLink(
+        kind: AppDeepLinkKind.login,
         route: AppRoutes.login,
         raw: rawTarget,
       ),
       AppDeepLinkAlias.order => AppDeepLink(
+        kind: AppDeepLinkKind.order,
         route: AppRoutes.mine,
         orderStatus: OrderFilterStatus.fromValue(
           uri.queryParameters['status'] ?? '',
         ),
         raw: rawTarget,
       ),
-      // TODO(页面): 产品详情 / 重新授信 / 准入页尚未搭建，先不解析。
-      _ => null,
+      AppDeepLinkAlias.productDetail => AppDeepLink(
+        kind: AppDeepLinkKind.productDetail,
+        productId: productId,
+        raw: rawTarget,
+      ),
+      AppDeepLinkAlias.recredit => AppDeepLink(
+        kind: AppDeepLinkKind.recredit,
+        productId: productId,
+        raw: rawTarget,
+      ),
+      AppDeepLinkAlias.admission => AppDeepLink(
+        kind: AppDeepLinkKind.admission,
+        productId: productId,
+        raw: rawTarget,
+      ),
+      _ => AppDeepLink(kind: AppDeepLinkKind.unsupported, raw: rawTarget),
     };
   }
 }

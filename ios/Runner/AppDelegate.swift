@@ -8,6 +8,8 @@ import CFNetwork
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Initialize device-risk collection as early as possible during launch.
+    TrustDecisionRegistrar.shared.activate()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -22,6 +24,8 @@ import CFNetwork
     else {
       return
     }
+
+    TrustDecisionRegistrar.shared.register(with: registrar.messenger())
 
     let channel = FlutterMethodChannel(
       name: "laya_credit/capture_proxy",

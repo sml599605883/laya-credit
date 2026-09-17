@@ -89,6 +89,20 @@ abstract final class AppColors {
   /// 未到达阶段的金额文字色。
   static const creditProgressAmount = Color(0xFF333333);
 
+  // ---------- 首页推荐列表（蓝湖稿 `02-01` 的 `group_3`，后端模块 PRODUCT_LIST） ----------
+
+  /// 推荐卡的深色外框底色（设计稿 `list-items_1` rgba(18,24,10)）。
+  static const productCardBackground = Color(0xFF12180A);
+
+  /// 推荐卡内产品名文字色（设计稿 `text_16`）。
+  static const productCardTitle = Color(0xFF333333);
+
+  /// 推荐卡内「利率 / 期限」小表底底色（设计稿 `box_11` rgba(247,247,247)）。
+  static const productCardMetricBackground = Color(0xFFF7F7F7);
+
+  /// 推荐卡底部提示文案色（设计稿 `text_24`）。
+  static const productCardTip = Color(0xFFFE295C);
+
   // ---------- 个人中心（蓝湖稿 `07-01 - 个人中心`） ----------
 
   /// 个人中心顶部深色头图底色（设计稿 `box_1`）。

@@ -17,6 +17,14 @@ abstract final class AppAssets {
   /// 授信进度卡：进度槽上的阶段金币（已到达阶段用原图，未到达阶段去色）。
   static const homeProgressCoin = 'assets/home/home_progress_coin.png';
 
+  /// 推荐列表（蓝湖稿 `02-01` 的 `group_3`）右侧的整块「Apply Now」按钮，96x130。
+  ///
+  /// 弧形卡身 + 文案都烘焙在切图里，按后端 `holts`（1 高亮 / 0 正常 / -1 置灰）三态选图：
+  /// 柠檬绿 / 品牌红 / 灰，对应设计稿从上到下的三张卡。
+  static const homeApplyNowHighlight = 'assets/home/apply_now_highlight.png';
+  static const homeApplyNowNormal = 'assets/home/apply_now_normal.png';
+  static const homeApplyNowDisabled = 'assets/home/apply_now_disabled.png';
+
   // 个人中心（蓝湖稿 `07-01 - 个人中心`）
   /// 顶栏头像（设计稿 `label_1`，48x48）。圆角 8 与 1pt 白描边由代码补。
   static const mineAvatar = 'assets/mine/mine_avatar.png';

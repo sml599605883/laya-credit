@@ -8,6 +8,7 @@ import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/home_data.dart';
 import '../providers/home_provider.dart';
+import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
@@ -18,15 +19,23 @@ import '../widgets/state_views.dart';
 /// 额度卡底部的橙色提示文案（蓝湖稿 `02-01 - 首页-默认` / `text-wrapper_4`）。
 const _applyHint = 'Confirm your loan\uFF0CCash hits fast.';
 
+/// 推荐列表区块标题（蓝湖稿 `02-01` 的 `text_14`）。
+///
+/// 设计稿右侧还有「More + 箭头」，产品确认不要，这里只保留标题。
+const _recommendationTitle = 'Recommendation';
+
+/// 推荐卡底部多段提示文案的分隔符（设计稿 `text_24`：`Low interest rates / ...`）。
+const _tipSeparator = ' / ';
+
 /// 首页（蓝湖稿 `02-01 - 首页-默认`）。
 ///
 /// 页面分两段，与设计稿一一对应：
 /// 1. 深色额度头图（`375x347`，切图 `home_background.png`）：问候语 / 产品名 /
 ///    可用额度 / 金币 / 额度条 + 白色额度卡（期限、利率、Apply Now）。
-/// 2. 浅绿内容区：后端按模块下发的授信进度、BANNER、借款进度卡。
+/// 2. 浅绿内容区：后端按模块下发的授信进度、BANNER、推荐列表、借款进度卡。
 ///
 /// 接口：`GET /outsulk/connectedly`。后端按模块下发（BANNER / LARGE_CARD /
-/// PROCESS_LIST / AD_LIST），这里按模块类型渲染，顺序与内容都由后端控制。
+/// PROCESS_LIST / AD_LIST / PRODUCT_LIST），这里按模块类型渲染，顺序与内容都由后端控制。
 class HomePage extends ConsumerWidget {
   const HomePage({super.key, this.isActive = true});
 
@@ -332,7 +341,7 @@ class _LimitCard extends ConsumerWidget {
     // 整张大卡都可点击：点卡片空白处同样进入申请流程；按钮仍是独立热区。
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _openApply(ref),
+      onTap: () => _openApply(ref, product.id),
       child: _card(),
     );
   }
@@ -434,6 +443,7 @@ class _LimitCard extends ConsumerWidget {
                     child: _ApplyButton(
                       layout: layout,
                       label: product.buttonText,
+                      productId: product.id,
                     ),
                   ),
                 ),
@@ -538,6 +548,9 @@ class _HomeContent extends StatelessWidget {
         ],
         // 运营位（设计稿 02-01 / 02-02 的第二块）。
         _Banner(layout: layout, banners: home.banners, isActive: isActive),
+        // 推荐列表（设计稿 02-01 的 `group_3`）：后端没下发时整块不渲染。
+        if (home.productList.isNotEmpty)
+          _Recommendation(layout: layout, cards: home.productList),
         // 进行中的借款订单：设计稿没给位置，只在后端真的下发时追加在最下面。
         if (home.hasOrders) ...[
           SizedBox(height: layout.px(AppSpacing.sm)),
@@ -1026,18 +1039,25 @@ class _OrderProgressCard extends StatelessWidget {
 
 /// 额度卡里的主行动按钮（设计稿 `text-wrapper_3`：柠檬绿胶囊）。
 class _ApplyButton extends ConsumerWidget {
-  const _ApplyButton({required this.layout, required this.label});
+  const _ApplyButton({
+    required this.layout,
+    required this.label,
+    required this.productId,
+  });
 
   final AppLayout layout;
 
   /// 后端下发的按钮文案，为空时回落到设计稿文案。
   final String label;
 
+  /// 点击申请 `tartarizing` 传的产品 id。
+  final String productId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return FilledButton(
       key: const Key('home-apply-button'),
-      onPressed: () => _openApply(ref),
+      onPressed: () => _openApply(ref, productId),
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.actionLime,
         foregroundColor: AppColors.cardValue,
@@ -1061,15 +1081,326 @@ class _ApplyButton extends ConsumerWidget {
   }
 }
 
-/// 「立即申请」入口：未登录先跳登录页，已登录走申请流程。
+/// 首页推荐列表（设计稿 `02-01` 的 `group_3`，后端模块 PRODUCT_LIST）。
 ///
-/// 额度卡整块与卡内按钮共用这一处逻辑，避免两套热区行为不一致。
-Future<void> _openApply(WidgetRef ref) async {
+/// 区块标题 + 若干张推荐卡；设计稿右侧的「More + 箭头」不要。
+class _Recommendation extends StatelessWidget {
+  const _Recommendation({required this.layout, required this.cards});
+
+  final AppLayout layout;
+  final List<HomeProductListCard> cards;
+
+  /// 标题与第一张卡之间、以及相邻卡片之间都是 12pt（设计稿 `list_2` 的 margin）。
+  static const _gap = 12.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 运营位与标题之间的间距（设计稿 `box_15` 的 margin-top 16）。
+        SizedBox(height: layout.px(AppSpacing.sm)),
+        Text(
+          _recommendationTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.cardValue,
+            fontSize: layout.px(16),
+            fontWeight: FontWeight.w700,
+            // 设计稿行高 19pt。
+            height: 19 / 16,
+          ),
+        ),
+        SizedBox(height: layout.px(_gap)),
+        for (var index = 0; index < cards.length; index++) ...[
+          if (index > 0) SizedBox(height: layout.px(_gap)),
+          _RecommendationCard(layout: layout, card: cards[index]),
+        ],
+      ],
+    );
+  }
+}
+
+/// 一张推荐卡（设计稿 `list-items_1`）：
+/// 深色外框里套白卡，右侧压一张 96x130 的「Apply Now」整块按钮切图。
+class _RecommendationCard extends ConsumerWidget {
+  const _RecommendationCard({required this.layout, required this.card});
+
+  final AppLayout layout;
+  final HomeProductListCard card;
+
+  /// 深色外框与白卡之间的留白（设计稿 `list-items_1` padding 8）。
+  static const _framePadding = 8.0;
+
+  /// 白卡内边距：右侧 74pt 是留给按钮的（设计稿 `box_8` padding）。
+  static const _cardPadTop = 12.0;
+  static const _cardPadLeft = 8.0;
+  static const _cardPadRight = 74.0;
+  static const _cardPadBottom = 8.0;
+
+  /// 产品 Logo（设计稿 14x14，圆角 2）。
+  static const _logoSize = 14.0;
+  static const _logoGap = 4.0;
+
+  /// 金额与额度说明之间的间距（设计稿都是 margin-top 4）。
+  static const _amountGap = 4.0;
+
+  /// 「利率 / 期限」小表（设计稿 `box_11`：宽 130 + 左右 padding 8）。
+  static const _metricWidth = 146.0;
+  static const _metricPadVertical = 12.0;
+  static const _metricPadHorizontal = 8.0;
+  static const _metricGap = 12.0;
+
+  /// 底部提示文案与上方的间距（设计稿 `text_24` margin-top 15）。
+  static const _tipGap = 15.0;
+  static const _tipPadRight = 24.0;
+
+  /// 按钮切图尺寸（设计稿 `text-wrapper_10`：96x130）。
+  static const _buttonWidth = 96.0;
+
+  /// 按钮切图按后端下发的配色选：高亮 / 正常 / 置灰。
+  String get _buttonAsset => switch (card.buttonStyle) {
+    HomeProductCardButtonStyle.highlighted => AppAssets.homeApplyNowHighlight,
+    HomeProductCardButtonStyle.normal => AppAssets.homeApplyNowNormal,
+    HomeProductCardButtonStyle.grayed => AppAssets.homeApplyNowDisabled,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Semantics(
+      button: true,
+      label: '${card.productName} ${card.amountRange}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // 整张卡都可点击，热区行为与额度大卡一致。
+        onTap: () => _openApply(ref, card.id),
+        child: Stack(
+          // 按钮切图比白卡高 8pt，靠外框的 8pt 留白找平，不要被 Stack 裁掉。
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              padding: layout.edgeInsets(
+                left: _framePadding,
+                top: _framePadding,
+                right: _framePadding,
+                bottom: _framePadding,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.productCardBackground,
+                borderRadius: layout.radius(AppSpacing.radiusBanner),
+              ),
+              child: Container(
+                padding: layout.edgeInsets(
+                  left: _cardPadLeft,
+                  top: _cardPadTop,
+                  right: _cardPadRight,
+                  bottom: _cardPadBottom,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: layout.radius(AppSpacing.radiusBanner),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      // 左侧内容 67pt 高、小表 60pt 高，小表在整行里垂直居中。
+                      children: [
+                        Expanded(child: _product()),
+                        SizedBox(
+                          width: layout.px(_metricWidth),
+                          child: _metrics(),
+                        ),
+                      ],
+                    ),
+                    if (card.tips.isNotEmpty)
+                      Padding(
+                        padding: layout.edgeInsets(
+                          top: _tipGap,
+                          right: _tipPadRight,
+                        ),
+                        // 提示文案由后端拼装、长度不可控，放不下时整行等比缩小，
+                        // 而不是把「... can borrow」截掉。
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            card.tips.join(_tipSeparator),
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: AppColors.productCardTip,
+                              fontSize: layout.px(9),
+                              // 设计稿行高 11pt。
+                              height: 11 / 9,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            // 整块按钮切图（弧形卡身 + 文案都烘焙在图里），上下与外框找平。
+            Positioned(
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: layout.px(_buttonWidth),
+              child: Image.asset(
+                _buttonAsset,
+                key: ValueKey('home-recommendation-apply-${card.id}'),
+                fit: BoxFit.fill,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 左侧一列：产品 Logo + 名称 / 额度 / 额度说明。
+  Widget _product() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            ClipRRect(
+              borderRadius: layout.radius(AppSpacing.radiusXxs),
+              child: RemoteImage(
+                url: card.productLogo,
+                fit: BoxFit.contain,
+                width: layout.px(_logoSize),
+                height: layout.px(_logoSize),
+              ),
+            ),
+            SizedBox(width: layout.px(_logoGap)),
+            Expanded(
+              child: Text(
+                card.productName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.productCardTitle,
+                  fontSize: layout.px(10),
+                  // 设计稿行高 16pt。
+                  height: 16 / 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+        Padding(
+          padding: layout.edgeInsets(top: _amountGap),
+          // 额度长度由后端决定，容器放不下时等比缩小而不是截断金额。
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              card.amountRange,
+              maxLines: 1,
+              style: TextStyle(
+                color: AppColors.cardValue,
+                fontSize: layout.px(24),
+                fontWeight: FontWeight.w700,
+                // 设计稿行高 29pt。
+                height: 29 / 24,
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: layout.edgeInsets(top: _amountGap),
+          child: Text(
+            card.amountRangeDes,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.cardLabel,
+              fontSize: layout.px(12),
+              // 设计稿行高 14pt。
+              height: 14 / 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 右侧「利率 / 期限」小表。
+  Widget _metrics() {
+    return Container(
+      padding: layout.edgeInsets(
+        left: _metricPadHorizontal,
+        top: _metricPadVertical,
+        right: _metricPadHorizontal,
+        bottom: _metricPadVertical,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.productCardMetricBackground,
+        borderRadius: layout.radius(AppSpacing.radiusSm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _metricRow(card.loanRateDes, card.loanRate),
+          SizedBox(height: layout.px(_metricGap)),
+          _metricRow(card.termInfoText, card.termInfo),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricRow(String label, String value) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.cardLabel,
+              fontSize: layout.px(10),
+              // 设计稿行高 12pt。
+              height: 12 / 10,
+            ),
+          ),
+        ),
+        // 数值比标签重要，宽度不够时优先保住数值。
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: AppColors.productCardTitle,
+              fontSize: layout.px(10),
+              height: 12 / 10,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 「立即申请」入口：未登录先跳登录页，已登录走产品申请流程。
+///
+/// 额度卡整块、卡内按钮与推荐卡共用这一处逻辑，避免多套热区行为不一致。
+/// 准入 / 产品详情 / 借款确认跳转统一由 `ProductApplicationFlow` 处理。
+Future<void> _openApply(WidgetRef ref, String productId) async {
   // TODO(埋点): 「立即申请」点击需要在 Firebase Analytics 上报事件。
   if (!ref.read(userSessionProvider).isLoggedIn) {
     await AppNavigator.toLogin();
     return;
   }
-  // TODO(接入): 走点击申请 `/outsulk/weaken` + 产品详情/认证流程。
-  ToastHelper.showMessage('Application flow is not wired up yet');
+  // 产品 id 来自首页模块的 `cussedly`，缺失时无法发起准入。
+  if (productId.isEmpty) {
+    ToastHelper.showError('Product is unavailable');
+    return;
+  }
+  final flow = await ref.read(productApplicationFlowProvider.future);
+  await flow.applyProduct(productId: productId);
 }

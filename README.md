@@ -137,7 +137,12 @@ lib/
 3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：认证项、订单、上报、H5 相关接口尚未落地。
-5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 + 悬浮底栏）。
+   「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
+   H5 地址需要 WebView、认证项需要证件 / 活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡页、
+   原生 `recredit` 需要重新授信 loading 页。相关分支见
+   `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
+5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
+   推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
    白描边 / 深色标题条 / 左侧金币 / 金色光晕 / 标题文字 / 柠檬绿卡身），
    页面只在卡身上叠金额行 / 进度槽 / 阶段文案行；进度槽上的阶段金币用
@@ -194,6 +199,27 @@ lib/
       底部导航目前是代码画的悬浮胶囊，不需要背景切图。
     - 设计稿的间距不全是 8pt 倍数（`block_2` 的 12/10、About Us 卡上方的 17、图标与文案之间的 6），
       这里以设计稿数值为准，新增元素时请沿用同一套值而不是就近取整。
+
+11. **首页推荐列表已按蓝湖稿 02-01 的 `group_3` 还原**（后端模块 `PRODUCT_LIST`，
+    测试环境下发混淆值 `Sixcylinder`）。`kneeing[].liquidators` 的混淆表在
+    `7.map.html#首页元素`，**逐行对应**：MalvernePlucked=BANNER、LupusesWheelrace=LARGE_CARD、
+    Abaca=SMALL_CARD、Fugue=REPAY、Sixcylinder=PRODUCT_LIST、Broadtoothed=PROCESS_LIST、
+    BelliferousOverfertilizing=AD_LIST。补新类型时先核对行序，不要再按名字猜。
+    模块要点与已知差异：
+    - 区块标题右侧的「More + 箭头」产品确认不做，`_Recommendation` 只渲染标题；
+      后端没下发推荐卡时整块不渲染（设计稿没有这一块的空态）。
+    - 卡片 96x130 的弧形「Apply Now」按钮是**整块切图**（弧形卡身 + 文案烘焙在图里），
+      按后端 `holts`（1 高亮 / 0 正常 / -1 置灰）选
+      `apply_now_highlight` / `apply_now_normal` / `apply_now_disabled`；
+      `holts` 缺失或取值不认识时回落「正常」。切图位置走 `top/right/bottom: 0` 贴住深色外框，
+      所以外框高度变化时按钮会一起伸缩，不要再按固定 top 摆。
+    - 「利率 / 期限」小表的期限标签用的是 `lxe`，与产品大卡的 `solomon` 不是同一个字段；
+      金额说明仍复用大卡的 `octodentate`。文档示例里它的值是 `Maximum Loan Amount Upto`，
+      而设计稿写的是 `Available up to` —— 以接口实测为准，不要照设计稿写死。
+    - 底部粉色提示行由 `islet`（数组）用「 / 」拼接；它是长度不可控的整行文案，
+      放不下时等比缩小而不是截断。金额同理走 `FittedBox(scaleDown)`，金额永远不许省略号。
+    - 整张卡与按钮共用 `_openApply()`（与额度大卡一致）。`superidealness` 跳转地址暂未接入，
+      与 banner 一样等 WebView / 产品详情页补齐后再接。
 
 ## 常用命令
 

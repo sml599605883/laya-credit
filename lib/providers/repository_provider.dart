@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/product_repository.dart';
 import 'network_provider.dart';
 
 /// 仓库统一入口：页面/Provider 只依赖仓库，不直接依赖 Dio。
@@ -14,4 +15,11 @@ final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
 final appRepositoryProvider = FutureProvider<AppRepository>((ref) async {
   final client = await ref.watch(httpClientProvider.future);
   return AppRepository(client);
+});
+
+final productRepositoryProvider = FutureProvider<ProductRepository>((
+  ref,
+) async {
+  final client = await ref.watch(httpClientProvider.future);
+  return ProductRepository(client);
 });

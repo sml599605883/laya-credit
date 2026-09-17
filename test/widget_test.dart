@@ -16,6 +16,9 @@ import 'package:laya_credit/data/models/login_result.dart';
 import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/data/repositories/auth_repository.dart';
+import 'package:laya_credit/data/repositories/product_repository.dart';
+import 'package:laya_credit/data/models/product_apply_result.dart';
+import 'package:laya_credit/data/models/product_detail.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/pages/home_page.dart';
@@ -92,6 +95,47 @@ class _StubAuthRepository extends AuthRepository {
   }
 }
 
+/// 产品申请仓库桩：记录准入调用，返回可配的准入 / 详情结果。
+class _StubProductRepository extends ProductRepository {
+  _StubProductRepository({
+    this.applyResult = const ProductApplyResult(
+      statusCode: 200,
+      jumpUrl: '',
+      jumpType: 0,
+      message: '',
+    ),
+    this.detail = const ProductDetail(
+      resultCode: 200,
+      basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
+      nextStep: ProductNextStep(taskType: 'Kegful', title: 'Identity'),
+    ),
+  }) : super(_placeholderClient());
+
+  final ProductApplyResult applyResult;
+  final ProductDetail detail;
+
+  /// (productId, apiRemind)
+  final List<(String, int)> applyCalls = [];
+  int detailCalls = 0;
+
+  @override
+  Future<ApiResponse<ProductApplyResult>> applyProduct({
+    required String productId,
+    int apiRemind = 0,
+  }) async {
+    applyCalls.add((productId, apiRemind));
+    return ApiResponse(code: 0, message: 'success', data: applyResult);
+  }
+
+  @override
+  Future<ApiResponse<ProductDetail>> getProductDetail({
+    required String productId,
+  }) async {
+    detailCalls++;
+    return ApiResponse(code: 0, message: 'success', data: detail);
+  }
+}
+
 HttpClient _placeholderClient() {
   return HttpClient(
     config: NetworkConfig(
@@ -146,6 +190,7 @@ class _RecordingClient extends HttpClient {
 
 /// 首页额度大卡 + 授信进度阶段（蓝湖稿 02-01 / 02-02 的 LARGE_CARD）。
 const _productCard = HomeProductCard(
+  id: '1',
   productName: 'Pera Cash',
   productLogo: '',
   buttonText: 'Apply Now',
@@ -197,6 +242,21 @@ const _orderCard = HomeOrderCard(
   jumpUrl: '',
 );
 
+/// 推荐列表里的产品卡（蓝湖稿 02-01 的 PRODUCT_LIST 模块）。
+const _recommendationCard = HomeProductListCard(
+  id: '1',
+  productName: 'PG Finance',
+  productLogo: '',
+  amountRange: '\u20b160,000',
+  amountRangeDes: 'Available up to',
+  loanRate: '\u2264 0.5% Day',
+  loanRateDes: 'Interest rate',
+  termInfo: '\u2264 0.5% Day',
+  termInfoText: 'Loan terms',
+  tips: ['Low interest rates', 'Ages 17 years and over can borrow'],
+  buttonStyle: HomeProductCardButtonStyle.highlighted,
+);
+
 void _usePhoneSurface(WidgetTester tester) {
   // 默认的 800x600 测试窗口会把页面下半部分裁掉，断言会失真。
   tester.view.physicalSize = const Size(1206, 2622);
@@ -243,6 +303,7 @@ Future<void> _pumpApp(
   WidgetTester tester, {
   AppRepository? repository,
   AuthRepository? authRepository,
+  ProductRepository? productRepository,
   Future<void> Function(ProviderContainer container)? setUp,
 }) async {
   _usePhoneSurface(tester);
@@ -268,6 +329,10 @@ Future<void> _pumpApp(
         appRepositoryProvider.overrideWith((ref) async => repository),
       if (authRepository != null)
         authRepositoryProvider.overrideWith((ref) async => authRepository),
+      if (productRepository != null)
+        productRepositoryProvider.overrideWith(
+          (ref) async => productRepository,
+        ),
     ],
   );
   addTearDown(container.dispose);
@@ -420,6 +485,71 @@ void main() {
     expect(find.text('\u20b150,000'), findsOneWidget);
   });
 
+  testWidgets('首页按设计稿 02-01 渲染推荐列表，标题右侧不出现 More 与箭头', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: null,
+          orders: [],
+          notices: [],
+          productList: [_recommendationCard],
+        ),
+      ),
+    );
+
+    expect(find.text('Recommendation'), findsOneWidget);
+    // 设计稿标题右侧的「More + 箭头」按产品要求不渲染。
+    expect(find.text('More'), findsNothing);
+    expect(find.byIcon(Icons.chevron_right), findsNothing);
+
+    expect(find.text('PG Finance'), findsOneWidget);
+    expect(find.text('\u20b160,000'), findsOneWidget);
+    expect(find.text('Available up to'), findsOneWidget);
+    expect(find.text('Interest rate'), findsOneWidget);
+    expect(find.text('Loan terms'), findsOneWidget);
+    expect(
+      find.text('Low interest rates / Ages 17 years and over can borrow'),
+      findsOneWidget,
+    );
+
+    // 按钮是整块切图，按后端 `holts` 选三态配色（这里是高亮）。
+    final button = tester.widget<Image>(
+      find.byKey(const ValueKey('home-recommendation-apply-1')),
+    );
+    expect(
+      (button.image as AssetImage).assetName,
+      AppAssets.homeApplyNowHighlight,
+    );
+  });
+
+  testWidgets('首页推荐卡整块可点击：点空白处同样走申请流程', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: null,
+          orders: [],
+          notices: [],
+          productList: [_recommendationCard],
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('PG Finance'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LoginPage), findsOneWidget);
+  });
+
+  testWidgets('首页没有推荐列表时整块不渲染，不出现空态标题', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    expect(find.text('Recommendation'), findsNothing);
+  });
+
   testWidgets('首页额度头图渲染后端下发的产品、额度、期限与申请入口', (tester) async {
     await _pumpApp(
       tester,
@@ -429,6 +559,7 @@ void main() {
           orders: [],
           notices: [],
           product: HomeProductCard(
+            id: '1',
             productName: 'Pera Cash',
             productLogo: '',
             buttonText: 'Apply Now',
@@ -504,7 +635,9 @@ void main() {
       ),
     );
 
-    final controller = tester.widget<PageView>(find.byType(PageView)).controller!;
+    final controller = tester
+        .widget<PageView>(find.byType(PageView))
+        .controller!;
     final start = controller.page!;
 
     // 每 3 秒切到下一条：等一拍定时器 + 300ms 切换动画。
@@ -983,6 +1116,64 @@ void main() {
     expect(order.status, HomeOrderCardStatus.toRepay);
   });
 
+  test('首页 PRODUCT_LIST 用 Sixcylinder 混淆值解析推荐列表', () {
+    final home = HomeData.fromJson(const {
+      'kneeing': [
+        {
+          'liquidators': 'Sixcylinder',
+          'stabiliment': [
+            {
+              'cussedly': 1,
+              'heartfelt': 'Pera Pitaka(AA)',
+              'bathtubs': 'https://cdn.example.com/logo.png',
+              'wastefulnesses': '\u20b150,000',
+              'octodentate': 'Maximum Loan Amount Upto',
+              'mesometral': 'Interest Rate',
+              'antibilious': '\u2264 0.5% Day',
+              'lxe': 'Loan terms',
+              'gundy': '121day',
+              'islet': ['Low Interest Rates', '17 years old can be borrowed'],
+              'holts': 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    final card = home.productList.single;
+    expect(card.id, '1');
+    expect(card.productName, 'Pera Pitaka(AA)');
+    expect(card.productLogo, 'https://cdn.example.com/logo.png');
+    expect(card.amountRange, '\u20b150,000');
+    expect(card.amountRangeDes, 'Maximum Loan Amount Upto');
+    expect(card.loanRateDes, 'Interest Rate');
+    expect(card.loanRate, '\u2264 0.5% Day');
+    expect(card.termInfoText, 'Loan terms');
+    expect(card.termInfo, '121day');
+    expect(card.tips, ['Low Interest Rates', '17 years old can be borrowed']);
+    expect(card.buttonStyle, HomeProductCardButtonStyle.highlighted);
+    // 推荐列表不是产品大卡，不能顶掉头图的 LARGE_CARD。
+    expect(home.product, isNull);
+  });
+
+  test('推荐卡按钮配色 holts 覆盖三态，缺省回落正常态', () {
+    HomeProductCardButtonStyle styleOf(Object? holts) => HomeData.fromJson({
+      'kneeing': [
+        {
+          'liquidators': 'PRODUCT_LIST',
+          'stabiliment': [
+            {'heartfelt': 'Pera Pitaka(AA)', 'holts': holts},
+          ],
+        },
+      ],
+    }).productList.single.buttonStyle;
+
+    expect(styleOf(1), HomeProductCardButtonStyle.highlighted);
+    expect(styleOf(0), HomeProductCardButtonStyle.normal);
+    expect(styleOf(-1), HomeProductCardButtonStyle.grayed);
+    expect(styleOf(null), HomeProductCardButtonStyle.normal);
+  });
+
   test('首页 kneeing 用测试环境下发的混淆模块名解析', () {
     // 文档 `7.map.html` 写的是 BANNER / LARGE_CARD / AD_LIST，
     // 测试环境下发的却是混淆串，两种都要能解析。
@@ -1074,5 +1265,164 @@ void main() {
     expect(path, ApiEndpoints.bannerClick);
     expect(params[ApiFields.bannerConfigId], '1394');
     expect(params.containsKey(ApiFields.obfuscateBannerClick), isTrue);
+  });
+
+  test('点击申请接口带产品 id、来源标识与固定的模块参数', () async {
+    final client = _RecordingClient();
+    await ProductRepository(client).applyProduct(productId: '7', apiRemind: 0);
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.productApply);
+    expect(params[ApiFields.productId], '7');
+    expect(params[ApiFields.apiRemind], '0');
+    // 文档标注已弃用，但仍要固定下发。
+    expect(params[ApiFields.applyModuleId], '1001');
+    expect(params[ApiFields.applyPosition], '1000');
+    expect(params[ApiFields.applySubModuleId], '1000');
+    expect(params.containsKey(ApiFields.obfuscateApply1), isTrue);
+    expect(params.containsKey(ApiFields.obfuscateApply2), isTrue);
+  });
+
+  test('产品详情解析 priapi 与 cretonne 下一步认证项', () {
+    final detail = ProductDetail.fromJson({
+      ApiFields.applyResultCode: 200,
+      ApiFields.productDetail: {
+        ApiFields.itemId: '7',
+        ApiFields.productName: 'Pera Agad',
+        ApiFields.detailOrderNo: 'ORDER-9',
+        ApiFields.detailOrderId: 266561,
+        ApiFields.amount: '1000',
+        ApiFields.detailTerm: '91',
+        ApiFields.detailTermType: '1',
+      },
+      ApiFields.detailNextStep: {
+        ApiFields.detailTaskType: 'Bespattered',
+        ApiFields.itemTitle: 'Informasi bank',
+        ApiFields.jumpUrl: '',
+        ApiFields.applyJumpType: 0,
+      },
+    });
+
+    expect(detail.resultCode, 200);
+    expect(detail.basicInfo.productId, '7');
+    expect(detail.basicInfo.orderNo, 'ORDER-9');
+    expect(detail.basicInfo.orderId, 266561);
+    expect(detail.basicInfo.loanTerm, '91');
+    expect(detail.basicInfo.termType, '1');
+    expect(detail.nextStep.taskType, 'Bespattered');
+    expect(detail.nextStep.title, 'Informasi bank');
+  });
+
+  test('准入结果解析 countercharged / superidealness 与跳转类型', () {
+    final result = ProductApplyResult.fromJson({
+      ApiFields.applyResultCode: 302,
+      ApiFields.jumpUrl: 'ph://laya-credit/ios/IntervesicularSauder',
+      ApiFields.applyJumpType: 0,
+      ApiFields.applyMessage: 'success',
+    });
+
+    expect(result.statusCode, 302);
+    expect(result.hasJump, isTrue);
+    expect(result.isAdmitted, isFalse);
+    expect(result.jumpType, 0);
+  });
+
+  testWidgets('已登录用户点额度大卡会发起点击申请', (tester) async {
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    // 点大卡的非按钮区域，走的是同一处 _openApply 逻辑。
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(productRepository.applyCalls, [('1', 0)]);
+  });
+
+  testWidgets('准入失败时不继续拉产品详情', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 505,
+        jumpUrl: '',
+        jumpType: 0,
+        message: 'Risk rejected',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(productRepository.applyCalls, hasLength(1));
+    expect(productRepository.detailCalls, 0);
+    expect(find.text('Risk rejected'), findsOneWidget);
+  });
+
+  testWidgets('准入成功后拉产品详情并按下一步认证项提示', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
+        nextStep: ProductNextStep(
+          taskType: 'Bespattered',
+          title: 'Informasi bank',
+        ),
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(productRepository.applyCalls, hasLength(1));
+    expect(productRepository.detailCalls, 1);
+    expect(find.text('Please complete Informasi bank'), findsOneWidget);
   });
 }

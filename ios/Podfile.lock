@@ -7,12 +7,27 @@ PODS:
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
+  - TrustDecisionLiveness (3.3.2)
+  - TrustDecisionPro (5.3.1.5):
+    - TrustDecisionPro/FMDeviceManagerFramework (= 5.3.1.5)
+    - TrustDecisionPro/TDCorePlugin (= 5.3.1.5)
+    - TrustDecisionPro/TDMobRisk (= 5.3.1.5)
+  - TrustDecisionPro/FMDeviceManagerFramework (5.3.1.5)
+  - TrustDecisionPro/TDCorePlugin (5.3.1.5)
+  - TrustDecisionPro/TDMobRisk (5.3.1.5)
 
 DEPENDENCIES:
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - Flutter (from `Flutter`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+  - TrustDecisionLiveness
+  - TrustDecisionPro
+
+SPEC REPOS:
+  trunk:
+    - TrustDecisionLiveness
+    - TrustDecisionPro
 
 EXTERNAL SOURCES:
   device_info_plus:
@@ -29,7 +44,9 @@ SPEC CHECKSUMS:
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  TrustDecisionLiveness: 1b522a99c6b7463d8e22a0d29676a6e98fc6fdb0
+  TrustDecisionPro: 127cf9d1595d36213a42a86f35cf78109d0790f4
 
-PODFILE CHECKSUM: 3ba3a73b1b12adcf321a227a745625fe0888cc82
+PODFILE CHECKSUM: 963158b476d7300943d0e5412d08995e8d50756f
 
 COCOAPODS: 1.17.0

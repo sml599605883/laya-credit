@@ -19,4 +19,13 @@ abstract final class ApiEndpoints {
 
   /// banner 点击记录上报。POST
   static const bannerClick = '/outsulk/gaile';
+
+  /// 点击申请（产品准入）。POST
+  static const productApply = '/outsulk/weaken';
+
+  /// 产品详情（准入成功后拉取认证项 / 下一步）。POST
+  static const productDetail = '/outsulk/inconstruable';
+
+  /// 跟进订单号获取跳转地址（认证完成后进借款确认页）。POST
+  static const productPush = '/outsulk/octodentate';
 }

@@ -51,6 +51,17 @@ abstract final class ApiFields {
   static const stepAmount = 'beingless';
   static const stepSelected = 'estamp';
 
+  // ---------- 推荐列表卡（PRODUCT_LIST） ----------
+  /// 推荐卡提示文案数组（如 `["Low Interest Rates", "17 years old can be borrowed"]`）。
+  /// 首页元素的取值见 `7.map.html#首页元素`：`Sixcylinder` = `PRODUCT_LIST`。
+  static const tips = 'islet';
+
+  /// 推荐卡按钮配色：1 高亮 / 0 正常 / -1 置灰。
+  static const buttonColorCode = 'holts';
+
+  /// 推荐卡期限标签（产品大卡的期限标签是 `solomon`，推荐卡用的是 `lxe`）。
+  static const termText = 'lxe';
+
   // ---------- 借款进度卡 ----------
   static const orderNo = 'resex';
   static const productId = 'tartarizing';
@@ -66,6 +77,51 @@ abstract final class ApiFields {
   static const cardStatus = 'satin';
   static const displayAmount = 'libertytown';
   static const orderStatusText = 'cuboid';
+
+  // ---------- 产品申请 / 准入（`/outsulk/weaken`）----------
+  /// 模块 id / 位置 / 子模块 id：文档标注已弃用，固定写死。
+  static const applyModuleId = 'monotheist';
+  static const applyPosition = 'besmeared';
+  static const applySubModuleId = 'unidentifying';
+
+  /// 来源标识（0 默认，1 首页 banner，2 首页弹窗 ...）。
+  static const apiRemind = 'dirdum';
+  static const obfuscateApply1 = 'baaing';
+  static const obfuscateApply2 = 'deafened';
+
+  /// 准入结果（data 内）。`200` 成功，其余为失败或需跳转。
+  static const applyResultCode = 'countercharged';
+
+  /// 跳转类型：0 原生 / 1 H5。
+  static const applyJumpType = 'liquidators';
+
+  /// 准入结果文案。
+  static const applyMessage = 'ivah';
+  static const applyAccessKey = 'closehearted';
+  static const applySecretKey = 'scabrousness';
+
+  // ---------- 产品详情（`/outsulk/inconstruable`）----------
+  /// 产品信息对象。
+  static const productDetail = 'priapi';
+  static const obfuscateDetail1 = 'bonnerdale';
+  static const obfuscateDetail2 = 'jawed';
+  static const obfuscateDetail3 = 'rustiness';
+  static const detailOrderNo = 'pirate';
+  static const detailOrderId = 'gasking';
+
+  /// 借款期限 / 期限类型（产品详情与订单跳转共用）。
+  static const detailTerm = 'dandled';
+  static const detailTermType = 'hellenizer';
+
+  /// 下一步认证项 `{ taskType, title, url, type }`。
+  static const detailNextStep = 'cretonne';
+  static const detailTaskType = 'catholical';
+
+  // ---------- 跟进订单号获取跳转地址（`/outsulk/octodentate`）----------
+  static const obfuscatePush1 = 'indefinity';
+  static const obfuscatePush2 = 'monocentric';
+  static const obfuscatePush3 = 'mediacies';
+  static const obfuscatePush4 = 'wanderlusts';
 
   // ---------- 各接口的混淆字段（无业务含义，每次请求随机值）----------
   static const obfuscateSendSms = 'tectites';
