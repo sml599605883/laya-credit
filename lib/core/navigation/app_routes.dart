@@ -18,8 +18,18 @@ abstract final class AppRoutes {
   /// 登录页。
   static const login = '/login';
 
+  /// 证件选择页（认证流程第一步）。
+  static const idVerification = '/id-verification';
+
   /// 全部路由（用于启动自检与埋点白名单）。
-  static const List<String> all = [root, home, stats, mine, login];
+  static const List<String> all = [
+    root,
+    home,
+    stats,
+    mine,
+    login,
+    idVerification,
+  ];
 
   /// 路由名是否已注册。
   static bool isValid(String? route) => route != null && all.contains(route);

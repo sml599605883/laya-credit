@@ -21,7 +21,9 @@ import 'package:laya_credit/data/models/product_apply_result.dart';
 import 'package:laya_credit/data/models/product_detail.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
+import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/home_page.dart';
+import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
 import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
@@ -274,6 +276,14 @@ String _loginCheckboxAsset(WidgetTester tester) {
   );
   return (image.image as AssetImage).assetName;
 }
+
+/// 页面上某张切图资源（按 [AppAssets] 常量找）。
+Finder _assetImage(String assetName) => find.byWidgetPredicate(
+  (widget) =>
+      widget is Image &&
+      widget.image is AssetImage &&
+      (widget.image as AssetImage).assetName == assetName,
+);
 
 /// 登录页底部运营 Banner（文案已含在切图里）。
 Finder _loginBanner() => find.byWidgetPredicate(
@@ -1424,5 +1434,81 @@ void main() {
     expect(productRepository.applyCalls, hasLength(1));
     expect(productRepository.detailCalls, 1);
     expect(find.text('Please complete Informasi bank'), findsOneWidget);
+  });
+
+  testWidgets('证件选择页按蓝湖稿 03 展示两组证件类型', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    AppNavigator.push(AppRoutes.idVerification);
+    await tester.pumpAndSettle();
+
+    // 头图与返回按钮都是设计稿切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.idVerifyHeader), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(find.text('ID Verification'), findsOneWidget);
+
+    // 两张卡的标题。
+    expect(find.text('Recommended ID Type'), findsOneWidget);
+    expect(find.text('Other Options'), findsOneWidget);
+
+    // 推荐证件 5 项，顺序与设计稿 `section_3` 一致（`POSTAL  ID` 的空格也照搬）。
+    expect(find.text('PRC ID'), findsOneWidget);
+    expect(find.text('SSS ID'), findsOneWidget);
+    expect(find.text('PHILIPPINE PASSPORT'), findsOneWidget);
+    expect(find.text('POSTAL  ID'), findsOneWidget);
+    expect(find.text('UMID(Unified Multi-Purpose ID)'), findsOneWidget);
+
+    // 其他证件 5 项（设计稿 `section_4`）。
+    expect(find.text("DRIVER'S LICENSE"), findsOneWidget);
+    expect(find.text('STUDENT CARD'), findsOneWidget);
+    expect(find.text('TIN  ID'), findsOneWidget);
+    expect(find.text("Voter's ID"), findsOneWidget);
+    expect(find.text('PhilHealth ID'), findsOneWidget);
+
+    // 卡片比头图底边高 19pt，白色标题块压在头图下沿上（设计稿 `top: -19`）。
+    final headerRect = tester.getRect(_assetImage(AppAssets.idVerifyHeader));
+    final cardRect = tester.getRect(
+      find
+          .ancestor(
+            of: find.text('Recommended ID Type'),
+            matching: find.byType(DecoratedBox),
+          )
+          .first,
+    );
+    // 设计稿 `section_3` 顶边 237 与 `text-wrapper_4` 的 `top: -19`：白卡压住头图 19pt。
+    expect(headerRect.bottom - cardRect.top, greaterThan(0));
+
+    // 上传页没搭建前，选中证件只给占位提示。
+    await tester.tap(find.text('PRC ID'));
+    await tester.pumpAndSettle();
+    expect(find.text('PRC ID is not available yet'), findsOneWidget);
+  });
+
+  testWidgets('身份认证项直接进入证件选择页', (tester) async {
+    // 桩仓库默认的下一步认证项就是身份认证（`taskType = Kegful`）。
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IdVerificationPage), findsOneWidget);
+    expect(find.text('Recommended ID Type'), findsOneWidget);
   });
 }

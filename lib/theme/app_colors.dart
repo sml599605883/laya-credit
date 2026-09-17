@@ -103,12 +103,27 @@ abstract final class AppColors {
   /// 推荐卡底部提示文案色（设计稿 `text_24`）。
   static const productCardTip = Color(0xFFFE295C);
 
+  // ---------- 证件选择页（蓝湖稿 `03 - 认证流程模块`） ----------
+
+  /// 页面底色（设计稿 `page` rgba(245,245,245)）。
+  static const idVerifyBackground = Color(0xFFF5F5F5);
+
+  /// 证件类型行文案色（设计稿 `text_7` 等 rgba(38,65,7)）。
+  static const idVerifyRowText = Color(0xFF264107);
+
+  /// 证件类型行之间的虚线分隔色（设计稿「路径 4」rgba(189,189,162)）。
+  static const idVerifyDashedDivider = Color(0xFFBDBDA2);
+
+  /// 卡片标题与证件列表之间的 1pt 分隔线（设计稿 `box_1` / `section_5` rgba(238,238,238)）。
+  static const idVerifyDivider = Color(0xFFEEEEEE);
+
   // ---------- 个人中心（蓝湖稿 `07-01 - 个人中心`） ----------
 
   /// 个人中心顶部深色头图底色（设计稿 `box_1`）。
   static const mineHeader = Color(0xFF0B2928);
 
-  /// 分组标题（Customer Service / About Us，设计稿 `text_4` / `text_5`）。
+  /// 标题文字（个人中心的 Customer Service / About Us、证件选择页的分组标题与
+  /// 导航标题，设计稿 `text_4` / `text_5` / `text_3`）。
   static const sectionTitle = Color(0xFF333333);
 
   /// 列表项主文案（设计稿 `text-group_3/4/6`）。

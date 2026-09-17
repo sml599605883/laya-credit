@@ -25,6 +25,13 @@ abstract final class AppAssets {
   static const homeApplyNowNormal = 'assets/home/apply_now_normal.png';
   static const homeApplyNowDisabled = 'assets/home/apply_now_disabled.png';
 
+  // 证件选择页（蓝湖稿 `03 - 认证流程模块`）
+  /// 顶部头图（375x213）：绿色渐变 + 大标题 + 吉祥物，整块切图。
+  static const idVerifyHeader = 'assets/id_verify/id_verify_header.png';
+
+  /// 二级页返回按钮（24x24）。
+  static const back = 'assets/common/back.png';
+
   // 个人中心（蓝湖稿 `07-01 - 个人中心`）
   /// 顶栏头像（设计稿 `label_1`，48x48）。圆角 8 与 1pt 白描边由代码补。
   static const mineAvatar = 'assets/mine/mine_avatar.png';

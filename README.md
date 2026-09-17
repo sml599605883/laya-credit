@@ -24,7 +24,8 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 - 页面栈操作只暴露 4 个语义化方法：`push` / `replace` / `resetTo`（清栈）/ `pop`。
 - 侧滑返回保持 Flutter 默认（iOS 可返回）。若某个流程需要禁止中途返回，只改该路由对应的 Route 实现，不要全局关闭。
 
-目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`。
+目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`，
+以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）。
 
 ### 2. 状态管理用什么
 
@@ -138,9 +139,11 @@ lib/
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：认证项、订单、上报、H5 相关接口尚未落地。
    「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
-   H5 地址需要 WebView、认证项需要证件 / 活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡页、
+   H5 地址需要 WebView、认证项需要活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡页、
    原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
+   认证项里的身份认证（`Kegful`）已接上证件选择页（见第 12 条），
+   证件上传页仍然缺。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -220,6 +223,33 @@ lib/
       放不下时等比缩小而不是截断。金额同理走 `FittedBox(scaleDown)`，金额永远不许省略号。
     - 整张卡与按钮共用 `_openApply()`（与额度大卡一致）。`superidealness` 跳转地址暂未接入，
       与 banner 一样等 WebView / 产品详情页补齐后再接。
+
+12. **证件选择页已按蓝湖稿 03 还原**（认证流程第一步，`/id-verification`）。
+    头图（绿色渐变 + 「ID Verification」大标题 + 吉祥物，375x213）是整块切图
+    `assets/id_verify/id_verify_header.png`（用户提供的 `位图@3x.png`），
+    返回按钮走 `assets/common/back.png`（用户提供的 `返回@3x.png`，24x24，两个素材都已按用途改名）。
+    两张卡（`Recommended ID Type` / `Other Options`）的白底、圆角 12、标题 16pt/700、
+    行高 46、行间虚线（实 4 空 4、`rgba(189,189,162)`）都取自设计稿 CSS 与 Design Tokens。
+    要点与已知差异：
+    - 设计稿把卡片标题块和卡身拆成两个绝对定位元素，标题块底边压在卡身上 19pt
+      （`text-wrapper_4` 的 `top: -19`）。代码按「标题块 + 卡身」竖排叠出同样效果，
+      白卡顶边因此压住头图下沿 19pt；卡身在 CSS 里是 `border-radius: 0 0 12 12`，
+      上圆角由标题块提供。
+    - 行尾箭头（设计稿 5x9）在 `assets/` 里没有对应切图：`assets/common/chevron_right.png`
+      是个人中心那套灰色箭头（7x11、`rgba(153,153,153)`），和设计稿的 `rgba(38,65,7)` 对不上，
+      按仓库约定「没有的素材直接忽略也不硬凑」，改用 `CustomPainter` 按设计稿尺寸画，
+      颜色走 `AppColors.idVerifyRowText`。行间虚线同理（Flutter 没有虚线边框）。
+    - 证件清单是客户端固定文案（设计稿写死的），不请求接口，所以页面没有
+      Loading / Error / Empty 态，与个人中心同一套判断。
+    - 选中证件后的上传页（正面 / 反面 + 拍摄引导）尚未搭建，点击先给占位提示；
+      `product_application_flow.dart` 里 `taskType == 'Kegful'` 会直接压栈这一页。
+      上传接口按产品维度取资料，补齐时再把 `productId` 透传过来，现在页面不吃参数。
+    - 导航浮层固定在头图上、不随内容滚动：设计稿内容正好 812pt 一屏放得下，
+      但小屏（< 812pt）滚动时返回按钮不能滚出屏幕。真机安全区比设计稿的
+      状态栏（17pt + 21pt 间距）高，返回按钮落在「安全区 + 10pt」处，
+      点击热区补到 40x40（设计稿只标了 24pt 图标）。
+    - 证件文案里的 `POSTAL  ID` / `TIN  ID` 是两个空格，来自设计稿的 `&nbsp;&nbsp;`，
+      不要顺手改成一个空格。
 
 ## 常用命令
 

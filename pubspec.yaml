@@ -73,6 +73,7 @@ flutter:
     - assets/navigation/
     - assets/login/
     - assets/common/
+    - assets/id_verify/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -3,6 +3,7 @@ import '../../data/models/product_detail.dart';
 import '../../data/repositories/product_repository.dart';
 import '../navigation/app_deep_link.dart';
 import '../navigation/app_navigator.dart';
+import '../navigation/app_routes.dart';
 import '../network/api_exception.dart';
 import '../ui/toast_helper.dart';
 
@@ -13,6 +14,11 @@ import '../ui/toast_helper.dart';
 ///
 /// 认证页面与 WebView 尚未搭建，相关分支先给用户明确提示，页面补齐后在
 /// [_openCertificationStep] / [_openWebPage] 里接对应路由即可。
+/// 认证项 `taskType`：身份认证（证件选择 / 上传）。
+///
+/// 取值是后端混淆串，取值表见 [ProductNextStep.taskType] 的说明。
+const _taskTypeIdentity = 'Kegful';
+
 class ProductApplicationFlow {
   ProductApplicationFlow({required this.repository, required this.isLoggedIn});
 
@@ -144,9 +150,15 @@ class ProductApplicationFlow {
   /// `Kegful`=身份 / `Reargued`=活体 / `FlintiestDevwsor`=个人信息 /
   /// `TrussvilleUninstructively`=工作 / `Thriftiness`=紧急联系人 / `Bespattered`=绑卡。
   void _openCertificationStep(ProductNextStep step, String productId) {
-    // TODO(页面): 认证页面尚未搭建。补齐后在这里按 taskType 跳对应页面：
-    //   public → 证件类型 / 上传，face → 活体，personal → 个人信息，
-    //   work → 工作信息，ext → 紧急联系人，bank → 绑卡。
+    // 身份认证：证件选择页已按蓝湖稿 `03 - 认证流程模块` 落地。
+    // 证件类型是客户端固定清单，页面不再请求接口，所以这里不需要下发数据；
+    // 选中证件后的上传页要按产品维度取资料，补齐时再把 productId 透传过去。
+    if (step.taskType == _taskTypeIdentity) {
+      AppNavigator.push(AppRoutes.idVerification);
+      return;
+    }
+
+    // TODO(页面): 活体（`Reargued`）/ 个人信息 / 工作 / 紧急联系人 / 绑卡页尚未搭建。
     final title = step.title.isEmpty ? 'certification' : step.title;
     ToastHelper.showMessage('Please complete $title');
   }

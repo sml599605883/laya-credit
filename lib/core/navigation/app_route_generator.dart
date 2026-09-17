@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../pages/home_page.dart';
+import '../../pages/id_verification_page.dart';
 import '../../pages/login_page.dart';
 import '../../pages/mine_page.dart';
 import '../../pages/stats_page.dart';
@@ -34,6 +35,9 @@ class AppRouteGenerator {
 
       case AppRoutes.mine:
         return _route<void>(settings, (_) => const MinePage());
+
+      case AppRoutes.idVerification:
+        return _route<void>(settings, (_) => const IdVerificationPage());
 
       case AppRoutes.login:
         final args = settings.arguments as LoginPageArguments?;
