@@ -9,10 +9,12 @@ class ProductDetail {
     required this.resultCode,
     required this.basicInfo,
     required this.nextStep,
+    this.identityPrompt = '',
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
     final info = json[ApiFields.productDetail];
+    final tips = json[ApiFields.detailTips];
 
     return ProductDetail(
       resultCode: _intOf(json[ApiFields.applyResultCode]),
@@ -24,6 +26,9 @@ class ProductDetail {
               (json[ApiFields.detailNextStep] as Map).cast<String, dynamic>(),
             )
           : const ProductNextStep(),
+      identityPrompt: tips is Map
+          ? tips[ApiFields.detailTipIdentity]?.toString() ?? ''
+          : '',
     );
   }
 
@@ -32,6 +37,11 @@ class ProductDetail {
 
   /// 下一步未完成的认证项，已完成时 [ProductNextStep.taskType] 为空。
   final ProductNextStep nextStep;
+
+  /// 证件上传页顶部引导文案（`overwhelming.splendacious`）。
+  ///
+  /// 低版本 / 未灰度用户可能不下发，为空时由页面用设计稿兜底文案。
+  final String identityPrompt;
 }
 
 /// 产品信息（`priapi`）。

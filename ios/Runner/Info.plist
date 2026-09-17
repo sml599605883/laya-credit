@@ -27,7 +27,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is required to complete the liveness check during identity verification.</string>
+	<string>Laya Credit uses the camera to photograph your ID and to complete the liveness check during identity verification.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Laya Credit accesses your photo library so you can choose an existing photo of your ID for identity verification.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -31,4 +31,7 @@ abstract final class ApiEndpoints {
 
   /// 获取用户身份信息（认证第一项）：证件类型列表。GET
   static const identityInfo = '/outsulk/gaonate';
+
+  /// 上传证件图片 / 活体照片（multipart。第一项）。POST
+  static const uploadIdentityImage = '/outsulk/fashioned';
 }

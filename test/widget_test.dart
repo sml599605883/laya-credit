@@ -23,11 +23,13 @@ import 'package:laya_credit/data/models/product_apply_result.dart';
 import 'package:laya_credit/data/models/product_detail.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
+import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/home_page.dart';
 import 'package:laya_credit/pages/id_upload_page.dart';
 import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
+import 'package:laya_credit/providers/media_provider.dart';
 import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
@@ -135,6 +137,39 @@ class _StubCertificationRepository extends CertificationRepository {
     if (failure case final error?) throw error;
     return ApiResponse(code: 0, message: 'success', data: data ?? _defaultData);
   }
+
+  /// 记录每次证件上传：(文件路径, 卡类型, 来源)。
+  final List<(String, String, IdentityPhotoSource)> uploadCalls = [];
+
+  @override
+  Future<ApiResponse<Map<String, dynamic>>> uploadIdentityImage({
+    required String filePath,
+    required String cardType,
+    required IdentityPhotoSource source,
+  }) async {
+    uploadCalls.add((filePath, cardType, source));
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: <String, dynamic>{'harbingers': 'TEST USER'},
+    );
+  }
+}
+
+/// 证件照服务桩：不弹系统 UI，直接返回固定路径。
+class _StubIdentityPhotoService extends IdentityPhotoService {
+  static const pickedPath = '/tmp/id-card.jpg';
+
+  final List<IdentityPhotoSource> pickCalls = [];
+
+  @override
+  Future<String?> pick(IdentityPhotoSource source) async {
+    pickCalls.add(source);
+    return pickedPath;
+  }
+
+  @override
+  Future<String?> compressToLimit(String path) async => path;
 }
 
 /// 产品申请仓库桩：记录准入调用，返回可配的准入 / 详情结果。
@@ -236,6 +271,20 @@ class _RecordingClient extends HttpClient {
     required T Function(Object? data) parse,
   }) async {
     calls.add((path, params ?? const {}));
+    return ApiResponse<T>(code: 0, message: 'success', data: parse(null));
+  }
+
+  final List<(String, String, Map<String, Object?>)> uploads = [];
+
+  @override
+  Future<ApiResponse<T>> upload<T>(
+    String path, {
+    required String filePath,
+    required String fileField,
+    required Map<String, Object?> fields,
+    required T Function(Object? data) parse,
+  }) async {
+    uploads.add((path, fileField, fields));
     return ApiResponse<T>(code: 0, message: 'success', data: parse(null));
   }
 }
@@ -381,6 +430,7 @@ Future<void> _pumpApp(
   AuthRepository? authRepository,
   ProductRepository? productRepository,
   CertificationRepository? certificationRepository,
+  IdentityPhotoService? identityPhotoService,
   Future<void> Function(ProviderContainer container)? setUp,
 }) async {
   _usePhoneSurface(tester);
@@ -414,6 +464,8 @@ Future<void> _pumpApp(
         certificationRepositoryProvider.overrideWith(
           (ref) async => certificationRepository,
         ),
+      if (identityPhotoService != null)
+        identityPhotoServiceProvider.overrideWithValue(identityPhotoService),
     ],
   );
   addTearDown(container.dispose);
@@ -1382,8 +1434,14 @@ void main() {
         ApiFields.jumpUrl: '',
         ApiFields.applyJumpType: 0,
       },
+      // 各认证页文案容器：身份认证文案取 `splendacious` 这一条。
+      ApiFields.detailTips: {
+        ApiFields.detailTipIdentity: 'Upload a clear photo of your valid ID.',
+        'bocking': 'ignored',
+      },
     });
 
+    expect(detail.identityPrompt, 'Upload a clear photo of your valid ID.');
     expect(detail.resultCode, 200);
     expect(detail.basicInfo.productId, '7');
     expect(detail.basicInfo.orderNo, 'ORDER-9');
@@ -1392,6 +1450,15 @@ void main() {
     expect(detail.basicInfo.termType, '1');
     expect(detail.nextStep.taskType, 'Bespattered');
     expect(detail.nextStep.title, 'Informasi bank');
+  });
+
+  test('产品详情不下发 overwhelming 时身份认证文案为空', () {
+    final detail = ProductDetail.fromJson({
+      ApiFields.applyResultCode: 200,
+      ApiFields.productDetail: {ApiFields.itemId: '7'},
+    });
+
+    expect(detail.identityPrompt, isEmpty);
   });
 
   test('准入结果解析 countercharged / superidealness 与跳转类型', () {
@@ -1665,8 +1732,15 @@ void main() {
     );
   });
 
-  testWidgets('上传方式面板点 Quit 关掉面板，点 Camera / Album 先给占位提示', (tester) async {
-    await _pumpApp(tester, repository: _StubAppRepository());
+  testWidgets('上传方式面板点 Quit 关掉面板，Album 走取图 -> 压缩 -> 上传', (tester) async {
+    final photo = _StubIdentityPhotoService();
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      identityPhotoService: photo,
+    );
     _openIdUploadPage(tester);
     await tester.pumpAndSettle();
 
@@ -1676,13 +1750,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(UploadMethodSheet), findsNothing);
 
-    // 相机 / 相册取图与上传接口都还没接（见 README「其余接口未接入」）。
+    // 相册取图（相册不需要相机权限）后压缩并以「卡类型 + 来源 1」上传。
     await tester.tap(find.text('Upload'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Camera'));
+    await tester.tap(find.text('Album'));
     await tester.pumpAndSettle();
+
     expect(find.byType(UploadMethodSheet), findsNothing);
-    expect(find.text('Camera is not available yet'), findsOneWidget);
+    expect(photo.pickCalls, [IdentityPhotoSource.album]);
+    expect(certificationRepository.uploadCalls, hasLength(1));
+    expect(certificationRepository.uploadCalls.single.$2, 'PRC');
+    expect(
+      certificationRepository.uploadCalls.single.$3,
+      IdentityPhotoSource.album,
+    );
+    expect(find.text('Uploaded'), findsOneWidget);
+  });
+
+  testWidgets('证件上传页引导文案优先用产品详情下发的 overwhelming.splendacious', (tester) async {
+    const apiPrompt =
+        'Upload a clear, well-lit photo of your valid ID to speed up review.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailIdentityPrompt(apiPrompt);
+      },
+    );
+    _openIdUploadPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    expect(find.textContaining('Valid official credentials'), findsNothing);
   });
 
   testWidgets('证件上传页返回按钮回到证件选择页', (tester) async {
@@ -1836,6 +1937,36 @@ void main() {
     expect(path, ApiEndpoints.identityInfo);
     expect(params[ApiFields.productId], '7');
     expect(params.containsKey(ApiFields.obfuscateIdentityInfo), isTrue);
+  });
+
+  test('证件上传接口带上传类型、来源、卡类型与文件字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).uploadIdentityImage(
+      filePath: '/tmp/id-card.jpg',
+      cardType: 'PRC',
+      source: IdentityPhotoSource.camera,
+    );
+
+    final (path, fileField, fields) = client.uploads.single;
+    expect(path, ApiEndpoints.uploadIdentityImage);
+    expect(fileField, ApiFields.uploadFileField);
+    // 固定「身份证正面」，来源取枚举，卡类型原样带下去。
+    expect(fields[ApiFields.uploadType], '11');
+    expect(
+      fields[ApiFields.uploadImageSource],
+      IdentityPhotoSource.camera.code,
+    );
+    expect(fields[ApiFields.uploadCardType], 'PRC');
+    // 活体参数用不到，但字段必须存在且带空串。
+    for (final key in [
+      ApiFields.uploadLivenessId,
+      ApiFields.uploadLivenessLicense,
+      ApiFields.uploadFaceType,
+      ApiFields.uploadBizId,
+    ]) {
+      expect(fields.containsKey(key), isTrue, reason: key);
+      expect(fields[key], isEmpty, reason: key);
+    }
   });
 
   test('身份信息解析 magisterial 的推荐 / 其他两段证件', () {

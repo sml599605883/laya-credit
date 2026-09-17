@@ -16,6 +16,19 @@ class SessionStore {
   SharedPreferencesAsync? _resolved;
   bool _resolveFailed = false;
 
+  /// 产品详情下发的证件上传页引导文案（`overwhelming.splendacious`）。
+  ///
+  /// 只在内存里缓存：产品详情在进入认证流程前一定会先拉一次，
+  /// 上传页拿不到时用设计稿兜底文案即可，不需要跨启动持久化。
+  String _productDetailIdentityPrompt = '';
+
+  String get productDetailIdentityPrompt => _productDetailIdentityPrompt;
+
+  /// 写入产品详情下发的身份认证引导文案。
+  void saveProductDetailIdentityPrompt(String prompt) {
+    _productDetailIdentityPrompt = prompt.trim();
+  }
+
   /// 平台实现可能没有注册（例如单元测试环境）。拿不到实例时所有读写退化为空操作，
   /// 不能因为本地存储不可用就让 App 启动失败。
   SharedPreferencesAsync? get _preferences {
@@ -71,6 +84,7 @@ class SessionStore {
 
   /// 清除 token，保留手机号方便下次登录预填。
   Future<void> clear() async {
+    _productDetailIdentityPrompt = '';
     try {
       final preferences = _preferences;
       if (preferences == null) return;

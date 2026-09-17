@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/media/identity_photo.dart';
+import '../core/media/identity_photo_permission.dart';
 import '../core/navigation/navigation.dart';
+import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
+import '../providers/media_provider.dart';
+import '../providers/repository_provider.dart';
+import '../providers/session_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
 
@@ -14,20 +21,16 @@ const _headerHeight = 213.0;
 /// 引导段落相对导航行的下移量（设计稿：导航行底边 78 -> 段落顶边 104）。
 const _promptGap = 18.0;
 
-/// 引导段落宽度与行数（设计稿 `text_4 { width: 204px }`，四行）。
+/// 引导段落宽度（设计稿 `text_4 { width: 204px }`）。
 const _promptWidth = 204.0;
 
-/// 引导段落文案（设计稿 `text_4`）。
+/// 接口没下发引导文案时的兜底（设计稿 `text_4`）。
 ///
-/// 四行就是设计稿的换行位置：204pt 宽下 Helvetica-Bold 16 的断行结果，
-/// 换成系统字体后断点会漂移，所以按设计稿写死换行符。
-/// TODO(接口): 身份信息响应里还有一组 `befleas`（引导文案，低版本 / 未灰度用户不下发），
-/// 文档没写清它属于哪一页，真机联调确认是这段文案后改成接口下发。
-const _prompt =
-    'Valid official credentials\n'
-    'avoid rejection and\n'
-    'quickly unlock your loan\n'
-    'service access.';
+/// 四行就是设计稿的换行位置：204pt 宽下 Helvetica-Bold 16 的断行结果。
+/// 正常情况走产品详情下发的 `overwhelming.splendacious`，这里只在
+/// 低版本 / 未灰度用户（后端不下发）时兜底。
+const _fallbackPrompt =
+    'Valid official credentials avoid rejection and quickly unlock your loan service access.';
 
 /// 引导块顶边（设计稿 `text-wrapper_5 { top: 194 }`）：
 /// 比头图底边高 19pt，白卡顶边压在头图下沿上。
@@ -53,10 +56,10 @@ const _buttonBottom = 50.0;
 /// 2. 上传引导整块切图（`section_3` + `group_1` 合起来 343x420）：
 ///    `Demonstration` / `Wrong Demonstration` 两张白卡、示范图与三张错误示例。
 /// 3. 底部 `Upload` 主按钮（`text-wrapper_4`）：柠檬绿胶囊，点击后弹出
-///    [UploadMethodSheet] 让用户选相机 / 相册。
+///    [UploadMethodSheet] 让用户选相机 / 相册，再走「取图 -> 压缩 -> 上传」。
 ///
 /// 卡类型 [cardType] 就是证件选择页的行文案，上传 / 保存接口都用它取值。
-class IdUploadPage extends StatelessWidget {
+class IdUploadPage extends ConsumerStatefulWidget {
   const IdUploadPage({
     super.key,
     required this.productId,
@@ -70,9 +73,27 @@ class IdUploadPage extends StatelessWidget {
   final String cardType;
 
   @override
+  ConsumerState<IdUploadPage> createState() => _IdUploadPageState();
+}
+
+class _IdUploadPageState extends ConsumerState<IdUploadPage> {
+  /// 上传中：挡住 `Upload` 按钮，避免同一个请求被连点两次。
+  bool _isUploading = false;
+
+  IdentityPhotoService get _photoService =>
+      ref.read(identityPhotoServiceProvider);
+
+  @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
     final safeTop = MediaQuery.paddingOf(context).top;
+
+    // 引导文案由产品详情 `overwhelming.splendacious` 下发，没下发时用设计稿兜底。
+    final cachedPrompt = ref
+        .watch(sessionStoreProvider)
+        .productDetailIdentityPrompt
+        .trim();
+    final prompt = cachedPrompt.isEmpty ? _fallbackPrompt : cachedPrompt;
 
     return Scaffold(
       // 设计稿 `page` 底色 `rgba(245,245,245)`。
@@ -101,7 +122,7 @@ class IdUploadPage extends StatelessWidget {
                   child: SizedBox(
                     width: layout.px(_promptWidth),
                     child: Text(
-                      _prompt,
+                      prompt,
                       style: TextStyle(
                         color: AppColors.idVerifyHeaderText,
                         fontSize: layout.px(16),
@@ -126,7 +147,7 @@ class IdUploadPage extends StatelessWidget {
                         child: Image.asset(
                           AppAssets.idVerifyUploadDemo,
                           fit: BoxFit.fill,
-                          semanticLabel: _prompt,
+                          semanticLabel: prompt,
                         ),
                       ),
                     ),
@@ -138,6 +159,7 @@ class IdUploadPage extends StatelessWidget {
                       ),
                       child: _UploadButton(
                         layout: layout,
+                        enabled: !_isUploading,
                         onTap: () => _showUploadMethods(context, layout),
                       ),
                     ),
@@ -157,7 +179,7 @@ class IdUploadPage extends StatelessWidget {
     );
   }
 
-  /// 弹出「选择上传方式」面板。
+  /// 弹出「选择上传方式」面板，选中后进入取图 / 压缩 / 上传流程。
   Future<void> _showUploadMethods(
     BuildContext context,
     AppLayout layout,
@@ -175,30 +197,97 @@ class IdUploadPage extends StatelessWidget {
 
     switch (method) {
       case UploadMethod.camera:
+        await _pickCompressAndUpload(
+          context,
+          source: IdentityPhotoSource.camera,
+        );
       case UploadMethod.album:
-        // TODO(依赖): 取图需要新增 image_picker / permission_handler /
-        // flutter_image_compress（peso_shield 用的是这三个），iOS 还要补相册的
-        // NSPhotoLibraryUsageDescription。
-        // TODO(接口): 上传接口 `/outsulk/fashioned` 的字段映射还没拿到
-        // （见 README「其余接口未接入」）。混淆字段名写错不会报错、只会静默读到 null，
-        // 所以这里先给占位提示；拿到 `7.map.html` 的映射后照 peso_shield 的
-        // `IdentityUploadPage._pickCompressAndUpload` 接：
-        // 权限 -> 取图 -> 压缩到 500KB -> multipart 上传
-        // （卡类型 = [cardType]，来源：相册 1 / 相机 2）-> 成功后进证件确认页。
-        ToastHelper.showMessage('${method.label} is not available yet');
+        await _pickCompressAndUpload(
+          context,
+          source: IdentityPhotoSource.album,
+        );
       case UploadMethod.quit:
         // 设计稿里 Quit 是次要行动（灰色），按「关掉面板」处理。
         break;
+    }
+  }
+
+  /// 权限 -> 取图 -> 压缩 -> 上传。用户取消取图时静默结束。
+  Future<void> _pickCompressAndUpload(
+    BuildContext context, {
+    required IdentityPhotoSource source,
+  }) async {
+    if (_isUploading) return;
+
+    if (source == IdentityPhotoSource.camera) {
+      final granted = await IdentityPhotoPermission.ensureCamera(context);
+      if (!granted || !mounted) return;
+    }
+
+    final loading = ToastHelper.showLoading();
+    try {
+      final picked = await _photoService.pick(source);
+      if (picked == null) return;
+
+      final compressed = await _photoService.compressToLimit(picked);
+      if (compressed == null) {
+        ToastHelper.showError('Image processing failed, please try again');
+        return;
+      }
+
+      await _uploadImage(compressed, source);
+    } on ApiException catch (error) {
+      ToastHelper.showError(error.message);
+    } catch (_) {
+      ToastHelper.showError('Upload failed, please try again');
+    } finally {
+      loading();
+    }
+  }
+
+  Future<void> _uploadImage(String filePath, IdentityPhotoSource source) async {
+    if (_isUploading) return;
+    setState(() => _isUploading = true);
+
+    try {
+      final repository = await ref.read(certificationRepositoryProvider.future);
+      final response = await repository.uploadIdentityImage(
+        filePath: filePath,
+        cardType: widget.cardType,
+        source: source,
+      );
+      if (!mounted) return;
+
+      if (!response.isSuccess) {
+        ToastHelper.showError(
+          response.message.isNotEmpty ? response.message : 'Upload failed',
+        );
+        return;
+      }
+
+      // TODO(页面): 上传成功后进 `03-01 - 身份认证-上传成功` 页，
+      // 让用户核对 OCR 识别出的姓名 / 证件号 / 出生日期，
+      // 再用 `POST /outsulk/wardmote` 保存。该页与保存接口尚未落地。
+      ToastHelper.showMessage('Uploaded');
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 }
 
 /// 底部 `Upload` 主按钮（设计稿 `text-wrapper_4`）。
 class _UploadButton extends StatelessWidget {
-  const _UploadButton({required this.layout, required this.onTap});
+  const _UploadButton({
+    required this.layout,
+    required this.onTap,
+    this.enabled = true,
+  });
 
   final AppLayout layout;
   final VoidCallback onTap;
+
+  /// 上传进行中置灰，既挡住重复点击，也避免用户以为没点上。
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -224,7 +313,7 @@ class _UploadButton extends StatelessWidget {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: onTap,
+              onTap: enabled ? onTap : null,
               customBorder: RoundedRectangleBorder(
                 borderRadius: layout.radius(_buttonHeight / 2),
               ),

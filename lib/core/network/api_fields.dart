@@ -113,6 +113,15 @@ abstract final class ApiFields {
   static const detailTerm = 'dandled';
   static const detailTermType = 'hellenizer';
 
+  /// 各认证页顶部文案对象（文档语义 `note`）。
+  ///
+  /// 结构：`{ 身份认证、身份认证成功、活体、个人信息、工作、紧急联系人、绑卡... }`，
+  /// 每个子字段是一条页面引导文案。`overwhelming` 本身不是文案，别整段当字符串用。
+  static const detailTips = 'overwhelming';
+
+  /// 身份认证页顶部文案（文档语义 `base`）。
+  static const detailTipIdentity = 'splendacious';
+
   /// 下一步认证项 `{ taskType, title, url, type }`。
   static const detailNextStep = 'cretonne';
   static const detailTaskType = 'catholical';
@@ -123,6 +132,33 @@ abstract final class ApiFields {
 
   /// 该接口的业务混淆字段（「获取用户身份信息」请求参数里的混淆字段）。
   static const obfuscateIdentityInfo = 'disemboguement';
+
+  // ---------- 认证项：上传证件图片（`/outsulk/fashioned`）----------
+  /// 上传类型：`10` 人像 / `11` 身份证正面。
+  static const uploadType = 'liquidators';
+
+  /// 图片来源：`1` 相册 / `2` 拍照（`uploadType=10` 时固定 `1`）。
+  static const uploadImageSource = 'chromogenous';
+
+  /// 证件类型（证件选择页的行文案）。
+  static const uploadCardType = 'heterological';
+
+  /// 图片文件的表单字段名（文档里就是字面量 `attach`，没有混淆）。
+  static const uploadFileField = 'attach';
+
+  // 下面四个是活体（`uploadType=10`）才用得上的参数。身份证正面用不到，
+  // 但后端要求这些字段必须存在，所以上传时固定带空串（对齐 peso_shield 的 uploadImage）。
+  /// 活体类型 5/6 传 biz_token，7 传 livenessId。
+  static const uploadLivenessId = 'gargantua';
+
+  /// 活体检测授权码（活体类型 7 必传）。
+  static const uploadLivenessLicense = 'musculopallial';
+
+  /// 活体类型：5 face++ / 6 lite face++ / 7 trustdecision。
+  static const uploadFaceType = 'bassein';
+
+  /// 活体业务编号（type=10 且 faceType=6 时必传）。
+  static const uploadBizId = 'sadomasochism';
 
   // ---------- 跟进订单号获取跳转地址（`/outsulk/octodentate`）----------
   static const obfuscatePush1 = 'indefinity';

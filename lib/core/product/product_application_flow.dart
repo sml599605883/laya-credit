@@ -6,6 +6,7 @@ import '../navigation/app_navigator.dart';
 import '../navigation/app_route_generator.dart';
 import '../navigation/app_routes.dart';
 import '../network/api_exception.dart';
+import '../session/session_store.dart';
 import '../ui/toast_helper.dart';
 
 /// 产品申请流程协调器（参考 peso_shield 的 `ProductApplicationFlow`）。
@@ -21,12 +22,19 @@ import '../ui/toast_helper.dart';
 const _taskTypeIdentity = 'Kegful';
 
 class ProductApplicationFlow {
-  ProductApplicationFlow({required this.repository, required this.isLoggedIn});
+  ProductApplicationFlow({
+    required this.repository,
+    required this.isLoggedIn,
+    required this.sessionStore,
+  });
 
   final ProductRepository repository;
 
   /// 调用时读取登录态（不要缓存，避免登录后流程层拿着旧值）。
   final bool Function() isLoggedIn;
+
+  /// 产品详情里下发的各页文案要缓存给后续页面用，所以流程层持有会话存储。
+  final SessionStore sessionStore;
 
   /// 防止用户连点导致重复发起准入。
   bool _isProcessing = false;
@@ -83,6 +91,10 @@ class ProductApplicationFlow {
         ToastHelper.showError(response.message);
         return null;
       }
+      // 详情里的认证页文案在进入对应页面前先落到缓存，上传页直接读，不用再传参。
+      sessionStore.saveProductDetailIdentityPrompt(
+        response.data.identityPrompt,
+      );
       return response.data;
     } on ApiException catch (error) {
       ToastHelper.hideLoading();

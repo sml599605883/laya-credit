@@ -13,5 +13,6 @@ final productApplicationFlowProvider = FutureProvider<ProductApplicationFlow>((
   return ProductApplicationFlow(
     repository: repository,
     isLoggedIn: () => ref.read(userSessionProvider).isLoggedIn,
+    sessionStore: ref.read(sessionStoreProvider),
   );
 });

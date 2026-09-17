@@ -99,6 +99,10 @@ class HttpClient {
       ApiProtocol.signature: signature,
     };
 
+    // multipart 请求的字段已经装在 FormData 里，不能再当普通 form body 处理，
+    // 否则这里会把整个 FormData 覆盖成 null、文件被静默丢掉。
+    final isMultipart = options.data is FormData;
+
     final businessParams = <String, Object?>{
       if (options.method == 'GET') ...options.queryParameters,
       if (options.method == 'POST' && options.data is Map)
@@ -111,9 +115,11 @@ class HttpClient {
     } else {
       // POST：公共参数与签名走 query，业务参数走 form body。
       options.queryParameters = requestParams;
-      options.data = businessParams.isEmpty
-          ? null
-          : businessParams.cast<String, dynamic>();
+      if (!isMultipart) {
+        options.data = businessParams.isEmpty
+            ? null
+            : businessParams.cast<String, dynamic>();
+      }
     }
 
     handler.next(options);
@@ -141,6 +147,27 @@ class HttpClient {
   }) async {
     return _send(
       () => _dio.post<Map<String, dynamic>>(path, data: params),
+      parse,
+    );
+  }
+
+  /// multipart/form-data 上传单个文件。
+  ///
+  /// [fields] 是随文件一起提交的业务参数；公共参数与签名仍由拦截器放到 query，
+  /// 和普通 POST 保持一致。[fileField] 必须是后端约定的文件字段名。
+  Future<ApiResponse<T>> upload<T>(
+    String path, {
+    required String filePath,
+    required String fileField,
+    required Map<String, Object?> fields,
+    required T Function(Object? data) parse,
+  }) async {
+    final formData = FormData.fromMap({
+      ...fields,
+      fileField: await MultipartFile.fromFile(filePath),
+    });
+    return _send(
+      () => _dio.post<Map<String, dynamic>>(path, data: formData),
       parse,
     );
   }

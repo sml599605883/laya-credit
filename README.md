@@ -144,8 +144,8 @@ lib/
    原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
-   第二项（证件上传页）已按设计稿落地（见第 13 条），
-   但证件上传 / 保存接口（`/outsulk/fashioned`、`/outsulk/wardmote`）仍然缺。
+   第二项（证件上传页）已按设计稿落地并接上上传接口（见第 13 条），
+   但保存接口（`/outsulk/wardmote`）与 `03-01 - 身份认证-上传成功` 页仍然缺。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -298,17 +298,26 @@ lib/
       （上下各 20pt 内边距 + 19pt 行高），面板通栏直角白底、遮罩
       `AppColors.dialogBarrier`。底部那 20pt 是真机上最容易漏掉的留白，
       所以面板包了 `SafeArea(top: false)` 补手势条、行高按 59 而不是 57 摆。
-    - `Camera` / `Album` 目前只给占位提示，两个缺口都在页面的 TODO 里：
-      取图要新增 `image_picker` / `permission_handler` / `flutter_image_compress`
-      （peso_shield 用的就是这三个）并补相册的 `NSPhotoLibraryUsageDescription`；
-      上传接口 `/outsulk/fashioned` 的混淆字段映射还没拿到，混淆字段名写错不会报错、
-      只会静默读到 null，所以拿到 `7.map.html` 之前不要猜字段名。
-      接的时候照 peso_shield 的 `IdentityUploadPage._pickCompressAndUpload`：
-      权限 -> 取图 -> 压缩到 500KB -> multipart 上传（卡类型 = `cardType`，
-      来源：相册 1 / 相机 2）-> 成功后进证件确认页。
-    - 引导段落（`text_4`）按设计稿写死四行换行：204pt 宽下 Helvetica-Bold 16 的断行结果，
-      换成系统字体后断点会漂移（「avoid rejection and quickly」正好卡在边界上）。
-      响应里那组 `befleas`（引导文案）还没确认属于哪一页，联调确认后再改成下发。
+    - `Camera` / `Album` 已接「权限 -> 取图 -> 压缩 -> 上传」：
+      相册走 PHPicker 不额外申请权限，相机先经 `IdentityPhotoPermission`；
+      取图 / 压缩在 `lib/core/media/identity_photo.dart`（压缩按 1600/1200/900
+      三档长边 + 质量依次尝试，命中 500KB 提前返回），页面不直接碰插件。
+      上传走 `POST /outsulk/fashioned`（`CertificationRepository.uploadIdentityImage`，
+      multipart 的字段名见 `ApiFields.upload*`）：固定 `liquidators=11`（身份证正面）、
+      `chromogenous` 取相册 1 / 相机 2、`heterological` 取 `cardType`、文件字段 `attach`；
+      `gargantua` / `musculopallial` / `bassein` / `sadomasochism` 这四个活体参数
+      身份证正面用不到，但后端要求字段存在，固定带空串（对齐 peso_shield 的 uploadImage），
+      **不要省略**。
+      上传成功后应进 `03-01 - 身份认证-上传成功` 页核对 OCR 结果并调用
+      `POST /outsulk/wardmote` 保存，该页与保存接口尚未落地（页面里留了 TODO）。
+      新增依赖 `image_picker` / `permission_handler` / `flutter_image_compress` /
+      `path_provider`，iOS 补了 `NSPhotoLibraryUsageDescription`，
+      Podfile 里给 permission_handler 开了 `PERMISSION_CAMERA=1`。
+    - 引导段落（`text_4`）优先用产品详情下发的 `overwhelming.splendacious`，
+      由 `ProductApplicationFlow` 在拉详情时写入 `SessionStore` 的内存缓存，
+      上传页读缓存、为空时回落到设计稿的四行兜底文案（204pt 宽下写死断行）。
+      `overwhelming` 是「各认证页文案」容器，不能整段当字符串。
+      **不要用身份信息响应里的 `befleas`**：接口文档确认引导文案属于产品详情。
     - 二级页的返回按钮 + 居中标题抽成了 `BackNavBar`（`lib/widgets/back_nav_bar.dart`），
       证件选择页与上传页共用，避免两份实现各自漂移。
 
