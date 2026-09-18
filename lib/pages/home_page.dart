@@ -581,11 +581,10 @@ class _ProductProgress extends StatelessWidget {
   static const _cardWidth = 343.0;
   static const _cardHeight = 119.0;
 
-  /// 金额行（设计稿 `text-wrapper_6` margin: 18px 4px 0 3px）。
+  /// 金额行纵向位置（设计稿 `text-wrapper_6` margin-top: 18px）；横向居中在对应阶段金币上。
   static const _amountTop = 49.0;
-  static const _amountLeft = 15.0;
-  static const _amountRight = 16.0;
   static const _amountFontSize = 10.0;
+  static const _amountLineHeight = 12.0;
 
   /// 进度槽（设计稿 `group_3`：白槽 6pt，金色填充上下各内缩 1pt）。
   static const _trackTop = 77.0;
@@ -594,11 +593,10 @@ class _ProductProgress extends StatelessWidget {
   static const _trackHeight = 6.0;
   static const _trackInset = 1.0;
 
-  /// 阶段文案行（设计稿 `text-wrapper_7` margin: 16px 5px 0 11px）。
+  /// 阶段文案行纵向位置（设计稿 `text-wrapper_13` margin-top: 16px）。
   static const _labelTop = 99.0;
-  static const _labelLeft = 23.0;
-  static const _labelRight = 17.0;
   static const _labelFontSize = 8.0;
+  static const _labelLineHeight = 10.0;
 
   /// 进度槽上的阶段金币（设计稿实测：第一枚距卡左边缘 24pt，间距 90.5pt）。
   static const _coinTop = 72.0;
@@ -609,11 +607,6 @@ class _ProductProgress extends StatelessWidget {
 
   /// 进度槽净宽（343 - 13 - 12）。
   static const _trackWidth = _cardWidth - _trackLeft - _trackRight;
-
-  // 设计稿是固定 4 个阶段、行内固定间距（不是等分）。
-  // 阶段数超过 4 时沿用最后一档间距，保证不溢出、不闪退。
-  static const _amountGaps = [48.0, 51.0, 51.0];
-  static const _labelGaps = [66.0, 49.0, 40.0];
 
   /// 未到达阶段的金币：同一张切图按亮度去色，与设计稿的银币一致。
   static const _silverFilter = ColorFilter.matrix(<double>[
@@ -627,6 +620,7 @@ class _ProductProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = product.steps;
     final currentIndex = _currentStepIndex(steps);
+    final coinStride = _coinStrideFor(steps.length);
     return AspectRatio(
       key: const Key('home-progress-card'),
       aspectRatio: _cardWidth / _cardHeight,
@@ -643,24 +637,45 @@ class _ProductProgress extends StatelessWidget {
                   fit: BoxFit.fill,
                 ),
               ),
-              Positioned(
-                left: at(_amountLeft),
-                top: at(_amountTop),
-                right: at(_amountRight),
-                child: _buildRow(children: _buildAmounts(steps, currentIndex)),
+              // 金额行 / 文案行都按等宽阶段列均分（每列居中），阶段中心也就是进度槽金币中心。
+              _stageRow(
+                factor: factor,
+                stride: coinStride,
+                total: steps.length,
+                top: _amountTop,
+                lineHeight: _amountLineHeight,
+                children: [
+                  for (final (index, step) in steps.indexed)
+                    Text(
+                      step.amount,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: _amountStyle(index, currentIndex),
+                    ),
+                ],
               ),
               Positioned(
                 left: at(_trackLeft),
                 top: at(_trackTop),
                 right: at(_trackRight),
                 height: at(_trackHeight),
-                child: _buildTrack(steps, currentIndex, factor),
+                child: _buildTrack(steps, currentIndex, factor, coinStride),
               ),
-              Positioned(
-                left: at(_labelLeft),
-                top: at(_labelTop),
-                right: at(_labelRight),
-                child: _buildRow(children: _buildLabels(steps)),
+              _stageRow(
+                factor: factor,
+                stride: coinStride,
+                total: steps.length,
+                top: _labelTop,
+                lineHeight: _labelLineHeight,
+                children: [
+                  for (final step in steps)
+                    Text(
+                      step.title,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: _labelStyle(),
+                    ),
+                ],
               ),
             ],
           );
@@ -669,47 +684,61 @@ class _ProductProgress extends StatelessWidget {
     );
   }
 
-  /// 金额行：当前阶段是玫红，其余是深灰。
-  List<Widget> _buildAmounts(List<HomeProgressStep> steps, int currentIndex) {
-    return [
-      for (final (index, step) in steps.indexed) ...[
-        if (index > 0) _gap(_amountGaps, index - 1),
-        Text(
-          step.amount,
-          maxLines: 1,
-          softWrap: false,
-          style: TextStyle(
-            color: index == currentIndex
-                ? AppColors.creditProgressAmountCurrent
-                : AppColors.creditProgressAmount,
-            fontSize: layout.px(_amountFontSize),
-            fontWeight: FontWeight.w700,
-            // 设计稿行高 12pt。
-            height: 12 / 10,
-          ),
-        ),
-      ],
-    ];
+  TextStyle _amountStyle(int index, int currentIndex) {
+    return TextStyle(
+      color: index == currentIndex
+          ? AppColors.creditProgressAmountCurrent
+          : AppColors.creditProgressAmount,
+      fontSize: layout.px(_amountFontSize),
+      fontWeight: FontWeight.w700,
+      // 设计稿行高 12pt。
+      height: 12 / 10,
+    );
   }
 
-  /// 阶段文案行。
-  List<Widget> _buildLabels(List<HomeProgressStep> steps) {
-    return [
-      for (final (index, step) in steps.indexed) ...[
-        if (index > 0) _gap(_labelGaps, index - 1),
-        Text(
-          step.title,
-          maxLines: 1,
-          softWrap: false,
-          style: TextStyle(
-            color: AppColors.cardValue,
-            fontSize: layout.px(_labelFontSize),
-            // 设计稿行高 10pt。
-            height: 10 / 8,
-          ),
-        ),
-      ],
-    ];
+  TextStyle _labelStyle() {
+    return TextStyle(
+      color: AppColors.cardValue,
+      fontSize: layout.px(_labelFontSize),
+      // 设计稿行高 10pt。
+      height: 10 / 8,
+    );
+  }
+
+  /// 金币实际间距（设计稿 4 档固定 [ _coinStride ]；档位更多时压缩到进度槽内）。
+  double _coinStrideFor(int total) {
+    if (total <= 1) return _coinStride;
+    final evenStride = (_trackWidth - _coinWidth * 2) / (total - 1);
+    return evenStride < _coinStride ? evenStride : _coinStride;
+  }
+
+  /// 一行等宽阶段列：每列宽度 = [stride]，内容居中，所以列中心正好压在进度槽金币上。
+  ///
+  /// 首列中心 = [_coinLeft] + [_coinWidth] / 2，之后每列 + [stride]，与金币位置一致。
+  /// 行宽可能比卡片略宽（首尾列各探出一点），但文字居中仍落在卡内，由外层卡片裁掉空白。
+  Widget _stageRow({
+    required double factor,
+    required double stride,
+    required int total,
+    required double top,
+    required double lineHeight,
+    required List<Widget> children,
+  }) {
+    final left = _coinLeft + _coinWidth / 2 - stride / 2;
+    return Positioned(
+      left: left * factor,
+      top: top * factor,
+      width: stride * total * factor,
+      height: lineHeight * factor,
+      child: Row(
+        children: [
+          for (final child in children)
+            Expanded(
+              child: FittedBox(fit: BoxFit.scaleDown, child: child),
+            ),
+        ],
+      ),
+    );
   }
 
   /// 进度槽：白色底槽 + 已完成阶段的金色填充，各阶段金币压在槽上。
@@ -717,15 +746,11 @@ class _ProductProgress extends StatelessWidget {
     List<HomeProgressStep> steps,
     int currentIndex,
     double factor,
+    double coinStride,
   ) {
     final total = steps.length;
     final filled = total == 0 ? 0 : currentIndex + 1;
     double at(num value) => value * factor;
-    // 设计稿只标了 4 档金币位置；档位更多时把间距压到放得下，避免金币跑出卡片。
-    final evenStride = total > 1
-        ? (_trackWidth - _coinWidth * 2) / (total - 1)
-        : _coinStride;
-    final coinStride = evenStride < _coinStride ? evenStride : _coinStride;
     return LayoutBuilder(
       builder: (context, constraints) {
         final trackWidth = constraints.maxWidth;
@@ -786,26 +811,6 @@ class _ProductProgress extends StatelessWidget {
   int _currentStepIndex(List<HomeProgressStep> steps) {
     final index = steps.indexWhere((step) => step.selected);
     return index < 0 ? 0 : index;
-  }
-
-  /// 设计稿只标了 4 个阶段的间距，阶段更多时沿用最后一档。
-  Widget _gap(List<double> gaps, int index) {
-    final gap = gaps[index.clamp(0, gaps.length - 1)];
-    return SizedBox(width: layout.px(gap));
-  }
-
-  /// 金额 / 阶段文案行：按设计稿的固定间距左排。
-  ///
-  /// 后端文案比设计稿宽时整行等比缩小，既不省略号截断也不会撑破卡片。
-  Widget _buildRow({required List<Widget> children}) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Row(mainAxisSize: MainAxisSize.min, children: children),
-      ),
-    );
   }
 }
 

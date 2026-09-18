@@ -21,6 +21,9 @@ import '../ui/toast_helper.dart';
 /// 取值是后端混淆串，取值表见 [ProductNextStep.taskType] 的说明。
 const _taskTypeIdentity = 'Kegful';
 
+/// 认证项 `taskType`：活体（人脸识别）。
+const _taskTypeFace = 'Reargued';
+
 class ProductApplicationFlow {
   ProductApplicationFlow({
     required this.repository,
@@ -92,13 +95,16 @@ class ProductApplicationFlow {
         return null;
       }
       // 详情里的认证页文案在进入对应页面前先落到缓存，认证页直接读，不用再传参。
-      // `overwhelming` 里每个认证页一条：`splendacious` 给上传页，
-      // `bocking` 给证件信息确认页。
+      // `overwhelming` 里每个认证页一条：`splendacious` 给上传页、
+      // `bocking` 给证件信息确认页、`seisin` 给人脸识别页。
       sessionStore.saveProductDetailIdentityPrompt(
         response.data.identityPrompt,
       );
       sessionStore.saveProductDetailIdentitySuccessPrompt(
         response.data.identitySuccessPrompt,
+      );
+      sessionStore.saveProductDetailLivenessPrompt(
+        response.data.livenessPrompt,
       );
       return response.data;
     } on ApiException catch (error) {
@@ -156,7 +162,7 @@ class ProductApplicationFlow {
   ) async {
     final step = detail.nextStep;
     if (step.taskType.isNotEmpty) {
-      _openCertificationStep(step, productId);
+      _openCertificationStep(step, productId, detail.basicInfo.orderNo);
       return;
     }
     await _openLoanConfirm(detail, productId);
@@ -167,7 +173,11 @@ class ProductApplicationFlow {
   /// `taskType` 取值（接口文档「产品详情认证项目列表」，混淆后）：
   /// `Kegful`=身份 / `Reargued`=活体 / `FlintiestDevwsor`=个人信息 /
   /// `TrussvilleUninstructively`=工作 / `Thriftiness`=紧急联系人 / `Bespattered`=绑卡。
-  void _openCertificationStep(ProductNextStep step, String productId) {
+  void _openCertificationStep(
+    ProductNextStep step,
+    String productId,
+    String orderNo,
+  ) {
     // 身份认证：证件选择页已按蓝湖稿 `03 - 认证流程模块` 落地。
     // 证件类型由后端按产品下发（`GET /outsulk/gaonate`），页面自己按 productId 拉。
     if (step.taskType == _taskTypeIdentity) {
@@ -178,7 +188,19 @@ class ProductApplicationFlow {
       return;
     }
 
-    // TODO(页面): 活体（`Reargued`）/ 个人信息 / 工作 / 紧急联系人 / 绑卡页尚未搭建。
+    // 活体（人脸识别）：token 接口要订单号，从产品详情带下去，页面不再自己拉详情。
+    if (step.taskType == _taskTypeFace) {
+      AppNavigator.push(
+        AppRoutes.faceVerification,
+        arguments: FaceVerificationPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+        ),
+      );
+      return;
+    }
+
+    // TODO(页面): 个人信息 / 工作 / 紧急联系人 / 绑卡页尚未搭建。
     final title = step.title.isEmpty ? 'certification' : step.title;
     ToastHelper.showMessage('Please complete $title');
   }

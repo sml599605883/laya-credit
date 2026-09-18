@@ -35,6 +35,9 @@ abstract final class ApiEndpoints {
   /// 上传证件图片 / 活体照片（multipart。第一项）。POST
   static const uploadIdentityImage = '/outsulk/fashioned';
 
+  /// 获取 face++ token / 活体检测授权码（认证第二项）。POST
+  static const faceToken = '/outsulk/carline';
+
   /// 保存识别出的身份证信息（认证第一项）。POST
   static const saveIdentityInfo = '/outsulk/wardmote';
 }

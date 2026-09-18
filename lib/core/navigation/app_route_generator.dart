@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/identity_recognition.dart';
+import '../../pages/face_verification_page.dart';
 import '../../pages/home_page.dart';
 import '../../pages/id_confirm_page.dart';
 import '../../pages/id_upload_page.dart';
@@ -46,6 +47,20 @@ class IdConfirmPageArguments {
   final String productId;
   final String cardType;
   final IdentityRecognition recognition;
+}
+
+/// 人脸识别页入参。
+///
+/// [orderNo] 是活体 token 接口的 `resex`，由产品申请流程从产品详情
+/// （`basicInfo.orderNo`）带下来，页面不再自己拉一次详情。
+class FaceVerificationPageArguments {
+  const FaceVerificationPageArguments({
+    required this.productId,
+    required this.orderNo,
+  });
+
+  final String productId;
+  final String orderNo;
 }
 
 /// 登录页入参。跳转方可以传入回调，在登录成功后继续未完成的动作。
@@ -102,6 +117,16 @@ class AppRouteGenerator {
             cardType: confirmArgs?.cardType ?? '',
             recognition:
                 confirmArgs?.recognition ?? const IdentityRecognition(),
+          ),
+        );
+
+      case AppRoutes.faceVerification:
+        final faceArgs = settings.arguments as FaceVerificationPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => FaceVerificationPage(
+            productId: faceArgs?.productId ?? '',
+            orderNo: faceArgs?.orderNo ?? '',
           ),
         );
 

@@ -26,7 +26,8 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 
 目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`，
 以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）、
-`/id-upload`（证件上传，见第 13 条）。
+`/id-upload`（证件上传，见第 13 条）、`/id-confirm`（证件信息确认，见第 14 条）、
+`/face-verification`（人脸识别，见第 15 条）。
 
 ### 2. 状态管理用什么
 
@@ -145,7 +146,8 @@ lib/
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
    第二项（证件上传页）已按设计稿落地并接上上传接口（见第 13 条），
-   第三项（证件信息确认页）也已落地并接上保存接口（见第 14 条）。
+   第三项（证件信息确认页）也已落地并接上保存接口（见第 14 条），
+   第四项（活体 / 人脸识别）也已落地并接上 token / 上传接口（见第 15 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -362,6 +364,46 @@ lib/
       三行兜底文案（190pt 宽下写死断行）。
     - `Upload` 按钮抽成了共用组件 `lib/widgets/upload_button.dart`
       （底图 + 文案 + 水波纹），上传页与确认页共用，避免两份实现各自漂移。
+
+15. **人脸识别页已按蓝湖稿 `03-01 - 身份认证-人脸识别` 还原**
+    （认证流程第四步，`/face-verification`，`FaceVerificationPage`）。
+    - 页面结构与证件上传页一致：通栏头图（复用 `id_verify_header_blank.png`）、
+      引导段落、示范整块切图（343x420）、底部 `Upload` 主按钮（343x48 柠檬绿胶囊）。
+      设计稿实测：示范图顶边 194（压在头图下 19pt）、示范图到按钮 100pt、
+      按钮下沿到页底 50pt，与上传页同口径。
+    - 新素材已按用途改名并登记到 `AppAssets`（`assets/id_verify/`）：
+      `face_verify_demo.png`（用户提供的 `编组 12@3x.png`，343x420）——
+      `Demonstration` 正确示范（绿色取景框 + 面部轮廓）与 `Wrong Demonstration`
+      三张错误示例（`Unclear` / `With reflection` / `Incomplete`）整块烘焙在一张里。
+      返回按钮复用 `assets/common/back.png`，主按钮复用共用组件
+      `lib/widgets/upload_button.dart`（文案沿用设计稿的 `Upload`）。
+    - 引导段落（`text_4`，193pt 宽 / 16pt Helvetica-Bold）优先用产品详情下发的
+      `overwhelming.seisin`（文档语义 `livness`，是「活体认证页面顶部文案」）。
+      **别和上传页的 `splendacious`、确认页的 `bocking` 混用**：三条同属
+      `overwhelming` 容器但各认证页一条，`ProductApplicationFlow` 在拉详情时
+      写进 `SessionStore`，为空时回落到设计稿的三行兜底文案。
+    - 点 `Upload` 的完整链路：
+      1. `POST /outsulk/carline`（`CertificationRepository.getFaceToken`）取活体
+         授权码，参数 `resex` 订单号 / `liquidators` 类型 + 两个随机混淆字段；
+         响应 `gravel` 是结果码：`200` 继续、`400` 弹「重新上传身份证」确认框
+         （确认后回 `/id-verification`）、其余按 `instellation` / `norseled` 提示。
+      2. 授权码交给 `LivenessGateway`（`lib/core/face/liveness_gateway.dart`）
+         经 method channel `laya_credit/client_bridge` 的
+         `showTrustDecisionLiveness` 拉起 TrustDecision SDK；原生实现在
+         仓库里早已就位（`ios/Runner/TrustDecisionRegistrar.swift`）。
+      3. SDK 返回的抓拍图（base64）落到临时文件（同步写：人脸图不大，
+         同步写能让这段流程不依赖事件循环），再走
+         `POST /outsulk/fashioned`（`uploadFaceImage`，`liquidators=10`、
+         `chromogenous=1`、`heterological` 空串、`gargantua` 带 livenessId、
+         `musculopallial` 带授权码、`bassein` 带活体类型），上传完删临时文件。
+      4. 成功后交给 `ProductApplicationFlow.continueProductDetailFlow`
+         继续下一步认证（`Reargued` 之外的认证项）。
+    - 相机权限不在页面里单独申请：TrustDecision SDK 拉起时系统会走
+      `Info.plist` 里的相机说明；权限被拒时 SDK 会把失败码回传，页面按失败提示。
+    - 订单号由 `ProductApplicationFlow` 从产品详情 `basicInfo.orderNo` 带进页面
+      （token 接口的 `resex`），页面不再自己拉一次产品详情。
+    - 测试通过 `livenessGatewayProvider` 注入假网关，覆盖「通过 / 未通过 /
+      token 400」三条分支；`FaceVerificationPage` 不直接依赖 `MethodChannel`。
 
 ## 常用命令
 

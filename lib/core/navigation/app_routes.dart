@@ -27,6 +27,9 @@ abstract final class AppRoutes {
   /// 证件信息确认页（认证流程第三步，识别结果核对）。
   static const idConfirm = '/id-confirm';
 
+  /// 人脸识别页（认证流程第四步，活体检测）。
+  static const faceVerification = '/face-verification';
+
   /// 全部路由（用于启动自检与埋点白名单）。
   static const List<String> all = [
     root,
@@ -37,6 +40,7 @@ abstract final class AppRoutes {
     idVerification,
     idUpload,
     idConfirm,
+    faceVerification,
   ];
 
   /// 路由名是否已注册。

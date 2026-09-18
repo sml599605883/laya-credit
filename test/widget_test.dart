@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:laya_credit/core/device/device_params.dart';
+import 'package:laya_credit/core/face/liveness_gateway.dart';
 import 'package:laya_credit/core/network/api_endpoints.dart';
 import 'package:laya_credit/core/network/api_exception.dart';
 import 'package:laya_credit/core/network/api_fields.dart';
@@ -11,6 +12,7 @@ import 'package:laya_credit/core/network/api_response.dart';
 import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
+import 'package:laya_credit/data/models/face_token_result.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
 import 'package:laya_credit/data/models/identity_recognition.dart';
@@ -26,11 +28,13 @@ import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
+import 'package:laya_credit/pages/face_verification_page.dart';
 import 'package:laya_credit/pages/home_page.dart';
 import 'package:laya_credit/pages/id_confirm_page.dart';
 import 'package:laya_credit/pages/id_upload_page.dart';
 import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
+import 'package:laya_credit/providers/liveness_provider.dart';
 import 'package:laya_credit/providers/media_provider.dart';
 import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
@@ -108,12 +112,23 @@ class _StubAuthRepository extends AuthRepository {
 
 /// 认证项仓库桩：默认下发设计稿那两组证件，可改成失败 / 慢请求 / 空数据。
 class _StubCertificationRepository extends CertificationRepository {
-  _StubCertificationRepository({this.data, this.failure, this.delay})
-    : super(_placeholderClient());
+  _StubCertificationRepository({
+    this.data,
+    this.failure,
+    this.delay,
+    this.faceToken = const FaceTokenResult(
+      resultCode: 200,
+      token: 'LICENSE-1',
+      livenessType: 7,
+    ),
+  }) : super(_placeholderClient());
 
   final IdVerificationData? data;
   final Object? failure;
   final Duration? delay;
+
+  /// 活体 token 接口的返回，可换成 `400` 等分支。
+  final FaceTokenResult faceToken;
 
   /// 记录每次请求的产品 id。
   final List<String> identityInfoCalls = [];
@@ -163,6 +178,37 @@ class _StubCertificationRepository extends CertificationRepository {
     return ApiResponse(code: 0, message: 'success', data: uploadData);
   }
 
+  /// 记录每次活体 token 请求的订单号。
+  final List<String> faceTokenCalls = [];
+
+  @override
+  Future<ApiResponse<FaceTokenResult>> getFaceToken({
+    required String orderNo,
+    int type = 0,
+  }) async {
+    faceTokenCalls.add(orderNo);
+    return ApiResponse(code: 0, message: 'success', data: faceToken);
+  }
+
+  /// 记录每次活体上传：(文件路径, livenessId, license, 活体类型)。
+  final List<(String, String, String, int)> faceUploadCalls = [];
+
+  @override
+  Future<ApiResponse<Map<String, dynamic>>> uploadFaceImage({
+    required String filePath,
+    required String livenessId,
+    required String license,
+    required int livenessType,
+    String bizId = '',
+  }) async {
+    faceUploadCalls.add((filePath, livenessId, license, livenessType));
+    return const ApiResponse<Map<String, dynamic>>(
+      code: 0,
+      message: 'success',
+      data: {'scabble': 99},
+    );
+  }
+
   /// 记录每次保存身份证信息：(姓名, 证件号, 出生日期, 卡类型)。
   final List<(String, String, String, String)> saveCalls = [];
 
@@ -192,6 +238,31 @@ class _StubIdentityPhotoService extends IdentityPhotoService {
 
   @override
   Future<String?> compressToLimit(String path) async => path;
+}
+
+/// 活体人脸图（base64）桩数据：内容不重要，页面只是把它落盘再上传。
+const _faceImageBase64 = 'ZmFrZS1mYWNl';
+
+/// 活体网关桩：不弹原生 SDK，直接返回可配的结果。
+class _StubLivenessGateway extends LivenessGateway {
+  _StubLivenessGateway({
+    this.outcome = const LivenessOutcome(
+      passed: true,
+      livenessId: 'LIVE-1',
+      imageBase64: _faceImageBase64,
+    ),
+  });
+
+  final LivenessOutcome outcome;
+
+  /// 记录每次传入 SDK 的授权码。
+  final List<String> licenses = [];
+
+  @override
+  Future<LivenessOutcome> run(String license) async {
+    licenses.add(license);
+    return outcome;
+  }
 }
 
 /// 产品申请仓库桩：记录准入调用，返回可配的准入 / 详情结果。
@@ -427,6 +498,21 @@ void _openIdConfirmPage(
   );
 }
 
+/// 直接打开人脸识别页（走和产品申请流程一样的路由与入参）。
+void _openFaceVerificationPage(
+  WidgetTester tester, {
+  String productId = '7',
+  String orderNo = 'ORDER-1',
+}) {
+  AppNavigator.push(
+    AppRoutes.faceVerification,
+    arguments: FaceVerificationPageArguments(
+      productId: productId,
+      orderNo: orderNo,
+    ),
+  );
+}
+
 /// 读取登录页协议行的勾选切图，用来判断当前是否勾选。
 String _loginCheckboxAsset(WidgetTester tester) {
   final image = tester.widget<Image>(
@@ -477,6 +563,7 @@ Future<void> _pumpApp(
   ProductRepository? productRepository,
   CertificationRepository? certificationRepository,
   IdentityPhotoService? identityPhotoService,
+  LivenessGateway? livenessGateway,
   Future<void> Function(ProviderContainer container)? setUp,
 }) async {
   _usePhoneSurface(tester);
@@ -512,6 +599,8 @@ Future<void> _pumpApp(
         ),
       if (identityPhotoService != null)
         identityPhotoServiceProvider.overrideWithValue(identityPhotoService),
+      if (livenessGateway != null)
+        livenessGatewayProvider.overrideWithValue(livenessGateway),
     ],
   );
   addTearDown(container.dispose);
@@ -626,6 +715,29 @@ void main() {
     expect(find.text('Identity'), findsOneWidget);
     expect(find.text('Basic information'), findsOneWidget);
     expect(find.text('Bank Card'), findsOneWidget);
+    // 金额 / 文案要同轴，并且都居中在进度槽对应的阶段金币上（设计稿 02-02）：
+    // 金币第一枚距卡左边缘 24pt、间距 90.5pt、宽 21.7pt。
+    final card = find.byKey(const Key('home-progress-card'));
+    final cardRect = tester.getRect(card);
+    final scale = cardRect.width / 343;
+    final stages = [
+      ('\u20b1 30,000', 'Identity'),
+      ('\u20b1 40,000', 'Living'),
+      ('\u20b150,000', 'Basic information'),
+      ('\u20b160,000', 'Bank Card'),
+    ];
+    for (final (index, (amount, label)) in stages.indexed) {
+      final expected = cardRect.left + (24 + index * 90.5 + 21.7 / 2) * scale;
+      final amountCenter = tester.getCenter(
+        find.descendant(of: card, matching: find.text(amount)),
+      );
+      final labelCenter = tester.getCenter(
+        find.descendant(of: card, matching: find.text(label)),
+      );
+      expect(amountCenter.dx, moreOrLessEquals(expected, epsilon: 1));
+      expect(labelCenter.dx, moreOrLessEquals(expected, epsilon: 1));
+      expect(amountCenter.dx, moreOrLessEquals(labelCenter.dx, epsilon: 0.5));
+    }
     // 申请入口在额度卡里，只此一处。
     expect(find.byKey(const Key('home-apply-button')), findsOneWidget);
   });
@@ -2157,6 +2269,186 @@ void main() {
     expect(certificationRepository.identityInfoCalls, ['1']);
   });
 
+  testWidgets('人脸识别页按蓝湖稿 03-01 渲染头图、示范图、标题与主按钮', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openFaceVerificationPage(tester);
+    await tester.pumpAndSettle();
+
+    // 头图 / 示范图 / 返回按钮 / 按钮底图都是设计稿切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.faceVerifyDemo), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+    expect(find.text('Face verification'), findsOneWidget);
+
+    // 引导段落按设计稿的三行断行。
+    expect(
+      find.text(
+        'Move naturally, ensure\n'
+        'good light. Once passed,\n'
+        'your identity is verified.',
+      ),
+      findsOneWidget,
+    );
+
+    // 示范图顶边压在头图下沿上 19pt（设计稿 top 194，头图 213）。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    final demoRect = tester.getRect(_assetImage(AppAssets.faceVerifyDemo));
+    expect(headerRect.bottom - demoRect.top, closeTo(19 * _designScale, 0.5));
+    expect(demoRect.width, closeTo(343 * _designScale, 0.5));
+    expect(demoRect.height, closeTo(420 * _designScale, 0.5));
+
+    // 示范图与按钮之间的间距（设计稿 614 -> 714）。
+    expect(
+      tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).top -
+          demoRect.bottom,
+      closeTo(100 * _designScale, 0.5),
+    );
+  });
+
+  testWidgets('人脸识别页引导文案优先用产品详情下发的 overwhelming.seisin', (tester) async {
+    const apiPrompt = 'Smile for the camera. Position your face clearly.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailLivenessPrompt(apiPrompt);
+      },
+    );
+    _openFaceVerificationPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    expect(find.textContaining('Move naturally'), findsNothing);
+  });
+
+  testWidgets('人脸识别页取 token、拉起活体、回传抓拍图并继续下一步', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final livenessGateway = _StubLivenessGateway();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+    );
+    _openFaceVerificationPage(tester, orderNo: 'ORDER-9');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // token 接口拿订单号，SDK 用下发的授权码拉起。
+    expect(certificationRepository.faceTokenCalls, ['ORDER-9']);
+    expect(livenessGateway.licenses, ['LICENSE-1']);
+
+    // 抓拍图上传用 SDK 的 livenessId + token，活体类型 7（trustdecision）。
+    expect(certificationRepository.faceUploadCalls, hasLength(1));
+    final (facePath, livenessId, license, livenessType) =
+        certificationRepository.faceUploadCalls.single;
+    expect(facePath, isNotEmpty);
+    expect(livenessId, 'LIVE-1');
+    expect(license, 'LICENSE-1');
+    expect(livenessType, 7);
+
+    // 上传成功后继续产品详情：默认下一步仍是身份认证。
+    expect(productRepository.detailCalls, greaterThan(0));
+    expect(find.byType(IdVerificationPage), findsOneWidget);
+  });
+
+  testWidgets('人脸识别页活体未通过时不回传抓拍图并提示', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final livenessGateway = _StubLivenessGateway(
+      outcome: const LivenessOutcome(passed: false, message: 'Liveness failed'),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+    );
+    _openFaceVerificationPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(livenessGateway.licenses, ['LICENSE-1']);
+    // 没过活体就没有抓拍图，不能发上传请求。
+    expect(certificationRepository.faceUploadCalls, isEmpty);
+    expect(find.text('Liveness failed'), findsOneWidget);
+  });
+
+  testWidgets('人脸识别页 token 返回 400 时引导重新上传身份证', (tester) async {
+    final certificationRepository = _StubCertificationRepository(
+      faceToken: const FaceTokenResult(resultCode: 400),
+    );
+    final livenessGateway = _StubLivenessGateway();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+    );
+    _openFaceVerificationPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Upload Your ID Again'), findsOneWidget);
+    // 还没拿到 token，不能拉起活体 SDK。
+    expect(livenessGateway.licenses, isEmpty);
+
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+    expect(find.byType(IdVerificationPage), findsOneWidget);
+  });
+
+  testWidgets('产品详情下一步是活体时进入人脸识别页并带上订单号', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-9'),
+        nextStep: ProductNextStep(taskType: 'Reargued', title: 'Living'),
+      ),
+    );
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FaceVerificationPage), findsOneWidget);
+
+    // 订单号带下去后，点主按钮直接用产品详情的订单号取 token。
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    expect(certificationRepository.faceTokenCalls, ['ORDER-9']);
+  });
+
   test('获取身份信息接口带产品 id 与业务混淆字段', () async {
     final client = _RecordingClient();
     await CertificationRepository(client).getIdentityInfo(productId: '7');
@@ -2257,6 +2549,77 @@ void main() {
 
     expect(detail.identityPrompt, 'upload prompt');
     expect(detail.identitySuccessPrompt, 'confirm prompt');
+  });
+
+  test('产品详情解析 overwhelming.seisin 作为人脸页引导文案', () {
+    final detail = ProductDetail.fromJson({
+      ApiFields.applyResultCode: 200,
+      ApiFields.detailTips: {
+        ApiFields.detailTipIdentity: 'upload prompt',
+        ApiFields.detailTipIdentitySuccess: 'confirm prompt',
+        ApiFields.detailTipLiveness: 'face prompt',
+      },
+    });
+
+    expect(detail.livenessPrompt, 'face prompt');
+    // 三个认证页各取各的一条，不能串味。
+    expect(detail.identityPrompt, 'upload prompt');
+    expect(detail.identitySuccessPrompt, 'confirm prompt');
+  });
+
+  test('face token 响应解析 result_code / token / 活体类型', () {
+    final result = FaceTokenResult.fromJson(const {
+      ApiFields.faceTokenResultCode: '200',
+      ApiFields.faceTokenBizUrl: 'https://facepp.example',
+      ApiFields.faceToken: 'TOKEN-1',
+      ApiFields.faceTokenError: '',
+      ApiFields.uploadFaceType: 7,
+    });
+
+    expect(result.resultCode, 200);
+    expect(result.bizUrl, 'https://facepp.example');
+    expect(result.token, 'TOKEN-1');
+    expect(result.livenessType, 7);
+    expect(result.canStartLiveness, isTrue);
+    expect(result.needsIdentityResubmit, isFalse);
+
+    // `400` 是「重新上传身份证」，缺 token 时不能拉起 SDK。
+    final resubmit = FaceTokenResult.fromJson(const {
+      ApiFields.faceTokenResultCode: 400,
+    });
+    expect(resubmit.needsIdentityResubmit, isTrue);
+    expect(resubmit.canStartLiveness, isFalse);
+  });
+
+  test('获取 face token 接口带订单号、类型与两个混淆字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).getFaceToken(orderNo: 'ORDER-1');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.faceToken);
+    expect(params[ApiFields.faceTokenOrderNo], 'ORDER-1');
+    expect(params[ApiFields.faceTokenType], '0');
+    expect(params[ApiFields.obfuscateFaceToken1], isNotEmpty);
+    expect(params[ApiFields.obfuscateFaceToken2], isNotEmpty);
+  });
+
+  test('上传活体照片接口带 type=10、来源 1 与活体参数', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).uploadFaceImage(
+      filePath: '/tmp/face.jpg',
+      livenessId: 'LIVE-1',
+      license: 'LICENSE-1',
+      livenessType: 7,
+    );
+
+    final (path, fileField, fields) = client.uploads.single;
+    expect(path, ApiEndpoints.uploadIdentityImage);
+    expect(fileField, ApiFields.uploadFileField);
+    expect(fields[ApiFields.uploadType], '10');
+    expect(fields[ApiFields.uploadImageSource], '1');
+    expect(fields[ApiFields.uploadLivenessId], 'LIVE-1');
+    expect(fields[ApiFields.uploadLivenessLicense], 'LICENSE-1');
+    expect(fields[ApiFields.uploadFaceType], '7');
   });
 
   test('上传响应里的出生日期归一成保存接口要求的 dd-MM-yyyy', () {

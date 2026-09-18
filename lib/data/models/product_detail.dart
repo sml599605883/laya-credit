@@ -11,6 +11,7 @@ class ProductDetail {
     required this.nextStep,
     this.identityPrompt = '',
     this.identitySuccessPrompt = '',
+    this.livenessPrompt = '',
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
@@ -33,6 +34,9 @@ class ProductDetail {
       identitySuccessPrompt: tips is Map
           ? tips[ApiFields.detailTipIdentitySuccess]?.toString() ?? ''
           : '',
+      livenessPrompt: tips is Map
+          ? tips[ApiFields.detailTipLiveness]?.toString() ?? ''
+          : '',
     );
   }
 
@@ -51,6 +55,11 @@ class ProductDetail {
   ///
   /// 与 [identityPrompt] 同属 `overwhelming` 容器但用途不同，不能互相顶替。
   final String identitySuccessPrompt;
+
+  /// 人脸（活体）认证页顶部引导文案（`overwhelming.seisin`）。
+  ///
+  /// 三个认证页各取各的一条：`splendacious` / `bocking` / `seisin`。
+  final String livenessPrompt;
 }
 
 /// 产品信息（`priapi`）。

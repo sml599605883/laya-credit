@@ -128,6 +128,12 @@ abstract final class ApiFields {
   /// `splendacious` 是上传页的，`bocking` 是识别结果确认页的。
   static const detailTipIdentitySuccess = 'bocking';
 
+  /// 活体（人脸）认证页顶部文案（文档语义 `livness`）。
+  ///
+  /// 与另外两条同属 `overwhelming` 容器：`splendacious` 上传页、
+  /// `bocking` 识别确认页、`seisin` 人脸页，三者不可互相顶替。
+  static const detailTipLiveness = 'seisin';
+
   /// 下一步认证项 `{ taskType, title, url, type }`。
   static const detailNextStep = 'cretonne';
   static const detailTaskType = 'catholical';
@@ -165,6 +171,29 @@ abstract final class ApiFields {
 
   /// 活体业务编号（type=10 且 faceType=6 时必传）。
   static const uploadBizId = 'sadomasochism';
+
+  // ---------- 认证项：获取活体检测 token（第二项）（`/outsulk/carline`）----------
+  /// 订单号（文档语义 `order_no`）。注意与产品详情的 `pirate` 不是同一个混淆名。
+  static const faceTokenOrderNo = 'resex';
+
+  /// 类型：`0` 默认 / `1` 绑卡前的活体校验（文档语义 `type`）。
+  static const faceTokenType = 'liquidators';
+
+  /// 该接口的两个混淆字段（文档语义 `ACCELERATE` / `ACCOMPLICE`，每次随机）。
+  static const obfuscateFaceToken1 = 'insectan';
+  static const obfuscateFaceToken2 = 'blindness';
+
+  /// 结果码：`200` 正常 / `400` 需重新上传身份证 / `500` 其他错误。
+  static const faceTokenResultCode = 'gravel';
+
+  /// face++ base url（文档语义 `biz_url`）。
+  static const faceTokenBizUrl = 'benzanthracene';
+
+  /// face++ token；活体类型为 `7` 时它就是活体检测授权码（文档语义 `biz_token`）。
+  static const faceToken = 'inducted';
+
+  /// face++ 具体错误（文档语义 `error`）。
+  static const faceTokenError = 'instellation';
 
   // ---------- 认证项：上传证件图片（`/outsulk/fashioned`）的 OCR 结果 ----------
   //

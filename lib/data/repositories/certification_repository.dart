@@ -4,6 +4,7 @@ import '../../core/network/api_fields.dart';
 import '../../core/network/api_response.dart';
 import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
+import '../models/face_token_result.dart';
 import '../models/id_verification_data.dart';
 
 /// 认证项相关接口（证件 / 活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡）。
@@ -55,6 +56,58 @@ class CertificationRepository {
         ApiFields.uploadLivenessLicense: '',
         ApiFields.uploadFaceType: '',
         ApiFields.uploadBizId: '',
+      },
+      parse: (data) =>
+          data is Map ? data.cast<String, dynamic>() : <String, dynamic>{},
+    );
+  }
+
+  /// 获取 face++ token / 活体检测授权码（认证第二项）。
+  ///
+  /// 文档「获取face++ token」：`resex` 传订单号，`liquidators` 是类型
+  /// （`0` 默认 / `1` 绑卡前的活体校验），另外带两个随机混淆字段。
+  Future<ApiResponse<FaceTokenResult>> getFaceToken({
+    required String orderNo,
+    int type = 0,
+  }) {
+    return _client.post<FaceTokenResult>(
+      ApiEndpoints.faceToken,
+      params: {
+        ApiFields.faceTokenOrderNo: orderNo,
+        ApiFields.faceTokenType: '$type',
+        ApiFields.obfuscateFaceToken1: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateFaceToken2: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? FaceTokenResult.fromJson(data.cast<String, dynamic>())
+          : const FaceTokenResult(),
+    );
+  }
+
+  /// 上传活体（人脸）照片（`POST /outsulk/fashioned`，`liquidators=10`）。
+  ///
+  /// 与身份证正面共用同一个接口：`chromogenous` 固定 `1`（活体不接受拍照来源），
+  /// `heterological` 活体不用、传空串，`gargantua` 带 SDK 返回的 livenessId，
+  /// `musculopallial` 带 token 接口下发的授权码，`bassein` 是活体类型。
+  Future<ApiResponse<Map<String, dynamic>>> uploadFaceImage({
+    required String filePath,
+    required String livenessId,
+    required String license,
+    required int livenessType,
+    String bizId = '',
+  }) {
+    return _client.upload<Map<String, dynamic>>(
+      ApiEndpoints.uploadIdentityImage,
+      filePath: filePath,
+      fileField: ApiFields.uploadFileField,
+      fields: {
+        ApiFields.uploadType: '10',
+        ApiFields.uploadImageSource: '1',
+        ApiFields.uploadCardType: '',
+        ApiFields.uploadLivenessId: livenessId,
+        ApiFields.uploadLivenessLicense: license,
+        ApiFields.uploadFaceType: '$livenessType',
+        ApiFields.uploadBizId: bizId,
       },
       parse: (data) =>
           data is Map ? data.cast<String, dynamic>() : <String, dynamic>{},

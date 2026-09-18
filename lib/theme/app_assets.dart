@@ -47,6 +47,13 @@ abstract final class AppAssets {
   static const idVerifyUploadButton =
       'assets/id_verify/id_verify_upload_button.png';
 
+  // 人脸识别页（蓝湖稿 `03-01 - 身份认证-人脸识别`）
+  /// 活体示范整块底图（343x420，用户提供的 `编组 12@3x.png`）：
+  /// `Demonstration` 正确示范（绿色取景框 + 面部轮廓）与 `Wrong Demonstration`
+  /// 三张错误示例（`Unclear` / `With reflection` / `Incomplete`）都烘焙在这一张里，
+  /// 页面只按 343x420 摆位置。
+  static const faceVerifyDemo = 'assets/id_verify/face_verify_demo.png';
+
   /// 证件信息确认页（蓝湖稿 `03-01 - 身份认证-上传成功`）的证件照位图
   /// （设计稿 `box_5`，319x200，用户提供的 `p/sfz/right@3x.png`）：
   /// 渐变底 / 旋纹 / 人像 / 文字占位条整块合并在一张里，页面只摆位置与圆角。
