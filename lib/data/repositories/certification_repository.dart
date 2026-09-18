@@ -60,4 +60,31 @@ class CertificationRepository {
           data is Map ? data.cast<String, dynamic>() : <String, dynamic>{},
     );
   }
+
+  /// 保存识别出的身份证信息（认证第一项）。
+  ///
+  /// 文档「保存用户身份证信息（第一项）」：`liquidators=11`（身份证正面），
+  /// 卡类型取证件选择页的行文案（`heterological`），`counter` 必须是 `d-m-Y`，
+  /// 另外带一个随机混淆字段 `stith`。
+  Future<ApiResponse<void>> saveIdentityInfo({
+    required String name,
+    required String idNumber,
+    required String birthDate,
+    required String cardType,
+  }) {
+    return _client.post<void>(
+      ApiEndpoints.saveIdentityInfo,
+      params: {
+        // `harbingers` / `approach` / `counter` 与上传响应用同一批字段名。
+        ApiFields.identityName: name,
+        ApiFields.identityIdNumber: idNumber,
+        ApiFields.identityBirthDate: birthDate,
+        // 与上传接口同一个 `liquidators`：11 身份证正面 / 10 活体。
+        ApiFields.uploadType: '11',
+        ApiFields.uploadCardType: cardType,
+        ApiFields.obfuscateSaveIdentity: ObfuscationHelper.randomParam(),
+      },
+      parse: (_) {},
+    );
+  }
 }

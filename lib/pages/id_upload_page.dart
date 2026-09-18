@@ -6,11 +6,13 @@ import '../core/media/identity_photo_permission.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
+import '../data/models/identity_recognition.dart';
 import '../providers/media_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
+import '../widgets/upload_button.dart';
 
 /// 导航标题（设计稿 `text_10`）。
 const _navTitle = 'ID Verification';
@@ -30,7 +32,10 @@ const _promptWidth = 204.0;
 /// 正常情况走产品详情下发的 `overwhelming.splendacious`，这里只在
 /// 低版本 / 未灰度用户（后端不下发）时兜底。
 const _fallbackPrompt =
-    'Valid official credentials avoid rejection and quickly unlock your loan service access.';
+    'Valid official credentials\n'
+    'avoid rejection and\n'
+    'quickly unlock your loan\n'
+    'service access.';
 
 /// 引导块顶边（设计稿 `text-wrapper_5 { top: 194 }`）：
 /// 比头图底边高 19pt，白卡顶边压在头图下沿上。
@@ -41,9 +46,6 @@ const _demoAspectRatio = 343 / 420;
 
 /// 引导块与 `Upload` 按钮之间的间距（设计稿 614 -> 714）。
 const _demoToButtonGap = 100.0;
-
-/// `Upload` 按钮高度（设计稿 `text-wrapper_4`：13 + 22 + 13）。
-const _buttonHeight = 48.0;
 
 /// 按钮下沿到页面底边的留白（设计稿 762 -> 812，比手势条高，不用再补安全区）。
 const _buttonBottom = 50.0;
@@ -157,7 +159,7 @@ class _IdUploadPageState extends ConsumerState<IdUploadPage> {
                         left: AppSpacing.pageHorizontal,
                         right: AppSpacing.pageHorizontal,
                       ),
-                      child: _UploadButton(
+                      child: UploadButton(
                         layout: layout,
                         enabled: !_isUploading,
                         onTap: () => _showUploadMethods(context, layout),
@@ -265,70 +267,19 @@ class _IdUploadPageState extends ConsumerState<IdUploadPage> {
         return;
       }
 
-      // TODO(页面): 上传成功后进 `03-01 - 身份认证-上传成功` 页，
-      // 让用户核对 OCR 识别出的姓名 / 证件号 / 出生日期，
-      // 再用 `POST /outsulk/wardmote` 保存。该页与保存接口尚未落地。
-      ToastHelper.showMessage('Uploaded');
+      // 上传成功后进 `03-01 - 身份认证-上传成功` 页核对识别结果，
+      // 确认无误后由那一页调 `POST /outsulk/wardmote` 保存。
+      AppNavigator.push(
+        AppRoutes.idConfirm,
+        arguments: IdConfirmPageArguments(
+          productId: widget.productId,
+          cardType: widget.cardType,
+          recognition: IdentityRecognition.fromUploadResponse(response.data),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
-  }
-}
-
-/// 底部 `Upload` 主按钮（设计稿 `text-wrapper_4`）。
-class _UploadButton extends StatelessWidget {
-  const _UploadButton({
-    required this.layout,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  final AppLayout layout;
-  final VoidCallback onTap;
-
-  /// 上传进行中置灰，既挡住重复点击，也避免用户以为没点上。
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: layout.px(_buttonHeight),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 底图：柠檬绿胶囊 + 24 圆角（用户提供的 `矩形@3x.png`）。
-          Image.asset(AppAssets.idVerifyUploadButton, fit: BoxFit.fill),
-          Center(
-            child: Text(
-              'Upload',
-              style: TextStyle(
-                color: AppColors.idVerifyUploadButtonText,
-                fontSize: layout.px(16),
-                fontWeight: FontWeight.w500,
-                // 设计稿：`font-size: 16px; line-height: 22px`。
-                height: 22 / 16,
-              ),
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: enabled ? onTap : null,
-              customBorder: RoundedRectangleBorder(
-                borderRadius: layout.radius(_buttonHeight / 2),
-              ),
-              // 底图是浅柠檬绿，水波纹用深色才看得出来。
-              splashColor: AppColors.idVerifyUploadButtonText.withValues(
-                alpha: 0.08,
-              ),
-              highlightColor: AppColors.idVerifyUploadButtonText.withValues(
-                alpha: 0.04,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

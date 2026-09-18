@@ -29,6 +29,19 @@ class SessionStore {
     _productDetailIdentityPrompt = prompt.trim();
   }
 
+  /// 产品详情下发的证件信息确认页引导文案（`overwhelming.bocking`）。
+  ///
+  /// 与上传页的 `splendacious` 一样只在内存里缓存：产品详情一定先于认证页拉取。
+  String _productDetailIdentitySuccessPrompt = '';
+
+  String get productDetailIdentitySuccessPrompt =>
+      _productDetailIdentitySuccessPrompt;
+
+  /// 写入产品详情下发的证件信息确认页引导文案。
+  void saveProductDetailIdentitySuccessPrompt(String prompt) {
+    _productDetailIdentitySuccessPrompt = prompt.trim();
+  }
+
   /// 平台实现可能没有注册（例如单元测试环境）。拿不到实例时所有读写退化为空操作，
   /// 不能因为本地存储不可用就让 App 启动失败。
   SharedPreferencesAsync? get _preferences {
@@ -85,6 +98,7 @@ class SessionStore {
   /// 清除 token，保留手机号方便下次登录预填。
   Future<void> clear() async {
     _productDetailIdentityPrompt = '';
+    _productDetailIdentitySuccessPrompt = '';
     try {
       final preferences = _preferences;
       if (preferences == null) return;

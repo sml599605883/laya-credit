@@ -145,7 +145,7 @@ lib/
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
    第二项（证件上传页）已按设计稿落地并接上上传接口（见第 13 条），
-   但保存接口（`/outsulk/wardmote`）与 `03-01 - 身份认证-上传成功` 页仍然缺。
+   第三项（证件信息确认页）也已落地并接上保存接口（见第 14 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -308,8 +308,8 @@ lib/
       `gargantua` / `musculopallial` / `bassein` / `sadomasochism` 这四个活体参数
       身份证正面用不到，但后端要求字段存在，固定带空串（对齐 peso_shield 的 uploadImage），
       **不要省略**。
-      上传成功后应进 `03-01 - 身份认证-上传成功` 页核对 OCR 结果并调用
-      `POST /outsulk/wardmote` 保存，该页与保存接口尚未落地（页面里留了 TODO）。
+      上传成功后进 `03-01 - 身份认证-上传成功` 页（见第 14 条）核对 OCR 结果，
+      由那一页调用 `POST /outsulk/wardmote` 保存。
       新增依赖 `image_picker` / `permission_handler` / `flutter_image_compress` /
       `path_provider`，iOS 补了 `NSPhotoLibraryUsageDescription`，
       Podfile 里给 permission_handler 开了 `PERMISSION_CAMERA=1`。
@@ -320,6 +320,48 @@ lib/
       **不要用身份信息响应里的 `befleas`**：接口文档确认引导文案属于产品详情。
     - 二级页的返回按钮 + 居中标题抽成了 `BackNavBar`（`lib/widgets/back_nav_bar.dart`），
       证件选择页与上传页共用，避免两份实现各自漂移。
+
+14. **证件信息确认页已按蓝湖稿 `03-01 - 身份认证-上传成功` 还原**
+    （认证流程第三步，`/id-confirm`，`IdConfirmPage`）。
+    - 页面三段与设计稿一一对应：通栏头图（`section_1`，375x213，复用上传页那份
+      没烘焙标题的 `id_verify_header_blank.png`）、白卡（`box_3`，343x396）、
+      底部 `Upload` 主按钮（`text-wrapper_3`，343x48）。
+    - 白卡里是证件照（`box_5`，319x200 + 12 圆角 + 2pt 白描边）与三行识别结果
+      （`text-wrapper_4`，每行 48pt、`#F8F8F8` 底、4 圆角）：
+      `Full Name` / `ID No.` / `Date of Birth`。**字段可编辑**（对齐 peso_shield
+      的同名页）：OCR 会认错，姓名 / 证件号就地改，出生日期点开选择面板改。
+      设计稿画的是只读态，这里保留灰底行样式、**不加输入框边框**。
+    - 新素材 `assets/id_verify/id_verify_id_card.png`（用户提供的
+      `p/sfz/right@3x.png`）已改名并登记为 `AppAssets.idVerifyIdCard`：
+      后端回传证件照地址（`connectedly.superidealness`）时优先展示远端图，
+      地址为空或加载失败才回落到这张设计稿切图。
+    - 识别结果来自上传接口 `POST /outsulk/fashioned`（`type=11`）响应的
+      `connectedly`，由 `IdentityRecognition.fromUploadResponse` 解析：
+      `harbingers` 姓名 / `approach` 证件号 / `counter` 出生日期 /
+      `superidealness` 证件照。`counter` 后端两种顺序都出现过：上传响应是
+      `23/11/1993`（日在先），身份信息 `gaonate` 响应是 `1969/11/03`（年在先），
+      页面统一归一成保存接口要的 `dd-MM-yyyy`（`IdentityRecognition.normalizeBirthDate`
+      先按「第一段 4 位就是年」解析、再用 `DateTime` 回读校验，2 月 30 日这类
+      不存在的日期原样透传交给用户改）。
+    - 点 `Upload` 走 `POST /outsulk/wardmote`
+      （`CertificationRepository.saveIdentityInfo`）：`liquidators=11`、
+      `heterological` 取证件选择页的行文案、三个识别字段原样回传，
+      另带随机混淆字段 `stith`。三个字段任一为空时页面直接提示
+      `Please complete all fields`，不发坏请求。
+      保存成功后交给 `ProductApplicationFlow.continueProductDetailFlow` 继续下一步。
+    - 出生日期选择面板按蓝湖稿 `03-02 - 个人信息-日期选择` 还原：
+      375x307 白面板 + 16pt 顶部圆角，右上角只有灰色 `Done`（没有 `Cancel`，
+      点遮罩关闭），下面是日 / 月 / 年三列滚轮。滚轮行高 52.5、可视高 234、
+      选中行加粗加深（`#0D1B17`），相邻行 `#666666`、再往外 `#999999`，
+      选中行上下各一条 1pt `#EEEEEE` 分隔线，两侧留 68 / 59。
+      换月 / 换年后会把日收进当月范围（2 月没有 30 号），拨动前先夹住下标，
+      避免 `ListWheelScrollView` 在新 childCount 下断言失败。
+    - 引导段落（`text_4`）优先用产品详情下发的 `overwhelming.bocking`
+      （与上传页的 `splendacious` 同容器但不同字段，别混用），
+      由 `ProductApplicationFlow` 写入 `SessionStore`，为空时回落到设计稿的
+      三行兜底文案（190pt 宽下写死断行）。
+    - `Upload` 按钮抽成了共用组件 `lib/widgets/upload_button.dart`
+      （底图 + 文案 + 水波纹），上传页与确认页共用，避免两份实现各自漂移。
 
 ## 常用命令
 

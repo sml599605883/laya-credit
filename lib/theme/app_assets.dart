@@ -47,6 +47,13 @@ abstract final class AppAssets {
   static const idVerifyUploadButton =
       'assets/id_verify/id_verify_upload_button.png';
 
+  /// 证件信息确认页（蓝湖稿 `03-01 - 身份认证-上传成功`）的证件照位图
+  /// （设计稿 `box_5`，319x200，用户提供的 `p/sfz/right@3x.png`）：
+  /// 渐变底 / 旋纹 / 人像 / 文字占位条整块合并在一张里，页面只摆位置与圆角。
+  /// 接口下发证件照地址（`connectedly.superidealness`）时优先展示远端图，
+  /// 这张只在地址为空时兜底。
+  static const idVerifyIdCard = 'assets/id_verify/id_verify_id_card.png';
+
   /// 二级页返回按钮（24x24）。
   static const back = 'assets/common/back.png';
 

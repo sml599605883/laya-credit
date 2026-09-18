@@ -123,6 +123,28 @@ abstract final class AppColors {
   /// 证件上传页 `Upload` 主按钮的文案色（设计稿 `text_6` rgba(19,19,19)）。
   static const idVerifyUploadButtonText = Color(0xFF131313);
 
+  // ---------- 证件信息确认页（蓝湖稿 `03-01 - 身份认证-上传成功`） ----------
+
+  /// 识别信息行的底色（设计稿 `text-wrapper_4` rgba(248,248,248)）。
+  static const idVerifyFieldBackground = Color(0xFFF8F8F8);
+
+  /// 识别信息行的字段名文字色（设计稿 `text_6` rgba(153,153,153)）。
+  static const idVerifyFieldLabel = Color(0xFF999999);
+
+  /// 识别信息行的字段值文字色（设计稿 `text_7` rgba(51,51,51)）。
+  static const idVerifyFieldValue = Color(0xFF333333);
+
+  // ---------- 生日选择面板（蓝湖稿 `03-02 - 个人信息-日期选择`） ----------
+
+  /// 面板遮罩（设计稿 `page` 底色 rgba(96,96,96,1)，按 60% 透明压暗底页）。
+  static const idVerifyPickerBarrier = Color(0x99606060);
+
+  /// 滚轮选中行两侧一格的文字色（设计稿 `text_5` rgba(102,102,102)）。
+  static const idVerifyPickerTextNear = Color(0xFF666666);
+
+  /// 滚轮选中行的文字色（设计稿 `text_8` rgba(13,27,23)）。
+  static const idVerifyPickerTextSelected = Color(0xFF0D1B17);
+
   // ---------- 个人中心（蓝湖稿 `07-01 - 个人中心`） ----------
 
   /// 个人中心顶部深色头图底色（设计稿 `box_1`）。

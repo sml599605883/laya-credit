@@ -122,6 +122,12 @@ abstract final class ApiFields {
   /// 身份认证页顶部文案（文档语义 `base`）。
   static const detailTipIdentity = 'splendacious';
 
+  /// 身份认证**成功**页顶部文案（文档语义 `identitySuccess`）。
+  ///
+  /// 与 [detailTipIdentity] 同属 `overwhelming` 容器，别混用：
+  /// `splendacious` 是上传页的，`bocking` 是识别结果确认页的。
+  static const detailTipIdentitySuccess = 'bocking';
+
   /// 下一步认证项 `{ taskType, title, url, type }`。
   static const detailNextStep = 'cretonne';
   static const detailTaskType = 'catholical';
@@ -159,6 +165,27 @@ abstract final class ApiFields {
 
   /// 活体业务编号（type=10 且 faceType=6 时必传）。
   static const uploadBizId = 'sadomasochism';
+
+  // ---------- 认证项：上传证件图片（`/outsulk/fashioned`）的 OCR 结果 ----------
+  //
+  // 接口文档「接口上传(face,身份证正面)（第一项）」：`type=11` 时响应 `connectedly`
+  // 带回识别结果，保存接口（`/outsulk/wardmote`）把这几个值原样回传。
+  /// 识别出的姓名。
+  static const identityName = 'harbingers';
+
+  /// 识别出的证件号。
+  static const identityIdNumber = 'approach';
+
+  /// 识别出的出生日期。上传响应是 `23/11/1993`，保存接口要求 `d-m-Y`，
+  /// 页面在跳转前统一成 `23-11-1993`（与设计稿 `23-02-1996` 一致）。
+  static const identityBirthDate = 'counter';
+
+  /// 证件照地址。与产品详情/准入的跳转地址（[jumpUrl]）共用同一个混淆字段名，
+  /// 但在上传响应里语义是「证件照 url」，所以单独给一个按用途命名的常量。
+  static const identityImageUrl = 'superidealness';
+
+  /// 保存身份证信息的混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscateSaveIdentity = 'stith';
 
   // ---------- 跟进订单号获取跳转地址（`/outsulk/octodentate`）----------
   static const obfuscatePush1 = 'indefinity';

@@ -91,9 +91,14 @@ class ProductApplicationFlow {
         ToastHelper.showError(response.message);
         return null;
       }
-      // 详情里的认证页文案在进入对应页面前先落到缓存，上传页直接读，不用再传参。
+      // 详情里的认证页文案在进入对应页面前先落到缓存，认证页直接读，不用再传参。
+      // `overwhelming` 里每个认证页一条：`splendacious` 给上传页，
+      // `bocking` 给证件信息确认页。
       sessionStore.saveProductDetailIdentityPrompt(
         response.data.identityPrompt,
+      );
+      sessionStore.saveProductDetailIdentitySuccessPrompt(
+        response.data.identitySuccessPrompt,
       );
       return response.data;
     } on ApiException catch (error) {

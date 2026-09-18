@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/identity_recognition.dart';
 import '../../pages/home_page.dart';
+import '../../pages/id_confirm_page.dart';
 import '../../pages/id_upload_page.dart';
 import '../../pages/id_verification_page.dart';
 import '../../pages/login_page.dart';
@@ -28,6 +30,22 @@ class IdUploadPageArguments {
 
   final String productId;
   final String cardType;
+}
+
+/// 证件信息确认页入参（蓝湖稿 `03-01 - 身份认证-上传成功`）。
+///
+/// [recognition] 是上传接口识别出的身份信息：页面只读展示并原样回传给保存接口，
+/// 所以这里不拆成三个字符串，避免中途被改写。
+class IdConfirmPageArguments {
+  const IdConfirmPageArguments({
+    required this.productId,
+    required this.cardType,
+    required this.recognition,
+  });
+
+  final String productId;
+  final String cardType;
+  final IdentityRecognition recognition;
 }
 
 /// 登录页入参。跳转方可以传入回调，在登录成功后继续未完成的动作。
@@ -72,6 +90,18 @@ class AppRouteGenerator {
           (_) => IdUploadPage(
             productId: uploadArgs?.productId ?? '',
             cardType: uploadArgs?.cardType ?? '',
+          ),
+        );
+
+      case AppRoutes.idConfirm:
+        final confirmArgs = settings.arguments as IdConfirmPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => IdConfirmPage(
+            productId: confirmArgs?.productId ?? '',
+            cardType: confirmArgs?.cardType ?? '',
+            recognition:
+                confirmArgs?.recognition ?? const IdentityRecognition(),
           ),
         );
 

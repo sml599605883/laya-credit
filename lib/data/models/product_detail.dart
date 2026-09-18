@@ -10,6 +10,7 @@ class ProductDetail {
     required this.basicInfo,
     required this.nextStep,
     this.identityPrompt = '',
+    this.identitySuccessPrompt = '',
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
@@ -29,6 +30,9 @@ class ProductDetail {
       identityPrompt: tips is Map
           ? tips[ApiFields.detailTipIdentity]?.toString() ?? ''
           : '',
+      identitySuccessPrompt: tips is Map
+          ? tips[ApiFields.detailTipIdentitySuccess]?.toString() ?? ''
+          : '',
     );
   }
 
@@ -42,6 +46,11 @@ class ProductDetail {
   ///
   /// 低版本 / 未灰度用户可能不下发，为空时由页面用设计稿兜底文案。
   final String identityPrompt;
+
+  /// 证件信息确认页顶部引导文案（`overwhelming.bocking`）。
+  ///
+  /// 与 [identityPrompt] 同属 `overwhelming` 容器但用途不同，不能互相顶替。
+  final String identitySuccessPrompt;
 }
 
 /// 产品信息（`priapi`）。

@@ -13,6 +13,7 @@ import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
+import 'package:laya_credit/data/models/identity_recognition.dart';
 import 'package:laya_credit/data/models/login_result.dart';
 import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
@@ -26,6 +27,7 @@ import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/home_page.dart';
+import 'package:laya_credit/pages/id_confirm_page.dart';
 import 'package:laya_credit/pages/id_upload_page.dart';
 import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
@@ -34,6 +36,7 @@ import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
 import 'package:laya_credit/widgets/back_nav_bar.dart';
+import 'package:laya_credit/widgets/remote_image.dart';
 import 'package:laya_credit/widgets/state_views.dart';
 import 'package:laya_credit/widgets/tab_bar/app_tab_bar.dart';
 
@@ -141,6 +144,15 @@ class _StubCertificationRepository extends CertificationRepository {
   /// 记录每次证件上传：(文件路径, 卡类型, 来源)。
   final List<(String, String, IdentityPhotoSource)> uploadCalls = [];
 
+  /// 上传接口识别出的身份信息，口径取接口文档「接口上传(face,身份证正面)（第一项）」
+  /// 的 `connectedly` 示例（出生日期后端给的是 `23/11/1993`）。
+  static const uploadData = <String, dynamic>{
+    'harbingers': 'NAVEEN TOM VARGHESE',
+    'approach': '623099344111',
+    'counter': '23/11/1993',
+    'superidealness': '',
+  };
+
   @override
   Future<ApiResponse<Map<String, dynamic>>> uploadIdentityImage({
     required String filePath,
@@ -148,11 +160,21 @@ class _StubCertificationRepository extends CertificationRepository {
     required IdentityPhotoSource source,
   }) async {
     uploadCalls.add((filePath, cardType, source));
-    return ApiResponse(
-      code: 0,
-      message: 'success',
-      data: <String, dynamic>{'harbingers': 'TEST USER'},
-    );
+    return ApiResponse(code: 0, message: 'success', data: uploadData);
+  }
+
+  /// 记录每次保存身份证信息：(姓名, 证件号, 出生日期, 卡类型)。
+  final List<(String, String, String, String)> saveCalls = [];
+
+  @override
+  Future<ApiResponse<void>> saveIdentityInfo({
+    required String name,
+    required String idNumber,
+    required String birthDate,
+    required String cardType,
+  }) async {
+    saveCalls.add((name, idNumber, birthDate, cardType));
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
   }
 }
 
@@ -378,6 +400,30 @@ void _openIdUploadPage(
   AppNavigator.push(
     AppRoutes.idUpload,
     arguments: IdUploadPageArguments(productId: productId, cardType: cardType),
+  );
+}
+
+/// 接口文档里识别出的身份信息示例（出生日期已归一成保存接口要求的 d-m-Y）。
+const _recognition = IdentityRecognition(
+  name: 'NAVEEN TOM VARGHESE',
+  idNumber: '623099344111',
+  birthDate: '23-11-1993',
+);
+
+/// 直接打开证件信息确认页（走和上传页一样的路由与入参）。
+void _openIdConfirmPage(
+  WidgetTester tester, {
+  String productId = '7',
+  String cardType = 'PRC',
+  IdentityRecognition recognition = _recognition,
+}) {
+  AppNavigator.push(
+    AppRoutes.idConfirm,
+    arguments: IdConfirmPageArguments(
+      productId: productId,
+      cardType: cardType,
+      recognition: recognition,
+    ),
   );
 }
 
@@ -1764,7 +1810,13 @@ void main() {
       certificationRepository.uploadCalls.single.$3,
       IdentityPhotoSource.album,
     );
-    expect(find.text('Uploaded'), findsOneWidget);
+
+    // 上传成功后进证件信息确认页核对识别结果，识别结果由上传响应带过来。
+    expect(find.byType(IdConfirmPage), findsOneWidget);
+    expect(find.text('NAVEEN TOM VARGHESE'), findsOneWidget);
+    expect(find.text('623099344111'), findsOneWidget);
+    // 后端给的 `23/11/1993` 要归一成设计稿那种带横杠的 `23-11-1993`。
+    expect(find.text('23-11-1993'), findsOneWidget);
   });
 
   testWidgets('证件上传页引导文案优先用产品详情下发的 overwhelming.splendacious', (tester) async {
@@ -1814,6 +1866,182 @@ void main() {
 
     expect(find.byType(IdUploadPage), findsNothing);
     expect(find.byType(IdVerificationPage), findsOneWidget);
+  });
+
+  testWidgets('证件信息确认页按蓝湖稿 03-01 渲染证件照、三行识别结果与 Upload 按钮', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openIdConfirmPage(tester);
+    await tester.pumpAndSettle();
+
+    // 头图 / 返回按钮 / 证件照 / 按钮底图都是设计稿切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+    expect(find.text('ID Verification'), findsOneWidget);
+
+    // 证件照地址为空时用设计稿切图兜底。
+    expect(find.byType(RemoteImage), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyIdCard), findsOneWidget);
+
+    // 三行识别结果：左字段名、右字段值。
+    for (final label in ['Full Name', 'ID No.', 'Date of Birth']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('NAVEEN TOM VARGHESE'), findsOneWidget);
+    expect(find.text('623099344111'), findsOneWidget);
+    expect(find.text('23-11-1993'), findsOneWidget);
+
+    // 引导段落按设计稿的三行断行，不跟着系统字体漂。
+    expect(
+      find.text(
+        'Confirm your ID details\n'
+        'below to ensure funds\n'
+        'land in your account.',
+      ),
+      findsOneWidget,
+    );
+
+    // 证件照 319x200（设计稿 `box_5`，2pt 白描边含在尺寸里）。
+    final idCardRect = tester.getRect(
+      find
+          .ancestor(
+            of: _assetImage(AppAssets.idVerifyIdCard),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(idCardRect.width, closeTo(319 * _designScale, 0.5));
+    expect(idCardRect.height, closeTo(200 * _designScale, 0.5));
+
+    // 证件照顶边压在头图下沿上 7pt（白卡 top 194 + 1pt 分隔线 + 11pt）。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    expect(headerRect.bottom - idCardRect.top, closeTo(7 * _designScale, 0.5));
+
+    // 信息行高 48 + 行距 8（设计稿 `text-wrapper_4`：14 + 20 + 14，margin-bottom 8）。
+    double centerY(Finder finder) => tester.getCenter(finder).dy;
+    expect(
+      centerY(find.text('ID No.')) - centerY(find.text('Full Name')),
+      closeTo(56 * _designScale, 0.5),
+    );
+    expect(
+      centerY(find.text('Date of Birth')) - centerY(find.text('ID No.')),
+      closeTo(56 * _designScale, 0.5),
+    );
+
+    // 白卡与按钮之间的间距（设计稿 590 -> 714）。
+    expect(
+      tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).top -
+          idCardRect.bottom,
+      closeTo(308 * _designScale, 0.5),
+    );
+  });
+
+  testWidgets('证件信息确认页引导文案优先用产品详情下发的 overwhelming.bocking', (tester) async {
+    const apiPrompt =
+        'Confirm they are correct and watch your approval odds climb!';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailIdentitySuccessPrompt(apiPrompt);
+      },
+    );
+    _openIdConfirmPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    expect(find.textContaining('Confirm your ID details'), findsNothing);
+  });
+
+  testWidgets('证件信息确认页点 Upload 保存识别结果并继续下一步认证', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: productRepository,
+    );
+    _openIdConfirmPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // 识别结果原样回传（出生日期是归一后的 d-m-Y），卡类型取证件选择页的行文案。
+    expect(certificationRepository.saveCalls, [
+      ('NAVEEN TOM VARGHESE', '623099344111', '23-11-1993', 'PRC'),
+    ]);
+    // 保存成功后继续拉产品详情，走下一步认证。
+    expect(productRepository.detailCalls, 1);
+  });
+
+  testWidgets('识别结果为空时确认页不发保存请求', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openIdConfirmPage(tester, recognition: const IdentityRecognition());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.saveCalls, isEmpty);
+    expect(find.text('Please complete all fields'), findsOneWidget);
+  });
+
+  testWidgets('证件信息确认页可修改识别结果后提交', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openIdConfirmPage(tester);
+    await tester.pumpAndSettle();
+
+    // OCR 会认错，姓名 / 证件号要能就地改，提交用改后的值。
+    await tester.enterText(find.byKey(const Key('id-confirm-name')), 'BANBU');
+    await tester.enterText(
+      find.byKey(const Key('id-confirm-id-number')),
+      '387740 980198 7862',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.saveCalls, [
+      ('BANBU', '387740 980198 7862', '23-11-1993', 'PRC'),
+    ]);
+  });
+
+  testWidgets('证件信息确认页点生日弹日期选择面板，Done 回填 dd-MM-yyyy', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openIdConfirmPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('id-confirm-birth-date')));
+    await tester.pumpAndSettle();
+
+    // 面板按蓝湖稿 03-02：右上角灰色 Done + 日 / 月 / 年三列滚轮。
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.byKey(const Key('id-confirm-birth-day')), findsOneWidget);
+    expect(find.byKey(const Key('id-confirm-birth-month')), findsOneWidget);
+    expect(find.byKey(const Key('id-confirm-birth-year')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('id-confirm-birth-done')));
+    await tester.pumpAndSettle();
+
+    // 选完回填的仍是保存接口要的 dd-MM-yyyy。
+    expect(find.text('23-11-1993'), findsOneWidget);
   });
 
   testWidgets('证件选择页请求中显示 Loading，失败可重试', (tester) async {
@@ -1993,6 +2221,64 @@ void main() {
 
     expect(data.recommended, ['PRC']);
     expect(data.other, ['TIN']);
+  });
+
+  test('保存身份证信息接口带姓名、证件号、d-m-Y 出生日期与卡类型', () async {
+    final client = _RecordingClient();
+    final repository = CertificationRepository(client);
+
+    await repository.saveIdentityInfo(
+      name: 'NAVEEN TOM VARGHESE',
+      idNumber: '623099344111',
+      birthDate: '23-11-1993',
+      cardType: 'PRC',
+    );
+
+    expect(client.calls, hasLength(1));
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.saveIdentityInfo);
+    expect(params[ApiFields.identityName], 'NAVEEN TOM VARGHESE');
+    expect(params[ApiFields.identityIdNumber], '623099344111');
+    expect(params[ApiFields.identityBirthDate], '23-11-1993');
+    expect(params[ApiFields.uploadType], '11');
+    expect(params[ApiFields.uploadCardType], 'PRC');
+    // 混淆字段必须带且非空。
+    expect(params[ApiFields.obfuscateSaveIdentity], isNotEmpty);
+  });
+
+  test('产品详情解析 overwhelming.bocking 作为确认页引导文案', () {
+    final detail = ProductDetail.fromJson({
+      ApiFields.applyResultCode: 200,
+      ApiFields.detailTips: {
+        ApiFields.detailTipIdentity: 'upload prompt',
+        ApiFields.detailTipIdentitySuccess: 'confirm prompt',
+      },
+    });
+
+    expect(detail.identityPrompt, 'upload prompt');
+    expect(detail.identitySuccessPrompt, 'confirm prompt');
+  });
+
+  test('上传响应里的出生日期归一成保存接口要求的 dd-MM-yyyy', () {
+    final recognition = IdentityRecognition.fromUploadResponse(
+      _StubCertificationRepository.uploadData,
+    );
+
+    expect(recognition.name, 'NAVEEN TOM VARGHESE');
+    expect(recognition.idNumber, '623099344111');
+    expect(recognition.birthDate, '23-11-1993');
+    expect(recognition.imageUrl, '');
+  });
+
+  test('出生日期同时支持 dd/MM/yyyy 与 yyyy/MM/dd，统一成 dd-MM-yyyy', () {
+    // 上传响应是日在先，身份信息 gaonate 响应是年在先。
+    expect(IdentityRecognition.normalizeBirthDate('23/11/1993'), '23-11-1993');
+    expect(IdentityRecognition.normalizeBirthDate('1969/11/03'), '03-11-1969');
+    expect(IdentityRecognition.normalizeBirthDate('1993-11-23'), '23-11-1993');
+    expect(IdentityRecognition.normalizeBirthDate('1993.11.23'), '23-11-1993');
+    // 不存在的日期不瞎猜，原样返回交给用户改。
+    expect(IdentityRecognition.normalizeBirthDate('1993/02/30'), '1993/02/30');
+    expect(IdentityRecognition.normalizeBirthDate(''), '');
   });
 
   test('身份信息没有下发证件配置时按空处理', () {
