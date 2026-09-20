@@ -6,11 +6,12 @@ import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
 import '../models/face_token_result.dart';
 import '../models/id_verification_data.dart';
+import '../models/personal_info_data.dart';
 
 /// 认证项相关接口（证件 / 活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡）。
 ///
-/// 目前只接了第一项（证件类型列表），其余认证项按接口文档 `4.certify.html`
-/// 在落地对应页面时逐个补到这里。
+/// 已接入证件 / 活体 / 个人信息 / 工作四项，其余认证项（紧急联系人 / 绑卡）
+/// 按接口文档 `4.certify.html` 在落地对应页面时逐个补到这里。
 class CertificationRepository {
   const CertificationRepository(this._client);
 
@@ -138,6 +139,93 @@ class CertificationRepository {
         ApiFields.obfuscateSaveIdentity: ObfuscationHelper.randomParam(),
       },
       parse: (_) {},
+    );
+  }
+
+  /// 获取个人信息表单（认证第二项，`POST /outsulk/orchel`）。
+  ///
+  /// 字段（标题 / 占位 / 控件类型 / 选项 / 当前值）全部由后端下发，
+  /// 页面只负责按描述渲染，不要在客户端写死任何字段或选项。
+  Future<ApiResponse<PersonalInfoData>> getPersonalInfo({
+    required String productId,
+  }) {
+    return _client.post<PersonalInfoData>(
+      ApiEndpoints.personalInfo,
+      params: {
+        ApiFields.productId: productId,
+        ApiFields.obfuscatePersonalInfo: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? PersonalInfoData.fromJson(data.cast<String, dynamic>())
+          : const PersonalInfoData(fields: [], tips: ''),
+    );
+  }
+
+  /// 保存个人信息（认证第二项，`POST /outsulk/marantas`）。
+  ///
+  /// [formData] 的 key 必须是「获取用户信息（第二项）」下发的 `crucians`，
+  /// 后端按同一份字段表取值；另外带两个文档标注的混淆字段。
+  Future<ApiResponse<void>> savePersonalInfo({
+    required String productId,
+    required Map<String, String> formData,
+  }) {
+    return _client.post<void>(
+      ApiEndpoints.savePersonalInfo,
+      params: {
+        ApiFields.productId: productId,
+        ...formData,
+        ApiFields.obfuscateSavePersonalInfo1: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateSavePersonalInfo2: ObfuscationHelper.randomParam(),
+      },
+      parse: (_) {},
+    );
+  }
+
+  /// 获取工作信息表单（认证第三项，`GET /outsulk/timeling`）。
+  ///
+  /// 与「获取用户信息（第二项）」同一份字段描述结构（`aminate` / `befleas`），
+  /// 所以复用 [PersonalInfoData]；字段 / 选项全部由后端下发，不要写死。
+  Future<ApiResponse<PersonalInfoData>> getWorkInfo({
+    required String productId,
+  }) {
+    return _client.get<PersonalInfoData>(
+      ApiEndpoints.workInfo,
+      params: {
+        ApiFields.productId: productId,
+        ApiFields.obfuscateWorkInfo: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? PersonalInfoData.fromJson(data.cast<String, dynamic>())
+          : const PersonalInfoData(fields: [], tips: ''),
+    );
+  }
+
+  /// 保存工作信息（认证第三项，`POST /outsulk/kneeing`）。
+  ///
+  /// [formData] 的 key 必须是「获取工作信息（第三项）」下发的 `crucians`，
+  /// 后端按同一份字段表取值；另外带三个文档标注的混淆字段。
+  Future<ApiResponse<void>> saveWorkInfo({
+    required String productId,
+    required Map<String, String> formData,
+  }) {
+    return _client.post<void>(
+      ApiEndpoints.saveWorkInfo,
+      params: {
+        ApiFields.productId: productId,
+        ...formData,
+        ApiFields.obfuscateSaveWorkInfo1: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateSaveWorkInfo2: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateSaveWorkInfo3: ObfuscationHelper.randomParam(),
+      },
+      parse: (_) {},
+    );
+  }
+
+  /// 地址初始化（`GET /outsulk/avern`）：省 / 市 / 区的层级数据。
+  Future<ApiResponse<AddressInitData>> getAddressInit() {
+    return _client.get<AddressInitData>(
+      ApiEndpoints.addressInit,
+      parse: (data) => AddressInitData.fromJson(data),
     );
   }
 }

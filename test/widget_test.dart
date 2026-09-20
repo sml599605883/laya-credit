@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,6 +18,7 @@ import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
 import 'package:laya_credit/data/models/identity_recognition.dart';
 import 'package:laya_credit/data/models/login_result.dart';
+import 'package:laya_credit/data/models/personal_info_data.dart';
 import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/data/repositories/auth_repository.dart';
@@ -34,6 +36,8 @@ import 'package:laya_credit/pages/id_confirm_page.dart';
 import 'package:laya_credit/pages/id_upload_page.dart';
 import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
+import 'package:laya_credit/pages/personal_info_page.dart';
+import 'package:laya_credit/pages/work_information_page.dart';
 import 'package:laya_credit/providers/liveness_provider.dart';
 import 'package:laya_credit/providers/media_provider.dart';
 import 'package:laya_credit/providers/network_provider.dart';
@@ -221,6 +225,268 @@ class _StubCertificationRepository extends CertificationRepository {
   }) async {
     saveCalls.add((name, idNumber, birthDate, cardType));
     return const ApiResponse<void>(code: 0, message: 'success', data: null);
+  }
+
+  /// 个人信息表单（认证第二项）：字段 / 控件类型 / 选项口径取接口文档
+  /// 「获取用户信息（第二项）」的 `aminate` 示例，覆盖枚举 / 输入 / 地址三种控件。
+  static const personalInfoData = PersonalInfoData(
+    tips: 'Fill in personal information truthfully and accurately',
+    fields: [
+      PersonalInfoField(
+        title: 'Gender',
+        placeholder: 'Gender',
+        key: 'copies',
+        control: PersonalInfoControl.selection,
+        isNumeric: false,
+        options: [
+          PersonalInfoOption(label: 'male', value: '1'),
+          PersonalInfoOption(label: 'female', value: '2'),
+        ],
+        initialDisplayValue: 'male',
+        initialSubmitValue: '1',
+      ),
+      PersonalInfoField(
+        title: 'Email',
+        placeholder: 'Please input email',
+        key: 'offer',
+        control: PersonalInfoControl.text,
+        isNumeric: false,
+        options: [],
+        initialDisplayValue: 'a@b.com',
+        initialSubmitValue: 'a@b.com',
+      ),
+      PersonalInfoField(
+        title: 'Home Phone Number',
+        placeholder: 'Please enter',
+        key: 'hyphal',
+        control: PersonalInfoControl.text,
+        isNumeric: true,
+        options: [],
+        initialDisplayValue: '',
+        initialSubmitValue: '',
+      ),
+      PersonalInfoField(
+        title: 'Residential Address',
+        placeholder: 'Please select address',
+        key: 'residential_address',
+        control: PersonalInfoControl.address,
+        isNumeric: false,
+        options: [],
+        initialDisplayValue: '',
+        initialSubmitValue: '',
+      ),
+    ],
+  );
+
+  /// 地址层级（`GET /outsulk/avern`）：三层，最深一层没有下级。
+  static const addressData = AddressInitData(
+    nodes: [
+      AddressNode(
+        id: '1',
+        code: '0001',
+        name: 'Region I',
+        children: [
+          AddressNode(
+            id: '11',
+            code: '00010001',
+            name: 'Pangasinan',
+            children: [
+              AddressNode(
+                id: '111',
+                code: '000100010001',
+                name: 'Alcala',
+                children: [],
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+
+  /// 记录每次拉取个人信息表单的产品 id。
+  final List<String> personalInfoCalls = [];
+
+  /// 个人信息表单返回，默认走 [personalInfoData]。
+  PersonalInfoData? personalInfo;
+
+  /// 置为异常时表单接口直接抛出，用来测错误态。
+  Object? personalInfoFailure;
+
+  /// 表单接口延迟，用来测 Loading 态。
+  Duration? personalInfoDelay;
+
+  @override
+  Future<ApiResponse<PersonalInfoData>> getPersonalInfo({
+    required String productId,
+  }) async {
+    personalInfoCalls.add(productId);
+    if (personalInfoDelay case final wait?) await Future<void>.delayed(wait);
+    if (personalInfoFailure case final error?) throw error;
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: personalInfo ?? personalInfoData,
+    );
+  }
+
+  /// 记录每次保存个人信息的表单（key 是接口下发的 `crucians`）。
+  final List<Map<String, String>> savePersonalInfoCalls = [];
+
+  /// 置为异常时保存接口直接抛出。
+  Object? savePersonalInfoFailure;
+
+  @override
+  Future<ApiResponse<void>> savePersonalInfo({
+    required String productId,
+    required Map<String, String> formData,
+  }) async {
+    savePersonalInfoCalls.add(Map<String, String>.from(formData));
+    if (savePersonalInfoFailure case final error?) throw error;
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
+  }
+
+  /// 工作信息表单（认证第三项）：与个人信息同一份字段结构（`aminate`），
+  /// 口径取接口文档「获取工作信息（第三项）」，覆盖输入 / 地址 / 枚举三种控件。
+  static const workInfoData = PersonalInfoData(
+    tips: '',
+    fields: [
+      PersonalInfoField(
+        title: 'Company Name',
+        placeholder: 'Please input company name',
+        key: 'undauntable',
+        control: PersonalInfoControl.text,
+        isNumeric: false,
+        options: [],
+        initialDisplayValue: 'SPSS',
+        initialSubmitValue: 'SPSS',
+      ),
+      PersonalInfoField(
+        title: 'City You Work',
+        placeholder: 'Please select company address',
+        key: 'printed',
+        control: PersonalInfoControl.address,
+        isNumeric: false,
+        options: [],
+        initialDisplayValue: '',
+        initialSubmitValue: '',
+      ),
+      PersonalInfoField(
+        title: 'Type of Work',
+        placeholder: 'Profession',
+        key: 'profit',
+        control: PersonalInfoControl.selection,
+        isNumeric: false,
+        options: [
+          PersonalInfoOption(label: 'Student', value: '1'),
+          PersonalInfoOption(label: 'Police', value: '2'),
+        ],
+        initialDisplayValue: 'Student',
+        initialSubmitValue: '1',
+      ),
+    ],
+  );
+
+  /// 工作信息的发薪日（`Payday`）字段：二级选项口径取接口文档
+  /// 「获取工作信息（第三项）」的嵌套 `overwhelming` 示例。
+  static const paydayData = PersonalInfoData(
+    tips: '',
+    fields: [
+      PersonalInfoField(
+        title: 'Payday',
+        placeholder: 'Please select payday',
+        key: 'opportunities',
+        control: PersonalInfoControl.selection,
+        isNumeric: false,
+        options: [
+          PersonalInfoOption(
+            label: 'Daily',
+            value: '1',
+            children: [PersonalInfoOption(label: 'Daily', value: '1')],
+          ),
+          PersonalInfoOption(
+            label: 'Weekly',
+            value: '2',
+            children: [
+              PersonalInfoOption(label: 'Mon', value: '2'),
+              PersonalInfoOption(label: 'Tue', value: '3'),
+            ],
+          ),
+          PersonalInfoOption(
+            label: 'Twice per Month',
+            value: '3',
+            children: [
+              PersonalInfoOption(label: 'Payroll Date1:1--15', value: '9'),
+            ],
+          ),
+          PersonalInfoOption(
+            label: 'Once a Month',
+            value: '4',
+            children: [
+              PersonalInfoOption(label: '1', value: '11'),
+              PersonalInfoOption(label: '2', value: '12'),
+            ],
+          ),
+        ],
+        initialDisplayValue: 'Once a Month|2',
+        initialSubmitValue: '12',
+      ),
+    ],
+  );
+
+  /// 记录每次拉取工作信息表单的产品 id。
+  final List<String> workInfoCalls = [];
+
+  /// 工作信息表单返回，默认走 [workInfoData]。
+  PersonalInfoData? workInfo;
+
+  /// 置为异常时工作信息接口直接抛出。
+  Object? workInfoFailure;
+
+  /// 工作信息接口延迟，用来测 Loading 态。
+  Duration? workInfoDelay;
+
+  @override
+  Future<ApiResponse<PersonalInfoData>> getWorkInfo({
+    required String productId,
+  }) async {
+    workInfoCalls.add(productId);
+    if (workInfoDelay case final wait?) await Future<void>.delayed(wait);
+    if (workInfoFailure case final error?) throw error;
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: workInfo ?? workInfoData,
+    );
+  }
+
+  /// 记录每次保存工作信息的表单（key 是接口下发的 `crucians`）。
+  final List<Map<String, String>> saveWorkInfoCalls = [];
+
+  /// 置为异常时保存接口直接抛出。
+  Object? saveWorkInfoFailure;
+
+  @override
+  Future<ApiResponse<void>> saveWorkInfo({
+    required String productId,
+    required Map<String, String> formData,
+  }) async {
+    saveWorkInfoCalls.add(Map<String, String>.from(formData));
+    if (saveWorkInfoFailure case final error?) throw error;
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
+  }
+
+  /// 记录地址初始化接口的调用次数。
+  int addressInitCalls = 0;
+
+  @override
+  Future<ApiResponse<AddressInitData>> getAddressInit() async {
+    addressInitCalls++;
+    return const ApiResponse<AddressInitData>(
+      code: 0,
+      message: 'success',
+      data: addressData,
+    );
   }
 }
 
@@ -458,6 +724,36 @@ void _usePhoneSurface(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// permission_handler 的 method channel：测试里没有原生实现，
+/// 需要按用例把相机权限状态伪造出来（1=granted，0=denied，4=permanentlyDenied）。
+const _permissionChannel = MethodChannel(
+  'flutter.baseflow.com/permissions/methods',
+);
+
+int _cameraSettingsOpened = 0;
+
+void _mockCameraPermission(int status) {
+  _cameraSettingsOpened = 0;
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_permissionChannel, (call) async {
+        switch (call.method) {
+          case 'checkPermissionStatus':
+            return status;
+          case 'requestPermissions':
+            return {for (final id in call.arguments as List) id: status};
+          case 'openAppSettings':
+            _cameraSettingsOpened++;
+            return true;
+          default:
+            return null;
+        }
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_permissionChannel, null);
+  });
+}
+
 /// 上传页 / 上传方式面板按 375pt 设计稿等比换算的缩放系数
 /// （测试机宽 402pt，`AppLayout` 上限 1.2 倍还没触顶）。
 const _designScale = 402 / 375;
@@ -510,6 +806,22 @@ void _openFaceVerificationPage(
       productId: productId,
       orderNo: orderNo,
     ),
+  );
+}
+
+/// 直接打开个人信息认证页（走和产品申请流程一样的路由与入参）。
+void _openPersonalInfoPage(WidgetTester tester, {String productId = '7'}) {
+  AppNavigator.push(
+    AppRoutes.personalInfo,
+    arguments: PersonalInfoPageArguments(productId: productId),
+  );
+}
+
+/// 直接打开工作信息认证页（走和产品申请流程一样的路由与入参）。
+void _openWorkInfoPage(WidgetTester tester, {String productId = '7'}) {
+  AppNavigator.push(
+    AppRoutes.workInfo,
+    arguments: WorkInfoPageArguments(productId: productId),
   );
 }
 
@@ -2327,6 +2639,7 @@ void main() {
   });
 
   testWidgets('人脸识别页取 token、拉起活体、回传抓拍图并继续下一步', (tester) async {
+    _mockCameraPermission(1);
     final certificationRepository = _StubCertificationRepository();
     final livenessGateway = _StubLivenessGateway();
     final productRepository = _StubProductRepository();
@@ -2362,6 +2675,7 @@ void main() {
   });
 
   testWidgets('人脸识别页活体未通过时不回传抓拍图并提示', (tester) async {
+    _mockCameraPermission(1);
     final certificationRepository = _StubCertificationRepository();
     final livenessGateway = _StubLivenessGateway(
       outcome: const LivenessOutcome(passed: false, message: 'Liveness failed'),
@@ -2384,7 +2698,35 @@ void main() {
     expect(find.text('Liveness failed'), findsOneWidget);
   });
 
+  testWidgets('人脸识别页相机权限被拒时弹引导、不取 token 也不拉起活体', (tester) async {
+    _mockCameraPermission(0);
+    final certificationRepository = _StubCertificationRepository();
+    final livenessGateway = _StubLivenessGateway();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+    );
+    _openFaceVerificationPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // 权限没过：先弹引导弹窗，token 与 SDK 都不能动。
+    expect(find.text('Enable Camera to Continue'), findsOneWidget);
+    expect(certificationRepository.faceTokenCalls, isEmpty);
+    expect(livenessGateway.licenses, isEmpty);
+
+    await tester.tap(find.text('Allow'));
+    await tester.pumpAndSettle();
+    expect(_cameraSettingsOpened, 1);
+    expect(find.text('Enable Camera to Continue'), findsNothing);
+  });
+
   testWidgets('人脸识别页 token 返回 400 时引导重新上传身份证', (tester) async {
+    _mockCameraPermission(1);
     final certificationRepository = _StubCertificationRepository(
       faceToken: const FaceTokenResult(resultCode: 400),
     );
@@ -2411,6 +2753,7 @@ void main() {
   });
 
   testWidgets('产品详情下一步是活体时进入人脸识别页并带上订单号', (tester) async {
+    _mockCameraPermission(1);
     final productRepository = _StubProductRepository(
       detail: const ProductDetail(
         resultCode: 200,
@@ -2651,5 +2994,833 @@ void main() {
       IdVerificationData.fromJson(const {ApiFields.idCardGroups: []}).isEmpty,
       isTrue,
     );
+  });
+
+  testWidgets('个人信息页按蓝湖稿 03-02 渲染头图、进度缎带与字段列表', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    // 头图复用证件上传页那张不带标题的渐变 + 吉祥物切图。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    // 进度缎带与 Upload 按钮底图都是设计稿切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.personalInfoProgressRibbon), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+
+    expect(find.text('Basic identity information'), findsOneWidget);
+    expect(find.text('25%'), findsOneWidget);
+
+    // 字段标题与当前值都来自接口下发的表单。
+    for (final title in [
+      'Gender',
+      'Email',
+      'Home Phone Number',
+      'Residential Address',
+    ]) {
+      expect(find.text(title), findsOneWidget);
+    }
+    expect(find.text('male'), findsOneWidget);
+    expect(find.text('a@b.com'), findsOneWidget);
+    // 未填的输入框展示接口下发的占位文案。
+    expect(find.text('Please enter'), findsOneWidget);
+
+    // 表单接口的 `befleas` 作为引导文案（产品详情没下发时）。
+    expect(
+      find.text('Fill in personal information truthfully and accurately'),
+      findsOneWidget,
+    );
+
+    // 缎带顶边比头图下沿高 28pt（设计稿 185 与 213）。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    final ribbonRect = tester.getRect(
+      _assetImage(AppAssets.personalInfoProgressRibbon),
+    );
+    expect(headerRect.bottom - ribbonRect.top, closeTo(28 * _designScale, 1));
+
+    // 字段行距 94pt（标题 22 + 8 + 行 48 + 字段间距 16）。
+    double centerY(Finder finder) => tester.getCenter(finder).dy;
+    expect(
+      centerY(find.text('Email')) - centerY(find.text('Gender')),
+      closeTo(94 * _designScale, 0.5),
+    );
+    expect(
+      centerY(find.text('Home Phone Number')) - centerY(find.text('Email')),
+      closeTo(94 * _designScale, 0.5),
+    );
+  });
+
+  testWidgets('个人信息页引导文案优先用产品详情下发的 overwhelming.deerherd', (tester) async {
+    const apiPrompt =
+        'Fill it out accurately, clean data lifts approval odds to 98%.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailPersonalPrompt(apiPrompt);
+      },
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    expect(find.textContaining('truthfully and accurately'), findsNothing);
+  });
+
+  testWidgets('个人信息页后端不下发文案时用设计稿兜底引导段', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    certificationRepository.personalInfo = PersonalInfoData(
+      tips: '',
+      fields: _StubCertificationRepository.personalInfoData.fields,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Share your info securely.\n'
+        'It\'s the first step toward\n'
+        'getting the funds you\n'
+        'need.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('个人信息页枚举字段弹选项面板，Done 回填展示文案与提交值', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: productRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('personal-info-field-copies')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('personal-info-option-done')), findsOneWidget);
+
+    // 滚到第二项（female / 2），确认后写回行文案。
+    // 只有两项，滚过头会被夹到最后一项，不用和滚轮的吸附距离较劲。
+    await tester.drag(
+      find.byKey(const Key('personal-info-option-wheel')),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('female'), findsOneWidget);
+    expect(find.text('male'), findsNothing);
+
+    // 提交的是选项的 `liquidators`（2），不是展示文案。
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    expect(certificationRepository.savePersonalInfoCalls.single['copies'], '2');
+  });
+
+  testWidgets('个人信息页地址字段拉地址层级并回填拼好的完整地址', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('personal-info-field-residential_address')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('personal-info-address-sheet')),
+      findsOneWidget,
+    );
+    expect(certificationRepository.addressInitCalls, 1);
+
+    // 逐层点下去：省 -> 市 -> 区，最深一层没有下级就收面板。
+    for (var level = 0; level < 3; level++) {
+      await tester.tap(find.byKey(const Key('personal-info-address-option-0')));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Region I-Pangasinan-Alcala'), findsOneWidget);
+
+    // 同一页面再点一次不再重复拉地址数据。
+    await tester.tap(
+      find.byKey(const Key('personal-info-field-residential_address')),
+    );
+    await tester.pumpAndSettle();
+    expect(certificationRepository.addressInitCalls, 1);
+  });
+
+  testWidgets('个人信息页点 Upload 按 crucians 回传表单并继续下一步认证', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: productRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // key 用接口下发的 `crucians`，值用 `fed` / 选项的 `liquidators`。
+    expect(certificationRepository.savePersonalInfoCalls, [
+      {
+        'copies': '1',
+        'offer': 'a@b.com',
+        'hyphal': '',
+        'residential_address': '',
+      },
+    ]);
+    // 保存成功后继续拉产品详情，走下一步认证。
+    expect(productRepository.detailCalls, 1);
+  });
+
+  testWidgets('个人信息页输入框改动后提交改后的值', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('personal-info-field-hyphal')),
+      '03211234567',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(
+      certificationRepository.savePersonalInfoCalls.single['hyphal'],
+      '03211234567',
+    );
+  });
+
+  testWidgets('个人信息页表单接口失败给错误态与重试入口', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..personalInfoFailure = const ApiException(
+        type: ApiFailureType.business,
+        message: 'Load failed',
+        code: -1,
+      );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Load failed'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(certificationRepository.personalInfoCalls, isNotEmpty);
+
+    // Riverpod 3 默认会对失败的 provider 做指数退避重试，次数不可预期；
+    // 只断言「点 Retry 会再发起一次请求」，重试成功后渲染出字段。
+    final callsBeforeRetry = certificationRepository.personalInfoCalls.length;
+    certificationRepository.personalInfoFailure = null;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(
+      certificationRepository.personalInfoCalls.length,
+      greaterThan(callsBeforeRetry),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gender'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('个人信息页接口请求中显示 Loading', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..personalInfoDelay = const Duration(milliseconds: 300);
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(LoadingView), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text('Gender'), findsOneWidget);
+  });
+
+  testWidgets('个人信息页后端不下发字段时走空态而不是空表单', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..personalInfo = const PersonalInfoData(tips: '', fields: []);
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No information required yet'), findsOneWidget);
+
+    // 空表单不能提交。
+    await tester.tap(find.text('Upload'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(certificationRepository.savePersonalInfoCalls, isEmpty);
+  });
+
+  testWidgets('产品详情下一步是个人信息时进入个人信息页并带上产品 id', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-9'),
+        nextStep: ProductNextStep(
+          taskType: 'FlintiestDevwsor',
+          title: 'Personal information',
+        ),
+      ),
+    );
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PersonalInfoPage), findsOneWidget);
+    expect(certificationRepository.personalInfoCalls, isNotEmpty);
+  });
+
+  testWidgets('工作信息页按蓝湖稿 03-03 渲染头图、进度缎带与字段列表', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openWorkInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    // 头图与进度缎带都复用个人信息页那两张切图，工作信息稿只是换了文案。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.personalInfoProgressRibbon), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+
+    expect(find.text('Job information'), findsOneWidget);
+    expect(find.text('50%'), findsOneWidget);
+
+    // 字段标题与当前值都来自工作信息接口下发的表单。
+    for (final title in ['Company Name', 'City You Work', 'Type of Work']) {
+      expect(find.text(title), findsOneWidget);
+    }
+    expect(find.text('SPSS'), findsOneWidget);
+    expect(find.text('Student'), findsOneWidget);
+    // 未填的地址字段展示接口下发的占位文案。
+    expect(find.text('Please select company address'), findsOneWidget);
+
+    // 接口没给 `befleas`、产品详情也没下发时用工作信息稿的兜底引导段。
+    expect(
+      find.text(
+        'Your job info stays\n'
+        'confidential and is only\n'
+        'used for credit\n'
+        'assessment. Share it\n'
+        'with confidence.',
+      ),
+      findsOneWidget,
+    );
+
+    // 缎带顶边比头图下沿高 28pt（设计稿 185 与 213），与个人信息页一致。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    final ribbonRect = tester.getRect(
+      _assetImage(AppAssets.personalInfoProgressRibbon),
+    );
+    expect(headerRect.bottom - ribbonRect.top, closeTo(28 * _designScale, 1));
+  });
+
+  testWidgets('工作信息页引导文案优先用产品详情下发的 overwhelming.ssn', (tester) async {
+    const apiPrompt =
+        'Tell us about your job, solid work info keeps the green light flashing.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailWorkPrompt(apiPrompt);
+      },
+    );
+    _openWorkInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    // 工作信息的接口文案不会串到个人信息页那条 `deerherd` 上。
+    expect(find.textContaining('confidential and is only'), findsNothing);
+  });
+
+  testWidgets('工作信息页点 Upload 走保存工作信息接口并继续下一步认证', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: productRepository,
+    );
+    _openWorkInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // key 用工作信息接口下发的 `crucians`，值用 `fed` / 选项的 `liquidators`。
+    expect(certificationRepository.saveWorkInfoCalls, [
+      {'undauntable': 'SPSS', 'printed': '', 'profit': '1'},
+    ]);
+    // 保存成功后再拉产品详情，走下一步认证。
+    expect(productRepository.detailCalls, 1);
+    // 下一步默认是身份认证，说明保存后的跳转链路真的走通了，
+    // 并且顶层认证跳转会清掉工作信息页。
+    expect(find.byType(IdVerificationPage), findsOneWidget);
+    expect(find.byType(WorkInformationPage), findsNothing);
+  });
+
+  testWidgets('产品详情下一步是工作信息时进入工作信息页并带上产品 id', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-9'),
+        nextStep: ProductNextStep(
+          taskType: 'TrussvilleUninstructively',
+          title: 'Job information',
+        ),
+      ),
+    );
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WorkInformationPage), findsOneWidget);
+    expect(certificationRepository.workInfoCalls, ['1']);
+  });
+
+  testWidgets('从个人信息进入工作信息时清掉上一个认证页（顶层认证）', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(PersonalInfoPage), findsOneWidget);
+
+    // 与 ProductApplicationFlow 进入下一个认证项时用的是同一条路径。
+    AppNavigator.pushTopLevelCertification(
+      AppRoutes.workInfo,
+      arguments: const WorkInfoPageArguments(productId: '7'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WorkInformationPage), findsOneWidget);
+    expect(find.byType(PersonalInfoPage), findsNothing);
+    expect(certificationRepository.workInfoCalls, ['7']);
+  });
+
+  testWidgets('选项面板不预选：重开时停在第一项', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..personalInfo = const PersonalInfoData(
+        tips: '',
+        fields: [
+          PersonalInfoField(
+            title: 'Education',
+            placeholder: 'Please select education',
+            key: 'phillis',
+            control: PersonalInfoControl.selection,
+            isNumeric: false,
+            options: [
+              PersonalInfoOption(label: 'Primary School', value: '1'),
+              PersonalInfoOption(label: 'High School', value: '2'),
+              PersonalInfoOption(label: 'Undergraduate', value: '3'),
+            ],
+            initialDisplayValue: 'Undergraduate',
+            initialSubmitValue: '3',
+          ),
+        ],
+      );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    // 行上仍按接口下发的 `fed` 展示已保存的值。
+    expect(find.text('Undergraduate'), findsOneWidget);
+
+    // 打开面板：停在第一项，不回填当前值；直接 Done 就选到第一项。
+    await tester.tap(find.byKey(const Key('personal-info-field-phillis')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Primary School'), findsOneWidget);
+    expect(find.text('Undergraduate'), findsNothing);
+  });
+
+  test('工作信息发薪日字段解析二级选项并把 fed 还原成提交值', () {
+    // 口径取接口文档「获取工作信息（第三项）」的 Payday 字段：
+    // 一级是发薪周期，周期自己再带一组下级选项；`fed` 是「一级文案|二级文案」。
+    final data = PersonalInfoData.fromJson(const {
+      ApiFields.infoFieldList: [
+        {
+          ApiFields.infoFieldKey: 'opportunities',
+          ApiFields.infoFieldTitle: 'Payday',
+          ApiFields.infoFieldControl: 'stepped',
+          ApiFields.infoFieldValue: 'Once a Month|1',
+          ApiFields.infoFieldOptions: [
+            {
+              ApiFields.infoOptionLabel: 'Once a Month',
+              ApiFields.infoOptionValue: 4,
+              ApiFields.infoFieldOptions: [
+                {ApiFields.infoOptionLabel: 1, ApiFields.infoOptionValue: 11},
+                {ApiFields.infoOptionLabel: 2, ApiFields.infoOptionValue: 12},
+              ],
+            },
+            {
+              ApiFields.infoOptionLabel: 'Daily',
+              ApiFields.infoOptionValue: 1,
+              ApiFields.infoFieldOptions: [
+                {
+                  ApiFields.infoOptionLabel: 'Daily',
+                  ApiFields.infoOptionValue: 1,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    final field = data.fields.single;
+    expect(field.hasNestedOptions, isTrue);
+    // 一级选项顺序按后端下发，不在客户端排序。
+    expect(field.options.map((option) => option.label), [
+      'Once a Month',
+      'Daily',
+    ]);
+    expect(field.options.first.children.map((child) => child.value), [
+      '11',
+      '12',
+    ]);
+    // 展示保留 `一级|二级`，提交值要换成二级的 `liquidators`。
+    expect(field.initialDisplayValue, 'Once a Month|1');
+    expect(field.initialSubmitValue, '11');
+    // 下游接口原样回传的二级值（`fed` 只给文案、不给 value）也要能还原。
+    final byChildValue = PersonalInfoData.fromJson(const {
+      ApiFields.infoFieldList: [
+        {
+          ApiFields.infoFieldKey: 'opportunities',
+          ApiFields.infoFieldControl: 'stepped',
+          ApiFields.infoFieldValue: 12,
+          ApiFields.infoFieldOptions: [
+            {
+              ApiFields.infoOptionLabel: 'Once a Month',
+              ApiFields.infoOptionValue: 4,
+              ApiFields.infoFieldOptions: [
+                {ApiFields.infoOptionLabel: 1, ApiFields.infoOptionValue: 11},
+                {ApiFields.infoOptionLabel: 2, ApiFields.infoOptionValue: 12},
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(byChildValue.fields.single.initialDisplayValue, 'Once a Month|2');
+    expect(byChildValue.fields.single.initialSubmitValue, '12');
+  });
+
+  testWidgets('工作信息发薪日字段先选周期再选具体日期，提交二级 liquidators', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..workInfo = _StubCertificationRepository.paydayData;
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: _StubProductRepository(),
+    );
+    _openWorkInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    // 回填口径：行上展示 `周期|发薪日`，不是接口原样字符串。
+    expect(find.text('Once a Month|2'), findsOneWidget);
+
+    // 打开面板：先出周期，且从第一项（Daily）开始，不回填上次选中的值。
+    await tester.tap(
+      find.byKey(const Key('personal-info-field-opportunities')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('personal-info-option-done')), findsOneWidget);
+
+    // 向上滚一项：Daily -> Weekly。
+    await tester.drag(
+      find.byKey(const Key('personal-info-option-wheel')),
+      const Offset(0, -70),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+
+    // 选中有下级的周期后再弹一次，这次只列该周期的下级选项。
+    expect(find.text('Mon'), findsOneWidget);
+    expect(find.text('Daily'), findsNothing);
+
+    // 下级同样从第一项（Mon）开始：向上滚一项 -> Tue。
+    await tester.drag(
+      find.byKey(const Key('personal-info-option-wheel')),
+      const Offset(0, -70),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Weekly|Tue'), findsOneWidget);
+
+    // 再点一次：周期面板回到第一项 Daily，而不是上次选的 Weekly。
+    await tester.tap(
+      find.byKey(const Key('personal-info-field-opportunities')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Weekly'), findsOneWidget);
+    // 直接 Done 走到 Daily 的下级（只有 Daily 一项），再 Done。
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mon'), findsNothing);
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+    expect(find.text('Daily|Daily'), findsOneWidget);
+    expect(find.text('Weekly|Tue'), findsNothing);
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    // 提交的是二级选项的 `liquidators`，Daily 的下级值就是 1。
+    expect(
+      certificationRepository.saveWorkInfoCalls.single['opportunities'],
+      '1',
+    );
+  });
+
+  test('个人信息表单解析两套控件类型命名', () {
+    // 值映射给的是 `enum` / `txt` / `citySelect`，
+    // 响应示例给的是 `stepped` / `onto` / `stage`，两套都要认得。
+    final mapped = PersonalInfoData.fromJson(const {
+      ApiFields.infoFieldTips: 'tip',
+      ApiFields.infoFieldList: [
+        {
+          ApiFields.infoFieldKey: 'a',
+          ApiFields.infoFieldTitle: 'A',
+          ApiFields.infoFieldControl: 'enum',
+          ApiFields.infoFieldValue: 'x',
+          ApiFields.infoFieldOptions: [
+            {ApiFields.infoOptionLabel: 'x', ApiFields.infoOptionValue: 1},
+          ],
+        },
+        {ApiFields.infoFieldKey: 'b', ApiFields.infoFieldControl: 'txt'},
+        {ApiFields.infoFieldKey: 'c', ApiFields.infoFieldControl: 'citySelect'},
+      ],
+    });
+    expect(mapped.tips, 'tip');
+    expect(mapped.fields.map((field) => field.control), [
+      PersonalInfoControl.selection,
+      PersonalInfoControl.text,
+      PersonalInfoControl.address,
+    ]);
+    // 选项的 `fed` 是文案时，提交要换成 `liquidators`。
+    expect(mapped.fields.first.initialDisplayValue, 'x');
+    expect(mapped.fields.first.initialSubmitValue, '1');
+
+    final example = PersonalInfoData.fromJson(const {
+      ApiFields.infoFieldList: [
+        {ApiFields.infoFieldKey: 'a', ApiFields.infoFieldControl: 'stepped'},
+        {ApiFields.infoFieldKey: 'b', ApiFields.infoFieldControl: 'onto'},
+        {ApiFields.infoFieldKey: 'c', ApiFields.infoFieldControl: 'stage'},
+        {ApiFields.infoFieldKey: 'd', ApiFields.infoFieldControl: 'unknown'},
+      ],
+    });
+    expect(example.fields.map((field) => field.control), [
+      PersonalInfoControl.selection,
+      PersonalInfoControl.text,
+      PersonalInfoControl.address,
+      PersonalInfoControl.unsupported,
+    ]);
+    // 没有业务 key 的字段直接丢掉，不渲染成空行。
+    expect(
+      PersonalInfoData.fromJson(const {
+        ApiFields.infoFieldList: [
+          {ApiFields.infoFieldTitle: 'no key'},
+        ],
+      }).isEmpty,
+      isTrue,
+    );
+  });
+
+  test('产品详情解析 overwhelming.deerherd 作为个人信息页引导文案', () {
+    final detail = ProductDetail.fromJson({
+      ApiFields.applyResultCode: 200,
+      ApiFields.detailTips: {
+        ApiFields.detailTipIdentity: 'upload prompt',
+        ApiFields.detailTipPersonal: 'personal prompt',
+      },
+    });
+
+    expect(detail.personalInfoPrompt, 'personal prompt');
+    expect(detail.identityPrompt, 'upload prompt');
+    // 没下发的认证页文案保持空，页面自己兜底。
+    expect(detail.livenessPrompt, '');
+  });
+
+  test('获取个人信息接口带产品 id 与业务混淆字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).getPersonalInfo(productId: '7');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.personalInfo);
+    expect(params[ApiFields.productId], '7');
+    expect(params.containsKey(ApiFields.obfuscatePersonalInfo), isTrue);
+  });
+
+  test('保存个人信息接口按 crucians 回传表单并带两个混淆字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).savePersonalInfo(
+      productId: '7',
+      formData: const {'copies': '2', 'residential_address': 'Region I-A-B'},
+    );
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.savePersonalInfo);
+    expect(params[ApiFields.productId], '7');
+    expect(params['copies'], '2');
+    expect(params['residential_address'], 'Region I-A-B');
+    expect(params[ApiFields.obfuscateSavePersonalInfo1], isNotEmpty);
+    expect(params[ApiFields.obfuscateSavePersonalInfo2], isNotEmpty);
+  });
+
+  test('地址初始化解析三层 kneeing，丢掉没有名称的脏数据', () {
+    final data = AddressInitData.fromJson(const {
+      ApiFields.addressNodes: [
+        {
+          ApiFields.addressName: 'Region I',
+          ApiFields.addressCode: '0001',
+          ApiFields.addressChildren: [
+            {
+              ApiFields.addressName: 'Pangasinan',
+              ApiFields.addressCode: '00010001',
+              ApiFields.addressChildren: [
+                {
+                  ApiFields.addressName: 'Alcala',
+                  ApiFields.addressCode: '000100010001',
+                },
+                {ApiFields.addressName: 'no code'},
+              ],
+            },
+          ],
+        },
+        {ApiFields.addressCode: 'missing name'},
+      ],
+    });
+
+    expect(data.nodes, hasLength(1));
+    final province = data.nodes.single.children.single;
+    expect(province.name, 'Pangasinan');
+    // 只有名称没有编码的下级被丢掉。
+    expect(province.children.single.name, 'Alcala');
+    expect(province.children.single.children, isEmpty);
+  });
+
+  test('地址初始化兼容省列表直接下发在 burner 下、节点缺编码', () {
+    final data = AddressInitData.fromJson(const {
+      ApiFields.addressChildren: [
+        {
+          ApiFields.addressName: 'Pangasinan',
+          ApiFields.addressCode: '0001',
+          ApiFields.addressChildren: [
+            {ApiFields.addressName: 'Alcala'},
+          ],
+        },
+      ],
+    });
+
+    expect(data.nodes, hasLength(1));
+    expect(data.nodes.single.name, 'Pangasinan');
+    // 整层都没有编码时退回按名称展示，而不是整片空白。
+    expect(data.nodes.single.children.single.name, 'Alcala');
   });
 }

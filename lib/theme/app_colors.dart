@@ -145,6 +145,43 @@ abstract final class AppColors {
   /// 滚轮选中行的文字色（设计稿 `text_8` rgba(13,27,23)）。
   static const idVerifyPickerTextSelected = Color(0xFF0D1B17);
 
+  // ---------- 个人信息认证页（蓝湖稿 `03-02-认证-个人信息`） ----------
+
+  /// 进度缎带上的百分比文字色（设计稿 `text_6` rgba(255,255,255,1)）。
+  static const personalInfoProgressText = Color(0xFFFFFFFF);
+
+  /// 字段标题文字色（设计稿 `text_7` 等 rgba(51,51,51,1)）。
+  static const personalInfoFieldTitle = Color(0xFF333333);
+
+  /// 字段行文案色（设计稿 `text_8` 等，已填值 / 选项文案同为 rgba(51,51,51,1)）。
+  static const personalInfoFieldValue = Color(0xFF333333);
+
+  /// 字段行未填时的占位文案色（设计稿 `text_17` / `text_21` rgba(183,183,183,1)）。
+  static const personalInfoFieldHint = Color(0xFFB7B7B7);
+
+  /// 字段行之间的 1pt 分隔线（设计稿 `section_2` 等 rgba(238,238,238,1)）。
+  static const personalInfoFieldDivider = Color(0xFFEEEEEE);
+
+  /// 字段行尾箭头的颜色（设计稿 `路径 2` 实测 rgba(24,28,23,1)）。
+  static const personalInfoFieldChevron = Color(0xFF181C17);
+
+  /// 底部 `Upload` 操作条的顶部投影（设计稿 `section_1` 的
+  /// `0 -5px 6px rgba(233,233,233,0.5)`）。
+  static const personalInfoBottomBarShadow = Color(0x80E9E9E9);
+
+  // ---------- 个人信息认证页的地址选择面板（蓝湖稿 `03-02 - 个人信息-地址选择`） ----------
+
+  /// 层级导航条底色（设计稿 `box_1` rgba(245,245,245,1)）。
+  static const personalInfoAddressPathBackground = Color(0xFFF5F5F5);
+
+  /// 层级导航条里当前层级的文案色（设计稿 `text_1` rgba(19,19,19,1)）；
+  /// 同时也是「已走过层级」的圆点与连线色（与 fund_nexus 进度条口径一致）。
+  static const personalInfoAddressPathActive = Color(0xFF131313);
+
+  /// 层级导航条里未到达层级的文案色（设计稿 `text_2` / `text_3` rgba(42,42,41,1)）；
+  /// 未到达层级的圆点与连线仍是白色（`AppColors.surface`）。
+  static const personalInfoAddressPathInactive = Color(0xFF2A2A29);
+
   // ---------- 个人中心（蓝湖稿 `07-01 - 个人中心`） ----------
 
   /// 个人中心顶部深色头图底色（设计稿 `box_1`）。

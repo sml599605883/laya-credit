@@ -30,6 +30,12 @@ abstract final class AppRoutes {
   /// 人脸识别页（认证流程第四步，活体检测）。
   static const faceVerification = '/face-verification';
 
+  /// 个人信息认证页（个人信息认证项）。
+  static const personalInfo = '/personal-info';
+
+  /// 工作信息认证页（工作信息认证项）。
+  static const workInfo = '/work-info';
+
   /// 全部路由（用于启动自检与埋点白名单）。
   static const List<String> all = [
     root,
@@ -41,6 +47,8 @@ abstract final class AppRoutes {
     idUpload,
     idConfirm,
     faceVerification,
+    personalInfo,
+    workInfo,
   ];
 
   /// 路由名是否已注册。

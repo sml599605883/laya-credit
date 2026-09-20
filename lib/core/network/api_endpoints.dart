@@ -40,4 +40,19 @@ abstract final class ApiEndpoints {
 
   /// 保存识别出的身份证信息（认证第一项）。POST
   static const saveIdentityInfo = '/outsulk/wardmote';
+
+  /// 获取用户信息（认证第二项）：个人信息表单字段描述。POST
+  static const personalInfo = '/outsulk/orchel';
+
+  /// 保存用户信息（认证第二项）。POST
+  static const savePersonalInfo = '/outsulk/marantas';
+
+  /// 获取工作信息（认证第三项）：工作信息表单字段描述。GET
+  static const workInfo = '/outsulk/timeling';
+
+  /// 保存工作信息（认证第三项）。POST
+  static const saveWorkInfo = '/outsulk/kneeing';
+
+  /// 地址初始化：地址层级（省 / 市 / 区）。GET
+  static const addressInit = '/outsulk/avern';
 }

@@ -134,6 +134,18 @@ abstract final class ApiFields {
   /// `bocking` 识别确认页、`seisin` 人脸页，三者不可互相顶替。
   static const detailTipLiveness = 'seisin';
 
+  /// 个人信息认证页顶部文案（文档语义 `person`）。
+  ///
+  /// 与另外几条同属 `overwhelming` 容器：表单字段本身由
+  /// 「获取用户信息（第二项）」下发，这里只取页面顶部那一句引导。
+  static const detailTipPersonal = 'deerherd';
+
+  /// 工作信息认证页顶部文案（文档语义 `work`）。
+  ///
+  /// 与另外几条同属 `overwhelming` 容器：表单字段本身由
+  /// 「获取工作信息（第三项）」下发，这里只取页面顶部那一句引导。
+  static const detailTipWork = 'ssn';
+
   /// 下一步认证项 `{ taskType, title, url, type }`。
   static const detailNextStep = 'cretonne';
   static const detailTaskType = 'catholical';
@@ -215,6 +227,86 @@ abstract final class ApiFields {
 
   /// 保存身份证信息的混淆字段（无业务含义，每次请求随机值）。
   static const obfuscateSaveIdentity = 'stith';
+
+  // ---------- 认证项：个人信息（第二项）----------
+  //
+  // 接口文档「获取用户信息（第二项）」（`/outsulk/orchel`）返回一个字段描述数组，
+  // 页面按描述渲染表单，「保存用户信息（第二项）」（`/outsulk/marantas`）再把
+  // 每个字段的 `crucians` 当 key 原样回传。
+
+  /// 字段描述数组（文档语义 `list`）。
+  static const infoFieldList = 'aminate';
+
+  /// 字段标题（文档语义 `title`）。与首页卡片元素共用同一个混淆名。
+  static const infoFieldTitle = 'upbear';
+
+  /// 字段占位文案（文档语义 `placeholder`）。
+  static const infoFieldPlaceholder = 'amias';
+
+  /// **保存时的业务 key**（文档语义 `key`）。服务端下发，前端不要写死。
+  static const infoFieldKey = 'crucians';
+
+  /// 控件类型（文档语义 `type`），取值见 `PersonalInfoControl`。
+  static const infoFieldControl = 'lipson';
+
+  /// 是否数字键盘（文档语义 `number_keyboard`，1 是 / 0 否）。
+  static const infoFieldNumeric = 'lazy';
+
+  /// 选项数组（文档语义 `options`）。与产品详情的各页文案（[detailTips]）
+  /// 共用同一个混淆名，两者语义完全不同，不要混用。
+  static const infoFieldOptions = 'overwhelming';
+
+  /// 字段当前值（文档语义 `value`）。
+  static const infoFieldValue = 'fed';
+
+  /// 页面引导文案（文档语义 `tip`，低版本或未灰度用户不下发）。
+  static const infoFieldTips = 'befleas';
+
+  /// 选项文案（文档语义 `label`）。
+  static const infoOptionLabel = 'harbingers';
+
+  /// 选项取值（文档语义 `value`），保存时提交这个值。
+  static const infoOptionValue = 'liquidators';
+
+  /// 获取用户信息（第二项）的混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscatePersonalInfo = 'clericate';
+
+  /// 保存用户信息（第二项）的两个混淆字段（文档标注，无业务含义）。
+  static const obfuscateSavePersonalInfo1 = 'rhus';
+  static const obfuscateSavePersonalInfo2 = 'downlie';
+
+  // ---------- 认证项：工作信息（第三项）----------
+  //
+  // 接口文档「获取工作信息（第三项）」（`/outsulk/timeling`）与「保存工作信息
+  // （第三项）」（`/outsulk/kneeing`）。字段描述数组与「获取用户信息（第二项）」
+  // 用同一批混淆名（`aminate` / `upbear` / `amias` / `crucians` / `lipson` /
+  // `overwhelming` / `fed`），所以表单模型直接复用 [PersonalInfoData]。
+
+  /// 获取工作信息（第三项）的混淆字段（无业务含义，每次请求随机值）。
+  ///
+  /// 与「获取用户信息（第二项）」文档标注的混淆名同为 `clericate`。
+  static const obfuscateWorkInfo = 'clericate';
+
+  /// 保存工作信息（第三项）的三个混淆字段（文档标注，无业务含义）。
+  static const obfuscateSaveWorkInfo1 = 'knucks';
+  static const obfuscateSaveWorkInfo2 = 'normothermic';
+  static const obfuscateSaveWorkInfo3 = 'taxibus';
+
+  // ---------- 地址初始化（`/outsulk/avern`）----------
+  /// 地址层级数组（文档语义 `list`）。与首页模块列表共用同一个混淆名。
+  static const addressNodes = 'kneeing';
+
+  /// 地址层级名称（文档语义 `name`）。
+  static const addressName = 'harbingers';
+
+  /// 地址层级编码（文档语义 `code`）。
+  static const addressCode = 'crucians';
+
+  /// 地址层级 id（文档语义 `id`）。
+  static const addressId = 'cussedly';
+
+  /// 下级地址数组（文档语义 `children`）。
+  static const addressChildren = 'burner';
 
   // ---------- 跟进订单号获取跳转地址（`/outsulk/octodentate`）----------
   static const obfuscatePush1 = 'indefinity';

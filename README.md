@@ -141,13 +141,15 @@ lib/
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：订单、上报、H5 相关接口尚未落地。
    「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
-   H5 地址需要 WebView、认证项需要活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡页、
+   H5 地址需要 WebView、认证项还缺紧急联系人 / 绑卡页、
    原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
    第二项（证件上传页）已按设计稿落地并接上上传接口（见第 13 条），
    第三项（证件信息确认页）也已落地并接上保存接口（见第 14 条），
-   第四项（活体 / 人脸识别）也已落地并接上 token / 上传接口（见第 15 条）。
+   第四项（活体 / 人脸识别）也已落地并接上 token / 上传接口（见第 15 条），
+   个人信息认证项也已落地并接上表单 / 保存接口（见第 16 条），
+   工作信息认证项也已落地（见第 17 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -398,12 +400,87 @@ lib/
          `musculopallial` 带授权码、`bassein` 带活体类型），上传完删临时文件。
       4. 成功后交给 `ProductApplicationFlow.continueProductDetailFlow`
          继续下一步认证（`Reargued` 之外的认证项）。
-    - 相机权限不在页面里单独申请：TrustDecision SDK 拉起时系统会走
-      `Info.plist` 里的相机说明；权限被拒时 SDK 会把失败码回传，页面按失败提示。
+    - 相机权限在取 token 前预检（口径对齐 peso_shield）：复用
+      `IdentityPhotoPermission.ensureCameraForLiveness`，先查当前状态，未授权再
+      `request`，被拒时弹「Enable Camera to Continue」引导去系统设置，
+      不浪费一次 token 请求；`Info.plist` 里的相机说明保持不变。
     - 订单号由 `ProductApplicationFlow` 从产品详情 `basicInfo.orderNo` 带进页面
       （token 接口的 `resex`），页面不再自己拉一次产品详情。
     - 测试通过 `livenessGatewayProvider` 注入假网关，覆盖「通过 / 未通过 /
-      token 400」三条分支；`FaceVerificationPage` 不直接依赖 `MethodChannel`。
+      token 400」三条分支，并 mock `permission_handler` channel 覆盖
+      「权限被拒弹引导」；`FaceVerificationPage` 不直接依赖 `MethodChannel`。
+
+16. **个人信息认证页已按蓝湖稿 `03-02-认证-个人信息` 还原**
+    （`/personal-info`，`PersonalInfoPage`，认证项 `taskType`
+    `FlintiestDevwsor`）。
+    - 页面分三段：通栏头图（**复用证件上传页的 `id_verify_header_blank.png`**：
+      经与设计稿逐像素比对，渐变与吉祥物位置完全一致，不需要再切一张）、
+      白卡（343 宽，卡顶是带 `25%` 的粉红进度缎带）、底部**固定**操作条
+      （白底 + 上方 `0 -5px 6px rgba(233,233,233,0.5)` 投影 +
+      343x48 柠檬绿 `Upload`，按钮下方留安全区）。
+      新增素材只有两张（`assets/personal_info/`）：`personal_info_progress_ribbon.png`
+      （用户提供的 `编组@3x.png`，343x33：粉红缎带 + 白卡顶部两角，
+      `25%` 文案由页面叠在中央）与地址面板的 `personal_info_sheet_close.png`（24x24）。
+    - 设计稿实测：缎带顶边 185（压在白卡顶边 192 上方 7pt）、白卡内容顶边 218、
+      第一个字段标题顶边 228；字段=标题 22pt + 8pt + 取值行 48pt，字段间距 16pt
+      （即 94pt 一节）；取值行 319 宽、`padding: 14 0`、行底 1pt `#EEEEEE` 分隔线
+      （最后一行不画）；行尾 6x10 箭头用 `CustomPainter` 还原（`#181C17`）。
+    - **表单字段不写死**：`POST /outsulk/orchel`（`CertificationRepository.getPersonalInfo`）
+      下发 `aminate[]`，每个字段带 `upbear` 标题 / `amias` 占位 / `crucians` 业务 key /
+      `lipson` 控件类型 / `lazy` 数字键盘 / `overwhelming` 选项 / `fed` 当前值。
+      控件类型两套命名都认（`Obesity|enum|stepped`=枚举、`Ori|txt|onto`=输入框、
+      `CumingsAgami|citySelect|stage`=地址选择，见 `PersonalInfoControl`）；
+      未知类型退化成只读行，不渲染成不可用的输入框。
+    - 交互（口径对齐 peso_shield）：枚举字段弹 `showPersonalInfoOptionSheet`
+      （`Done` 回填展示文案，提交 `liquidators`；**面板每次打开都从第一项开始，
+      不回填当前值**）；地址字段先拉
+      `GET /outsulk/avern`（同页缓存一次）再弹 `showPersonalInfoAddressSheet`，
+      逐层点选，返回 `省-市-区` 拼好的完整地址；`Upload` 把每个字段的 `crucians`
+      当 key 回传 `POST /outsulk/marantas`（带 `rhus` / `downlie` 两个混淆字段），
+      成功后交给 `ProductApplicationFlow.continueProductDetailFlow` 走下一步。
+    - 引导文案优先级：产品详情 `overwhelming.deerherd`（文档语义 `person`）
+      → 表单接口 `befleas` → 设计稿四行兜底。`deerherd` 与上传页 `splendacious`、
+      确认页 `bocking`、人脸页 `seisin` 同属 `overwhelming` 容器，不能互相顶替。
+    - **已知偏差**：进度文案 `25%` 目前写死——接口文档没有下发进度的字段，
+      设计稿就是这个值，接入进度接口后再换成下发值；`Upload` 按钮文案沿用共用组件
+      `lib/widgets/upload_button.dart`（16pt/500），设计稿该页标注是 14pt/700。
+
+17. **工作信息认证页已按蓝湖稿 `03-03 - 工作信息` 还原**
+    （`/work-info`，`WorkInformationPage`，认证项 `taskType`
+    `TrussvilleUninstructively`）。
+    - **与个人信息页共用同一套 UI**：`WorkInformationPage` 继承
+      `PersonalInfoPage`（`PersonalInfoPage.work` 构造），头图 / 进度缎带 / 动态
+      字段表单 / 底部 `Upload` 条全部复用，不复制第二份布局；
+      只有导航标题（`Job information`）、进度文案（`50%`）、引导段排版
+      （宽 164 / 字号 14 / 行高 17 / 距导航行 8）与数据源按形态切换。
+    - **素材直接复用个人信息页那两张**：头图 `id_verify_header_blank.png`、
+      进度缎带 `personal_info_progress_ribbon.png`——两张设计稿 PNG 的缎带
+      粉红区域逐像素比对完全一致（185~218，375 空间 x 103.5~271.5），
+      工作信息稿只是把文案换成 `50%`，不需要新切图。
+    - **字段同样不写死**：`GET /outsulk/timeling`
+      （`CertificationRepository.getWorkInfo`）返回与个人信息同一份 `aminate[]`
+      字段结构，所以直接复用 `PersonalInfoData` 与
+      `personal_info_option_sheet` / `personal_info_address_sheet`；
+      `Upload` 把每个字段的 `crucians` 当 key 回传 `POST /outsulk/kneeing`
+      （带 `knucks` / `normothermic` / `taxibus` 三个混淆字段），
+      成功后同样交给 `ProductApplicationFlow.continueProductDetailFlow`。
+    - **发薪日（`Payday`，`crucians=opportunities`）是二级选项字段**，单独处理：
+      一级是发薪周期（`Daily` / `Weekly` / `Twice per Month` / `Once a Month`），
+      每个周期自己再带一组下级选项（周几 / 每月几号），下级数组与一级同用
+      `overwhelming`。`PersonalInfoOption.children` 解析这层嵌套，
+      `PersonalInfoField.hasNestedOptions` 标记这类字段；页面上先弹一次面板选周期，
+      有下级再弹一次选具体日期（复用同一张 `personal_info_option_sheet`，
+      本项目蓝湖没有单独出这张面板，沿用 `03-02 - 个人信息-日期选择` 的面板家族）。
+      行上展示 `周期|发薪日`，提交接口的是**二级**的 `liquidators`
+      （接口文档 `fed: "Once a Month|1"` 的口径，对齐 peso_shield 的
+      `PersonalInformationPaydaySheet` 行为，但用本项目已有的滚轮面板实现）。
+      两个面板同样不预选（见第 16 条，行上仍按接口 `fed` 展示已保存的值），
+      对齐 peso_shield 重开时停在顶部的行为。
+    - 引导文案优先级：产品详情 `overwhelming.ssn`（文档语义 `work`）
+      → 表单接口 `befleas` → 设计稿五行兜底；`ssn` 与其他认证页文案同属
+      `overwhelming` 容器，不能互相顶替。
+    - **已知偏差**：与个人信息页一样，进度文案 `50%` 先按设计稿写死；
+      白卡内容顶边沿用个人信息页的 228，工作信息稿设计标注是 230（差 2pt，肉眼不可辨）。
 
 ## 常用命令
 

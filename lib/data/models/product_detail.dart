@@ -12,6 +12,8 @@ class ProductDetail {
     this.identityPrompt = '',
     this.identitySuccessPrompt = '',
     this.livenessPrompt = '',
+    this.personalInfoPrompt = '',
+    this.workInfoPrompt = '',
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,12 @@ class ProductDetail {
       livenessPrompt: tips is Map
           ? tips[ApiFields.detailTipLiveness]?.toString() ?? ''
           : '',
+      personalInfoPrompt: tips is Map
+          ? tips[ApiFields.detailTipPersonal]?.toString() ?? ''
+          : '',
+      workInfoPrompt: tips is Map
+          ? tips[ApiFields.detailTipWork]?.toString() ?? ''
+          : '',
     );
   }
 
@@ -60,6 +68,16 @@ class ProductDetail {
   ///
   /// 三个认证页各取各的一条：`splendacious` / `bocking` / `seisin`。
   final String livenessPrompt;
+
+  /// 个人信息认证页顶部引导文案（`overwhelming.deerherd`）。
+  ///
+  /// 与另外几条同属 `overwhelming` 容器，不能互相顶替。
+  final String personalInfoPrompt;
+
+  /// 工作信息认证页顶部引导文案（`overwhelming.ssn`）。
+  ///
+  /// 与另外几条同属 `overwhelming` 容器，不能互相顶替。
+  final String workInfoPrompt;
 }
 
 /// 产品信息（`priapi`）。

@@ -14,10 +14,44 @@ class IdentityPhotoPermission {
   ///
   /// 权限框架本身异常（例如插件未注册）时按「未授权」处理：
   /// 认证流程宁可什么都不做，也不能因为权限调用把整个页面顶崩。
-  static Future<bool> ensureCamera(BuildContext context) async {
+  static Future<bool> ensureCamera(BuildContext context) {
+    return _ensureCamera(
+      context,
+      title: 'Camera access needed',
+      content:
+          'Please allow camera access so you can photograph your ID. '
+          'You can also pick an existing photo from your album.',
+      cancelLabel: 'Not now',
+      confirmLabel: 'Open settings',
+    );
+  }
+
+  /// 活体（人脸识别）前的相机权限预检，口径对齐 peso_shield 的
+  /// `PermissionHelper.showCameraPermissionDialog`（拒绝时引导去系统设置）。
+  static Future<bool> ensureCameraForLiveness(BuildContext context) {
+    return _ensureCamera(
+      context,
+      title: 'Enable Camera to Continue',
+      content:
+          "We can't complete identity verification without camera access. "
+          'Enable the permission to continue your application securely.',
+      cancelLabel: 'Not Now',
+      confirmLabel: 'Allow',
+    );
+  }
+
+  static Future<bool> _ensureCamera(
+    BuildContext context, {
+    required String title,
+    required String content,
+    required String cancelLabel,
+    required String confirmLabel,
+  }) async {
     final PermissionStatus status;
     try {
-      status = await Permission.camera.request();
+      // 先看当前状态：已授权直接放行，永久拒绝不再重复弹系统框（对齐 peso_shield）。
+      final current = await Permission.camera.status;
+      status = current.isGranted ? current : await Permission.camera.request();
     } catch (_) {
       return false;
     }
@@ -27,24 +61,21 @@ class IdentityPhotoPermission {
     final goToSettings = await showCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
-        title: const Text('Camera access needed'),
-        content: const Text(
-          'Please allow camera access so you can photograph your ID. '
-          'You can also pick an existing photo from your album.',
-        ),
+        title: Text(title),
+        content: Text(content),
         actions: [
           CupertinoDialogAction(
             textStyle: const TextStyle(
               color: AppColors.actionSheetTextSecondary,
             ),
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Not now'),
+            child: Text(cancelLabel),
           ),
           CupertinoDialogAction(
             textStyle: const TextStyle(color: AppColors.primary),
             isDefaultAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Open settings'),
+            child: Text(confirmLabel),
           ),
         ],
       ),

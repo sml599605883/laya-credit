@@ -24,6 +24,12 @@ const _taskTypeIdentity = 'Kegful';
 /// 认证项 `taskType`：活体（人脸识别）。
 const _taskTypeFace = 'Reargued';
 
+/// 认证项 `taskType`：个人信息。
+const _taskTypePersonal = 'FlintiestDevwsor';
+
+/// 认证项 `taskType`：工作信息。
+const _taskTypeWork = 'TrussvilleUninstructively';
+
 class ProductApplicationFlow {
   ProductApplicationFlow({
     required this.repository,
@@ -96,7 +102,8 @@ class ProductApplicationFlow {
       }
       // 详情里的认证页文案在进入对应页面前先落到缓存，认证页直接读，不用再传参。
       // `overwhelming` 里每个认证页一条：`splendacious` 给上传页、
-      // `bocking` 给证件信息确认页、`seisin` 给人脸识别页。
+      // `bocking` 给证件信息确认页、`seisin` 给人脸识别页、
+      // `deerherd` 给个人信息认证页、`ssn` 给工作信息认证页。
       sessionStore.saveProductDetailIdentityPrompt(
         response.data.identityPrompt,
       );
@@ -106,6 +113,10 @@ class ProductApplicationFlow {
       sessionStore.saveProductDetailLivenessPrompt(
         response.data.livenessPrompt,
       );
+      sessionStore.saveProductDetailPersonalPrompt(
+        response.data.personalInfoPrompt,
+      );
+      sessionStore.saveProductDetailWorkPrompt(response.data.workInfoPrompt);
       return response.data;
     } on ApiException catch (error) {
       ToastHelper.hideLoading();
@@ -189,8 +200,9 @@ class ProductApplicationFlow {
     }
 
     // 活体（人脸识别）：token 接口要订单号，从产品详情带下去，页面不再自己拉详情。
+    // 进入新的认证项用顶层跳转，清掉前面的证件页，返回时直接回入口页。
     if (step.taskType == _taskTypeFace) {
-      AppNavigator.push(
+      AppNavigator.pushTopLevelCertification(
         AppRoutes.faceVerification,
         arguments: FaceVerificationPageArguments(
           productId: productId,
@@ -200,7 +212,25 @@ class ProductApplicationFlow {
       return;
     }
 
-    // TODO(页面): 个人信息 / 工作 / 紧急联系人 / 绑卡页尚未搭建。
+    // 个人信息：字段与选项全部由后端下发，页面只按描述渲染。
+    if (step.taskType == _taskTypePersonal) {
+      AppNavigator.pushTopLevelCertification(
+        AppRoutes.personalInfo,
+        arguments: PersonalInfoPageArguments(productId: productId),
+      );
+      return;
+    }
+
+    // 工作信息：与个人信息同一套 UI，切到工作信息的数据源 / 保存接口。
+    if (step.taskType == _taskTypeWork) {
+      AppNavigator.pushTopLevelCertification(
+        AppRoutes.workInfo,
+        arguments: WorkInfoPageArguments(productId: productId),
+      );
+      return;
+    }
+
+    // TODO(页面): 紧急联系人 / 绑卡页尚未搭建。
     final title = step.title.isEmpty ? 'certification' : step.title;
     ToastHelper.showMessage('Please complete $title');
   }

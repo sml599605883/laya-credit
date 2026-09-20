@@ -121,4 +121,21 @@ abstract final class AppAssets {
 
   // 通用
   static const chevronRight = 'assets/common/chevron_right.png';
+
+  // 个人信息认证页（蓝湖稿 `03-02-认证-个人信息`）
+  /// 白卡顶部的进度缎带（设计稿 `编组`，343x33，用户提供的 `编组@3x.png`）：
+  /// 粉红缎带 + 白卡顶部两角（含 12pt 圆角）合并在一张里，
+  /// `25%` 文案由页面按设计稿叠在缎带中央。
+  static const personalInfoProgressRibbon =
+      'assets/personal_info/personal_info_progress_ribbon.png';
+
+  /// 地址选择面板右上角的关闭按钮（设计稿 `编组`，24x24）
+  /// （蓝湖稿 `03-02 - 个人信息-地址选择`）。
+  static const personalInfoSheetClose =
+      'assets/personal_info/personal_info_sheet_close.png';
+
+  /// 地址选择面板层级行尾的灰色箭头（设计稿 `icon_common_go_h`，17x17，
+  /// `rgba(176,176,176,1)`，三层一致；用户提供的 `icon_common_go_h@3x.png`）。
+  static const personalInfoAddressChevron =
+      'assets/personal_info/personal_info_address_chevron.png';
 }

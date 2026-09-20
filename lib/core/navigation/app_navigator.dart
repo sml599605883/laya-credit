@@ -62,6 +62,38 @@ class AppNavigator {
 
   static bool canPop() => _navigator?.canPop() ?? false;
 
+  /// 认证流程相关的路由集合。
+  ///
+  /// 进入下一个认证项（活体 / 个人信息 / 工作 / 联系人 / 绑卡）时会清掉这些页面，
+  /// 避免认证页在返回栈里层层堆叠。新增认证页时记得补进来。
+  static const Set<String> _certificationRoutes = {
+    AppRoutes.idVerification,
+    AppRoutes.idUpload,
+    AppRoutes.idConfirm,
+    AppRoutes.faceVerification,
+    AppRoutes.personalInfo,
+    AppRoutes.workInfo,
+  };
+
+  /// 压栈到顶层认证页，同时清掉返回栈里已有的认证页。
+  ///
+  /// 证件选择 → 上传 → 确认是同一认证项的子步骤，用普通 [push] 堆叠；
+  /// 进入下一个认证项时用本方法，用户返回会直接回到入口页，
+  /// 而不是上一个认证项的页面（对齐 peso_shield 的顶层认证机制）。
+  static Future<T?> pushTopLevelCertification<T>(
+    String route, {
+    Object? arguments,
+  }) {
+    _warn(route);
+    return _navigator!.pushNamedAndRemoveUntil<T>(route, (pageRoute) {
+      final name = pageRoute.settings.name;
+      // 保留非认证流程的页面（首页 / 登录等）。
+      return name != null &&
+          name.isNotEmpty &&
+          !_certificationRoutes.contains(name);
+    }, arguments: arguments);
+  }
+
   // ==================== 便捷方法 ====================
 
   /// 打开登录页，返回是否登录成功。

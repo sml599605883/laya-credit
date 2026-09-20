@@ -8,7 +8,9 @@ import '../../pages/id_upload_page.dart';
 import '../../pages/id_verification_page.dart';
 import '../../pages/login_page.dart';
 import '../../pages/mine_page.dart';
+import '../../pages/personal_info_page.dart';
 import '../../pages/stats_page.dart';
+import '../../pages/work_information_page.dart';
 import '../../root_tab_page.dart';
 import 'app_routes.dart';
 
@@ -70,6 +72,24 @@ class LoginPageArguments {
   final Future<void> Function()? onLoginSuccess;
 }
 
+/// 个人信息认证页入参（蓝湖稿 `03-02-认证-个人信息`）。
+///
+/// 字段、选项与当前值都由页面自己按 [productId] 拉取，这里只带产品 id。
+class PersonalInfoPageArguments {
+  const PersonalInfoPageArguments({required this.productId});
+
+  final String productId;
+}
+
+/// 工作信息认证页入参（蓝湖稿 `03-03 - 工作信息`）。
+///
+/// 字段、选项与当前值都由页面自己按 [productId] 拉取，这里只带产品 id。
+class WorkInfoPageArguments {
+  const WorkInfoPageArguments({required this.productId});
+
+  final String productId;
+}
+
 /// 路由生成器：`MaterialApp.onGenerateRoute` 的唯一入口。
 ///
 /// 每个 case 负责把 `settings.arguments` 转成强类型的页面入参，
@@ -128,6 +148,20 @@ class AppRouteGenerator {
             productId: faceArgs?.productId ?? '',
             orderNo: faceArgs?.orderNo ?? '',
           ),
+        );
+
+      case AppRoutes.personalInfo:
+        final personalArgs = settings.arguments as PersonalInfoPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => PersonalInfoPage(productId: personalArgs?.productId ?? ''),
+        );
+
+      case AppRoutes.workInfo:
+        final workArgs = settings.arguments as WorkInfoPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => WorkInformationPage(productId: workArgs?.productId ?? ''),
         );
 
       case AppRoutes.login:

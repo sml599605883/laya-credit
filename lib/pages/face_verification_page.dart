@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/media/identity_photo_permission.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
@@ -174,6 +175,14 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
   /// 取活体授权码 -> 拉起 SDK -> 回传抓拍图 -> 继续下一步认证。
   Future<void> _startVerification() async {
     if (_isVerifying) return;
+
+    // 先做相机权限预检（对齐 peso_shield）：被拒时弹引导去系统设置，
+    // 不浪费一次 token 请求，也不让用户卡在一个没有反馈的按钮上。
+    final cameraGranted = await IdentityPhotoPermission.ensureCameraForLiveness(
+      context,
+    );
+    if (!cameraGranted || !mounted) return;
+
     // TODO(埋点): 点击人脸页主按钮需要在 Firebase Analytics 上报事件。
 
     if (widget.orderNo.isEmpty) {
