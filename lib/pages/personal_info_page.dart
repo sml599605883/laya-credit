@@ -13,6 +13,7 @@ import '../providers/session_provider.dart';
 import '../providers/work_info_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
+import '../widgets/field_chevron.dart';
 import '../widgets/state_views.dart';
 import '../widgets/upload_button.dart';
 import 'widgets/personal_info_address_sheet.dart';
@@ -484,7 +485,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
               Row(
                 children: [
                   Expanded(child: _buildValue(layout, field, selectable)),
-                  if (selectable) _FieldChevron(layout: layout),
+                  if (selectable) FieldChevron(layout: layout),
                 ],
               ),
               if (showDivider)
@@ -741,59 +742,4 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
-}
-
-/// 字段行尾箭头（设计稿 `路径 2`，6x10，`rgba(24,28,23)`）。
-///
-/// 设计稿切图在 `assets/` 里没有对应文件，按设计稿尺寸用画笔还原，
-/// 颜色走 [AppColors.personalInfoFieldChevron]。
-class _FieldChevron extends StatelessWidget {
-  const _FieldChevron({required this.layout});
-
-  final AppLayout layout;
-
-  static const _width = 6.0;
-  static const _height = 10.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: layout.px(_width),
-      height: layout.px(_height),
-      child: CustomPaint(
-        painter: const _FieldChevronPainter(
-          color: AppColors.personalInfoFieldChevron,
-        ),
-      ),
-    );
-  }
-}
-
-class _FieldChevronPainter extends CustomPainter {
-  const _FieldChevronPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      // 设计稿切图实测描边约 1pt。
-      ..strokeWidth = size.width * 0.22
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    canvas.drawPath(
-      Path()
-        ..moveTo(0, 0)
-        ..lineTo(size.width, size.height / 2)
-        ..lineTo(0, size.height),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_FieldChevronPainter oldDelegate) =>
-      oldDelegate.color != color;
 }

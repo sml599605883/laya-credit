@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/identity_recognition.dart';
+import '../../pages/emergency_contact_page.dart';
 import '../../pages/face_verification_page.dart';
 import '../../pages/home_page.dart';
 import '../../pages/id_confirm_page.dart';
@@ -90,6 +91,15 @@ class WorkInfoPageArguments {
   final String productId;
 }
 
+/// 紧急联系人认证页入参（蓝湖稿 `03-04 - 联系人信息`）。
+///
+/// 联系人条数与关系选项都由页面自己按 [productId] 拉取，这里只带产品 id。
+class EmergencyContactPageArguments {
+  const EmergencyContactPageArguments({required this.productId});
+
+  final String productId;
+}
+
 /// 路由生成器：`MaterialApp.onGenerateRoute` 的唯一入口。
 ///
 /// 每个 case 负责把 `settings.arguments` 转成强类型的页面入参，
@@ -162,6 +172,13 @@ class AppRouteGenerator {
         return _route<void>(
           settings,
           (_) => WorkInformationPage(productId: workArgs?.productId ?? ''),
+        );
+
+      case AppRoutes.emergencyContact:
+        final contactArgs = settings.arguments as EmergencyContactPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => EmergencyContactPage(productId: contactArgs?.productId ?? ''),
         );
 
       case AppRoutes.login:

@@ -684,9 +684,10 @@ class _ProductProgress extends StatelessWidget {
     );
   }
 
+  /// 金额样式：所有已解锁阶段（`index <= currentIndex`）都用高亮色，未解锁用深灰。
   TextStyle _amountStyle(int index, int currentIndex) {
     return TextStyle(
-      color: index == currentIndex
+      color: index <= currentIndex
           ? AppColors.creditProgressAmountCurrent
           : AppColors.creditProgressAmount,
       fontSize: layout.px(_amountFontSize),
@@ -807,9 +808,12 @@ class _ProductProgress extends StatelessWidget {
         : ColorFiltered(colorFilter: _silverFilter, child: coin);
   }
 
-  /// 当前阶段下标：后端没标选中态时按第一个阶段处理。
+  /// 当前阶段下标：`estamp` 会标记所有已解锁阶段，取最后一个已解锁的作为当前进度。
+  ///
+  /// 之前取的是第一个（`indexWhere`），后端同时下发多个已解锁阶段时只会点亮第一项。
+  /// 一个都没标记时按第一个阶段处理。
   int _currentStepIndex(List<HomeProgressStep> steps) {
-    final index = steps.indexWhere((step) => step.selected);
+    final index = steps.lastIndexWhere((step) => step.selected);
     return index < 0 ? 0 : index;
   }
 }

@@ -73,6 +73,7 @@ class AppNavigator {
     AppRoutes.faceVerification,
     AppRoutes.personalInfo,
     AppRoutes.workInfo,
+    AppRoutes.emergencyContact,
   };
 
   /// 压栈到顶层认证页，同时清掉返回栈里已有的认证页。

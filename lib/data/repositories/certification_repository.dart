@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import '../../core/media/identity_photo.dart';
 import '../../core/network/api_endpoints.dart';
 import '../../core/network/api_fields.dart';
 import '../../core/network/api_response.dart';
 import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
+import '../models/emergency_contact_data.dart';
 import '../models/face_token_result.dart';
 import '../models/id_verification_data.dart';
 import '../models/personal_info_data.dart';
@@ -226,6 +229,45 @@ class CertificationRepository {
     return _client.get<AddressInitData>(
       ApiEndpoints.addressInit,
       parse: (data) => AddressInitData.fromJson(data),
+    );
+  }
+
+  /// 获取联系人信息（认证第四项，`GET /outsulk/liquidators`）。
+  ///
+  /// 除产品 id 外还要带一个文档标注的混淆字段；联系人条数与关系选项都由后端下发。
+  Future<ApiResponse<EmergencyContactData>> getEmergencyContacts({
+    required String productId,
+  }) {
+    return _client.get<EmergencyContactData>(
+      ApiEndpoints.emergencyContacts,
+      params: {
+        ApiFields.productId: productId,
+        ApiFields.obfuscateEmergencyContact: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? EmergencyContactData.fromJson(data.cast<String, dynamic>())
+          : const EmergencyContactData(),
+    );
+  }
+
+  /// 保存联系人信息（认证第四项，`POST /outsulk/stabiliment`）。
+  ///
+  /// `connectedly` 是联系人数组的 JSON 字符串（不是表单数组），
+  /// 每项的 `canmaker` 必须是获取接口下发的原值。
+  Future<ApiResponse<void>> saveEmergencyContacts({
+    required String productId,
+    required List<EmergencyContactInput> contacts,
+  }) {
+    return _client.post<void>(
+      ApiEndpoints.saveEmergencyContacts,
+      params: {
+        ApiFields.productId: productId,
+        ApiFields.emergencyContactSaveData: jsonEncode(
+          contacts.map((contact) => contact.toJson()).toList(growable: false),
+        ),
+        ApiFields.obfuscateSaveEmergencyContact: ObfuscationHelper.randomParam(),
+      },
+      parse: (_) {},
     );
   }
 }

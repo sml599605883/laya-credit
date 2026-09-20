@@ -36,6 +36,9 @@ abstract final class AppRoutes {
   /// 工作信息认证页（工作信息认证项）。
   static const workInfo = '/work-info';
 
+  /// 紧急联系人认证页（紧急联系人认证项）。
+  static const emergencyContact = '/emergency-contact';
+
   /// 全部路由（用于启动自检与埋点白名单）。
   static const List<String> all = [
     root,
@@ -49,6 +52,7 @@ abstract final class AppRoutes {
     faceVerification,
     personalInfo,
     workInfo,
+    emergencyContact,
   ];
 
   /// 路由名是否已注册。

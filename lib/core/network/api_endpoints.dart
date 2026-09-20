@@ -55,4 +55,10 @@ abstract final class ApiEndpoints {
 
   /// 地址初始化：地址层级（省 / 市 / 区）。GET
   static const addressInit = '/outsulk/avern';
+
+  /// 获取联系人信息（认证第四项）。GET
+  static const emergencyContacts = '/outsulk/liquidators';
+
+  /// 保存联系人信息（认证第四项）。POST
+  static const saveEmergencyContacts = '/outsulk/stabiliment';
 }

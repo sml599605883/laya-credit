@@ -1,5 +1,6 @@
 // 通用组件统一导出。
 export 'back_nav_bar.dart';
+export 'field_chevron.dart';
 export 'remote_image.dart';
 export 'state_views.dart';
 export 'upload_button.dart';

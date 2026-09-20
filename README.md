@@ -27,7 +27,9 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`，
 以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）、
 `/id-upload`（证件上传，见第 13 条）、`/id-confirm`（证件信息确认，见第 14 条）、
-`/face-verification`（人脸识别，见第 15 条）。
+`/face-verification`（人脸识别，见第 15 条）、
+`/personal-info`（个人信息，见第 16 条）、`/work-info`（工作信息，见第 17 条）、
+`/emergency-contact`（紧急联系人，见第 18 条）。
 
 ### 2. 状态管理用什么
 
@@ -141,7 +143,7 @@ lib/
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：订单、上报、H5 相关接口尚未落地。
    「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
-   H5 地址需要 WebView、认证项还缺紧急联系人 / 绑卡页、
+   H5 地址需要 WebView、认证项还缺绑卡页、
    原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
@@ -149,7 +151,8 @@ lib/
    第三项（证件信息确认页）也已落地并接上保存接口（见第 14 条），
    第四项（活体 / 人脸识别）也已落地并接上 token / 上传接口（见第 15 条），
    个人信息认证项也已落地并接上表单 / 保存接口（见第 16 条），
-   工作信息认证项也已落地（见第 17 条）。
+   工作信息认证项也已落地（见第 17 条），
+   紧急联系人认证项也已落地并接上获取 / 保存接口（见第 18 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -481,6 +484,52 @@ lib/
       `overwhelming` 容器，不能互相顶替。
     - **已知偏差**：与个人信息页一样，进度文案 `50%` 先按设计稿写死；
       白卡内容顶边沿用个人信息页的 228，工作信息稿设计标注是 230（差 2pt，肉眼不可辨）。
+
+18. **紧急联系人认证页已按蓝湖稿 `03-04 - 联系人信息` 还原**
+    （`/emergency-contact`，`EmergencyContactPage`，认证项 `taskType`
+    `Thriftiness`）。
+    - 页面分三段：通栏头图（复用证件上传页的 `id_verify_header_blank.png`，
+      与个人信息 / 工作信息页同款）、白卡（343 宽，卡顶是带 `75%` 的粉红进度缎带）、
+      底部**固定**操作条（白底 + 上方 `0 -5px 6px rgba(233,233,233,0.5)` 投影 +
+      343x48 柠檬绿 `Upload`，按钮下方留安全区）。
+    - **进度缎带直接复用个人信息页那张 `personal_info_progress_ribbon.png`**：
+      设计稿 `text-wrapper_3` 标注的 198x33 是该元素框（含 79px 左右内边距），
+      粉色缎带本体在两页稿里逐像素一致（x 106~270，164pt 宽，缎带顶边同为 185）。
+      行尾通讯录图标 `emergency_contact_picker.png` 是用户提供的切图（原 `通讯录@3x.png`，
+      60x60 @3x），设计稿按 18x18 摆放；行尾箭头复用公共的
+      `FieldChevron`（`lib/widgets/field_chevron.dart`，从个人信息页提出来的）。
+    - 设计稿实测：缎带顶边 185、白卡内容顶边 230（缎带下沿 218 + 12）、
+      分组标题 15/18 加粗 `#333`；每个联系人是一组，组内=标题行 + 两个字段
+      （`Relationship` / `Contact Information`），字段标题 16/22、取值行 48pt、
+      组间 30pt；`Contact Information` 行的姓名用 14/20 `#333`、手机号 `#B7B7B7`。
+    - **联系人条数不写死**：`GET /outsulk/liquidators`（`tartarizing`=产品 id、
+      `aiel`=混淆字段，`CertificationRepository.getEmergencyContacts`）下发
+      `connectedly.conopholis.kneeing[]`，每条含 `undersupplied`（已选关系取值）、
+      `harbingers`（姓名）/ `levering`（手机号）、`canmaker`（位置号
+      `first`/`second`/`third`…）、`colocating[]`（关系下拉：`harbingers` 展示文案 /
+      `liquidators` 取值）。分组标题按位置号顺序拼成
+      `Relationship with Emergency Contacts - N`；`connectedly.befleas` 是可选的引导文案。
+    - 交互（口径对齐 peso_shield）：关系字段复用个人信息页的
+      `showPersonalInfoOptionSheet`（`Done` 回填展示文案，提交 `liquidators`，
+      **面板每次打开都从第一项开始、不回填当前值**）；`Contact Information` 行点击
+      调 `flutter_native_contact_picker` 打开系统通讯录，选中后把姓名 + 手机号一起回填
+      （优先取用户在系统面板选中的号码，其次取第一个非空号码，见 `_primaryPhone`）。
+      手机号行（设计稿 `text_13`）本身不可编辑，但**点击同样拉起系统通讯录**
+      （口径对齐 peso_shield：那边姓名与手机号在同一个可点区域里，只让姓名行可点会有一块点不动的死区）；
+      `Upload` 按每条联系人的 `canmaker` 当位置号回传
+      `POST /outsulk/stabiliment`（`tartarizing`=产品 id、`connectedly`=联系人数组的
+      **JSON 字符串**、`sciographic`=混淆字段），成功后交给
+      `ProductApplicationFlow.continueProductDetailFlow` 走下一步认证。
+      没选人的联系人回传空串而不是本地占位文案（`Name` / `Phone Number` / `Please select`
+      只是页面占位）。**不需要通讯录权限**：`flutter_native_contact_picker` 在 iOS 用的是
+      系统 `CNContactPickerViewController` 选人面板（对齐 peso_shield，`Info.plist`
+      里不加 `NSContactsUsageDescription`），App 只拿到用户选中的那一条；
+      选人失败弹 `Unable to open contacts` 不闪退。
+    - 引导文案优先级：产品详情 `overwhelming.embol`（文档语义 `ext`）
+      → 接口 `befleas` → 设计稿四行兜底；`embol` 与其他认证页文案同属
+      `overwhelming` 容器，不能互相顶替。
+    - **已知偏差**：进度文案 `75%` 先按设计稿写死（读法同第 16 / 17 条）；
+      `Upload` 按钮文案沿用共用组件 `lib/widgets/upload_button.dart`。
 
 ## 常用命令
 

@@ -30,6 +30,9 @@ const _taskTypePersonal = 'FlintiestDevwsor';
 /// 认证项 `taskType`：工作信息。
 const _taskTypeWork = 'TrussvilleUninstructively';
 
+/// 认证项 `taskType`：紧急联系人。
+const _taskTypeEmergencyContact = 'Thriftiness';
+
 class ProductApplicationFlow {
   ProductApplicationFlow({
     required this.repository,
@@ -117,6 +120,9 @@ class ProductApplicationFlow {
         response.data.personalInfoPrompt,
       );
       sessionStore.saveProductDetailWorkPrompt(response.data.workInfoPrompt);
+      sessionStore.saveProductDetailEmergencyContactPrompt(
+        response.data.emergencyContactPrompt,
+      );
       return response.data;
     } on ApiException catch (error) {
       ToastHelper.hideLoading();
@@ -231,6 +237,16 @@ class ProductApplicationFlow {
     }
 
     // TODO(页面): 紧急联系人 / 绑卡页尚未搭建。
+    // 紧急联系人：条数与关系选项全部由后端下发，页面只按描述渲染。
+    if (step.taskType == _taskTypeEmergencyContact) {
+      AppNavigator.pushTopLevelCertification(
+        AppRoutes.emergencyContact,
+        arguments: EmergencyContactPageArguments(productId: productId),
+      );
+      return;
+    }
+
+    // TODO(页面): 绑卡页尚未搭建。
     final title = step.title.isEmpty ? 'certification' : step.title;
     ToastHelper.showMessage('Please complete $title');
   }

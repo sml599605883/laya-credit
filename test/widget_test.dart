@@ -14,6 +14,7 @@ import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/face_token_result.dart';
+import 'package:laya_credit/data/models/emergency_contact_data.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
 import 'package:laya_credit/data/models/identity_recognition.dart';
@@ -27,10 +28,12 @@ import 'package:laya_credit/data/repositories/product_repository.dart';
 import 'package:laya_credit/data/models/product_apply_result.dart';
 import 'package:laya_credit/data/models/product_detail.dart';
 import 'package:laya_credit/theme/app_assets.dart';
+import 'package:laya_credit/theme/app_colors.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/face_verification_page.dart';
+import 'package:laya_credit/pages/emergency_contact_page.dart';
 import 'package:laya_credit/pages/home_page.dart';
 import 'package:laya_credit/pages/id_confirm_page.dart';
 import 'package:laya_credit/pages/id_upload_page.dart';
@@ -488,6 +491,86 @@ class _StubCertificationRepository extends CertificationRepository {
       data: addressData,
     );
   }
+
+  /// 紧急联系人（认证第四项）：三条联系人的口径取接口文档
+  /// 「获取联系人信息（第四项）」的 `conopholis.kneeing` 示例。
+  static const emergencyContactData = EmergencyContactData(
+    tips: 'We will protect your personal information from disclosure',
+    contacts: [
+      EmergencyContact(
+        number: 'first',
+        relationValue: '5',
+        name: 'Anna',
+        mobile: '86543217190',
+        relationOptions: _relationOptions,
+      ),
+      EmergencyContact(
+        number: 'second',
+        relationValue: '5',
+        relationOptions: _relationOptions,
+      ),
+      EmergencyContact(
+        number: 'third',
+        relationValue: '5',
+        relationOptions: _relationOptions,
+      ),
+    ],
+  );
+
+  /// 关系下拉的选项口径取接口文档的 `colocating` 示例（Parent…other）。
+  static const _relationOptions = [
+    EmergencyContactOption(label: 'Parent', value: '1'),
+    EmergencyContactOption(label: 'Spouse', value: '2'),
+    EmergencyContactOption(label: 'Child', value: '3'),
+    EmergencyContactOption(label: 'Sibling', value: '4'),
+    EmergencyContactOption(label: 'Friend', value: '5'),
+    EmergencyContactOption(label: 'Colleague', value: '6'),
+    EmergencyContactOption(label: 'other', value: '7'),
+  ];
+
+  /// 记录每次拉取紧急联系人的产品 id。
+  final List<String> emergencyContactCalls = [];
+
+  /// 紧急联系人返回，默认走 [emergencyContactData]。
+  EmergencyContactData? emergencyContacts;
+
+  /// 置为异常时接口直接抛出，用来测错误态。
+  Object? emergencyContactFailure;
+
+  /// 接口延迟，用来测 Loading 态。
+  Duration? emergencyContactDelay;
+
+  @override
+  Future<ApiResponse<EmergencyContactData>> getEmergencyContacts({
+    required String productId,
+  }) async {
+    emergencyContactCalls.add(productId);
+    if (emergencyContactDelay case final wait?) {
+      await Future<void>.delayed(wait);
+    }
+    if (emergencyContactFailure case final error?) throw error;
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: emergencyContacts ?? emergencyContactData,
+    );
+  }
+
+  /// 记录每次保存紧急联系人的入参。
+  final List<List<EmergencyContactInput>> saveEmergencyContactCalls = [];
+
+  /// 置为异常时保存接口直接抛出。
+  Object? saveEmergencyContactFailure;
+
+  @override
+  Future<ApiResponse<void>> saveEmergencyContacts({
+    required String productId,
+    required List<EmergencyContactInput> contacts,
+  }) async {
+    saveEmergencyContactCalls.add(List<EmergencyContactInput>.from(contacts));
+    if (saveEmergencyContactFailure case final error?) throw error;
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
+  }
 }
 
 /// 证件照服务桩：不弹系统 UI，直接返回固定路径。
@@ -684,6 +767,42 @@ const _productCard = HomeProductCard(
   ],
 );
 
+/// 两个阶段已解锁（`estamp` = 1）的进度卡，用来验证多段解锁。
+const _productCardTwoUnlocked = HomeProductCard(
+  id: '1',
+  productName: 'Pera Cash',
+  productLogo: '',
+  buttonText: 'Apply Now',
+  amountRange: '\u20b160,000',
+  amountRangeDes: 'Available up to',
+  termInfo: '180 Days',
+  termInfoDes: 'Loan terms',
+  loanRate: '\u2264 0.5% Day',
+  loanRateDes: 'Interest rate',
+  certifyFinished: false,
+  account: '',
+  accountText: '',
+  progressText: 'Credit activation progress',
+  steps: [
+    HomeProgressStep(
+      title: 'Identity',
+      amount: '\u20b1 30,000',
+      selected: true,
+    ),
+    HomeProgressStep(title: 'Living', amount: '\u20b1 40,000', selected: true),
+    HomeProgressStep(
+      title: 'Basic information',
+      amount: '\u20b150,000',
+      selected: false,
+    ),
+    HomeProgressStep(
+      title: 'Bank Card',
+      amount: '\u20b160,000',
+      selected: false,
+    ),
+  ],
+);
+
 /// 进行中的借款订单卡。
 const _orderCard = HomeOrderCard(
   orderNo: '39236372837263237',
@@ -751,6 +870,27 @@ void _mockCameraPermission(int status) {
   addTearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_permissionChannel, null);
+  });
+}
+
+/// flutter_native_contact_picker 的 method channel：测试里没有原生实现，
+/// 需要按用例把用户选中的联系人伪造出来（系统选人面板不需要通讯录权限）。
+const _contactPickerChannel = MethodChannel('flutter_native_contact_picker');
+
+void _mockPickedContact({required String name, required String phone}) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_contactPickerChannel, (call) async {
+        if (call.method == 'selectContact') {
+          return <String, Object?>{
+            'fullName': name,
+            'selectedPhoneNumber': phone,
+          };
+        }
+        return null;
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_contactPickerChannel, null);
   });
 }
 
@@ -822,6 +962,14 @@ void _openWorkInfoPage(WidgetTester tester, {String productId = '7'}) {
   AppNavigator.push(
     AppRoutes.workInfo,
     arguments: WorkInfoPageArguments(productId: productId),
+  );
+}
+
+/// 直接打开紧急联系人认证页（走和产品申请流程一样的路由与入参）。
+void _openEmergencyContactPage(WidgetTester tester, {String productId = '7'}) {
+  AppNavigator.push(
+    AppRoutes.emergencyContact,
+    arguments: EmergencyContactPageArguments(productId: productId),
   );
 }
 
@@ -1052,6 +1200,45 @@ void main() {
     }
     // 申请入口在额度卡里，只此一处。
     expect(find.byKey(const Key('home-apply-button')), findsOneWidget);
+  });
+
+  testWidgets('首页进度卡按 estamp 点亮所有已解锁阶段', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: _productCardTwoUnlocked,
+          orders: [],
+          notices: [],
+        ),
+      ),
+    );
+
+    final card = find.byKey(const Key('home-progress-card'));
+    Color? amountColor(String text) => tester
+        .widget<Text>(find.descendant(of: card, matching: find.text(text)))
+        .style
+        ?.color;
+
+    // 前两项 estamp=1：两段金额都高亮，未解锁的第 3 项仍是深灰。
+    expect(amountColor('\u20b1 40,000'), AppColors.creditProgressAmountCurrent);
+    expect(amountColor('\u20b1 30,000'), AppColors.creditProgressAmountCurrent);
+    expect(amountColor('\u20b150,000'), AppColors.creditProgressAmount);
+
+    // 进度槽填充到第 2 个阶段（2/4）。
+    Finder box(Color color) => find.descendant(
+      of: card,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).color == color,
+      ),
+    );
+    final trackWidth = tester.getSize(box(AppColors.creditProgressTrack)).width;
+    final fillWidth = tester.getSize(box(AppColors.creditProgressFill)).width;
+    expect(fillWidth / trackWidth, moreOrLessEquals(0.5, epsilon: 0.01));
   });
 
   testWidgets('首页有进行中订单时展示借款进度卡', (tester) async {
@@ -3678,6 +3865,365 @@ void main() {
     );
   });
 
+  testWidgets('紧急联系人页按蓝湖稿 03-04 渲染头图、进度缎带与三组联系人', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.emergencyContactCalls, ['7']);
+
+    // 头图和进度缎带都复用前两页那两张切图。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.personalInfoProgressRibbon), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+    // 行尾通讯录图标是用户提供的切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.emergencyContactPicker), findsNWidgets(3));
+
+    expect(find.text('Urgent contact person'), findsOneWidget);
+    expect(find.text('75%'), findsOneWidget);
+
+    // 三条联系人由后端下发，分组标题按位置号顺序生成。
+    for (var index = 1; index <= 3; index++) {
+      expect(
+        find.text('Relationship with Emergency Contacts - $index'),
+        findsOneWidget,
+      );
+    }
+    expect(find.text('Relationship'), findsNWidgets(3));
+    expect(find.text('Contact Information'), findsNWidgets(3));
+    expect(find.text('telephone number'), findsNWidgets(3));
+
+    // 第一条带姓名与手机号，后两条走设计稿的占位文案。
+    expect(find.text('Anna'), findsOneWidget);
+    expect(find.text('86543217190'), findsOneWidget);
+    expect(find.text('Friend'), findsNWidgets(3));
+    expect(find.text('Name'), findsNWidgets(2));
+    expect(find.text('Phone Number'), findsNWidgets(2));
+
+    // 接口的 `befleas` 作为引导文案（产品详情没下发时）。
+    expect(
+      find.text('We will protect your personal information from disclosure'),
+      findsOneWidget,
+    );
+
+    // 缎带顶边比头图下沿高 28pt（设计稿 185 与 213），
+    // 且与个人信息页同一张切图、铺满 343pt 白卡宽。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    final ribbonRect = tester.getRect(
+      _assetImage(AppAssets.personalInfoProgressRibbon),
+    );
+    expect(headerRect.bottom - ribbonRect.top, closeTo(28 * _designScale, 1));
+    expect(ribbonRect.width, closeTo(343 * _designScale, 0.5));
+    expect(
+      ribbonRect.center.dx,
+      closeTo(tester.getSize(find.byType(EmergencyContactPage)).width / 2, 1),
+    );
+    // 缎带下沿 33pt + 白卡内顶距 12pt 到第一个分组标题（设计稿 218 / 230）。
+    final cardRect = tester.getRect(
+      find.byKey(const Key('emergency-contact-title-first')),
+    );
+    expect(cardRect.top - ribbonRect.top, closeTo((33 + 12) * _designScale, 1));
+
+    // 分组间距 308pt（标题 18 + 16 + 22 + 8 + 48 + 12 + 22 + 8 + 48 + 12 +
+    // 22 + 22 + 20 + 30）。
+    double centerY(Finder finder) => tester.getCenter(finder).dy;
+    expect(
+      centerY(find.text('Relationship with Emergency Contacts - 2')) -
+          centerY(find.text('Relationship with Emergency Contacts - 1')),
+      closeTo(308 * _designScale, 0.5),
+    );
+    expect(
+      centerY(find.text('Relationship with Emergency Contacts - 3')) -
+          centerY(find.text('Relationship with Emergency Contacts - 2')),
+      closeTo(308 * _designScale, 0.5),
+    );
+  });
+
+  testWidgets('紧急联系人页引导文案优先用产品详情下发的 overwhelming.embol', (tester) async {
+    const apiPrompt =
+        'Emergency contacts are only used to reach you, never for marketing.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailEmergencyContactPrompt(apiPrompt);
+      },
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    // 接口的 `befleas` 不会顶掉产品详情那条文案。
+    expect(
+      find.textContaining('protect your personal information'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('紧急联系人页后端不下发文案时用设计稿兜底引导段', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    certificationRepository.emergencyContacts = EmergencyContactData(
+      contacts: _StubCertificationRepository.emergencyContactData.contacts,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Emergency contacts help\n'
+        'secure your account. We\n'
+        'respect every contact\'s\n'
+        'privacy.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('紧急联系人页关系下拉弹选项面板，Done 回填展示文案', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('emergency-contact-relation-first')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('personal-info-option-done')), findsOneWidget);
+
+    // 面板不预选，从第一项 Parent 开始：向上滚一项 -> Spouse。
+    await tester.drag(
+      find.byKey(const Key('personal-info-option-wheel')),
+      const Offset(0, -70),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('personal-info-option-done')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spouse'), findsOneWidget);
+    expect(find.text('Friend'), findsNWidgets(2));
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    // 提交回传的是选项的 `liquidators`，不是展示文案。
+    expect(
+      certificationRepository
+          .saveEmergencyContactCalls
+          .single
+          .first
+          .relationValue,
+      '2',
+    );
+  });
+
+  testWidgets('紧急联系人页点手机号区域也打开通讯录选人并一起回填', (tester) async {
+    _mockPickedContact(name: 'Bob Lee', phone: '9171234567');
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    // 后两条默认没选人，姓名 / 手机号都走占位文案。
+    expect(find.text('Name'), findsNWidgets(2));
+    expect(find.text('Phone Number'), findsNWidgets(2));
+
+    // 点手机号区域（设计稿 `text_13`）同样拉起系统选人。
+    final phoneRow = find.byKey(const Key('emergency-contact-phone-second'));
+    await tester.ensureVisible(phoneRow);
+    await tester.pumpAndSettle();
+    await tester.tap(phoneRow);
+    await tester.pumpAndSettle();
+
+    // 姓名与手机号一起回填，占位文案各少一个。
+    expect(find.text('Bob Lee'), findsOneWidget);
+    expect(find.text('9171234567'), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Phone Number'), findsOneWidget);
+
+    // 提交回传的是选中的联系人。
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+    final saved = certificationRepository.saveEmergencyContactCalls.single;
+    expect(saved[1].name, 'Bob Lee');
+    expect(saved[1].mobile, '9171234567');
+  });
+
+  testWidgets('紧急联系人页点 Upload 按 canmaker 回传三条联系人并继续下一步认证', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: productRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    final saved = certificationRepository.saveEmergencyContactCalls.single;
+    expect(saved.map((contact) => contact.number), [
+      'first',
+      'second',
+      'third',
+    ]);
+    // 姓名 / 手机号 / 关系都按接口下发的原值回传。
+    expect(saved.first.name, 'Anna');
+    expect(saved.first.mobile, '86543217190');
+    expect(saved.first.relationValue, '5');
+    // 后两条没选人，回传空串而不是本地占位文案。
+    expect(saved[1].name, '');
+    expect(saved[1].mobile, '');
+
+    // 保存成功后再拉产品详情，走下一步认证。
+    expect(productRepository.detailCalls, 1);
+    expect(find.byType(IdVerificationPage), findsOneWidget);
+    expect(find.byType(EmergencyContactPage), findsNothing);
+  });
+
+  testWidgets('紧急联系人页接口失败给错误态与重试入口', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    certificationRepository.emergencyContactFailure = const ApiException(
+      type: ApiFailureType.business,
+      message: 'Contacts unavailable',
+      code: 500,
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ErrorView), findsOneWidget);
+    expect(find.text('Contacts unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+
+    // Riverpod 3 默认会对失败的 provider 做指数退避重试，次数不可预期；
+    // 只断言「点 Retry 会再发起一次请求」，重试成功后渲染出联系人。
+    final callsBeforeRetry =
+        certificationRepository.emergencyContactCalls.length;
+    certificationRepository.emergencyContactFailure = null;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(
+      certificationRepository.emergencyContactCalls.length,
+      greaterThan(callsBeforeRetry),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Relationship with Emergency Contacts - 1'),
+      findsOneWidget,
+    );
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('紧急联系人页接口请求中显示 Loading', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    certificationRepository.emergencyContactDelay = const Duration(
+      milliseconds: 300,
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(LoadingView), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingView), findsNothing);
+    expect(
+      find.text('Relationship with Emergency Contacts - 1'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('紧急联系人页后端不下发联系人时走空态而不是空表单', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    certificationRepository.emergencyContacts = const EmergencyContactData();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openEmergencyContactPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No emergency contacts required yet'), findsOneWidget);
+    expect(
+      find.textContaining('Relationship with Emergency Contacts'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('产品详情下一步是紧急联系人时进入紧急联系人页并带上产品 id', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-9'),
+        nextStep: ProductNextStep(
+          taskType: 'Thriftiness',
+          title: 'Urgent contact person',
+        ),
+      ),
+    );
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EmergencyContactPage), findsOneWidget);
+    expect(certificationRepository.emergencyContactCalls, ['1']);
+  });
+
   test('个人信息表单解析两套控件类型命名', () {
     // 值映射给的是 `enum` / `txt` / `citySelect`，
     // 响应示例给的是 `stepped` / `onto` / `stage`，两套都要认得。
@@ -3822,5 +4368,108 @@ void main() {
     expect(data.nodes.single.name, 'Pangasinan');
     // 整层都没有编码时退回按名称展示，而不是整片空白。
     expect(data.nodes.single.children.single.name, 'Alcala');
+  });
+
+  test('紧急联系人解析 conopholis.kneeing 与关系选项', () {
+    final data = EmergencyContactData.fromJson(const {
+      ApiFields.emergencyContactTips: 'protect your data',
+      ApiFields.emergencyContactEmergent: {
+        ApiFields.emergencyContactList: [
+          {
+            ApiFields.emergencyContactNumber: 'first',
+            ApiFields.emergencyContactRelation: '5',
+            ApiFields.emergencyContactName: 'Anna',
+            ApiFields.emergencyContactMobile: '86543217190',
+            ApiFields.emergencyContactDropdown: [
+              {
+                ApiFields.emergencyContactOptionLabel: 'Parent',
+                ApiFields.emergencyContactOptionValue: 1,
+              },
+              {
+                ApiFields.emergencyContactOptionLabel: 'Friend',
+                ApiFields.emergencyContactOptionValue: 5,
+              },
+              {ApiFields.emergencyContactOptionLabel: 'Broken'},
+            ],
+          },
+          {
+            ApiFields.emergencyContactNumber: 'second',
+            ApiFields.emergencyContactRelation: '5',
+          },
+        ],
+      },
+    });
+
+    expect(data.tips, 'protect your data');
+    expect(data.contacts, hasLength(2));
+    final first = data.contacts.first;
+    expect(first.number, 'first');
+    expect(first.name, 'Anna');
+    expect(first.mobile, '86543217190');
+    // 选项的取值是数字也要当字符串；缺取值的那条被丢掉。
+    expect(first.relationOptions.map((option) => option.value), ['1', '5']);
+    expect(first.relationLabel, 'Friend');
+    // 没选关系时不给占位文案，由页面兜底。
+    expect(data.contacts[1].relationLabel, '');
+  });
+
+  test('紧急联系人只认 conopholis.kneeing，脏数据不整片丢掉', () {
+    final data = EmergencyContactData.fromJson(const {
+      ApiFields.emergencyContactEmergent: {
+        ApiFields.emergencyContactList: [
+          {ApiFields.emergencyContactNumber: 'first'},
+          'dirty',
+          null,
+        ],
+      },
+    });
+    // 非对象元素被丢掉，剩下的照常解析。
+    expect(data.contacts.single.number, 'first');
+
+    // 没有 `conopholis` 这一层时不猜结构，按空处理。
+    expect(EmergencyContactData.fromJson(const {}).contacts, isEmpty);
+  });
+
+  test('保存联系人按 canmaker 回传，键名走混淆字段', () {
+    const input = EmergencyContactInput(
+      number: 'second',
+      relationValue: '5',
+      name: ' Anna ',
+      mobile: ' 86543217190 ',
+    );
+
+    expect(input.toJson(), {
+      ApiFields.emergencyContactMobile: '86543217190',
+      ApiFields.emergencyContactName: 'Anna',
+      ApiFields.emergencyContactRelation: '5',
+      // 位置号原样回传，首尾空白不 trim（对齐获取接口下发值）。
+      ApiFields.emergencyContactNumber: 'second',
+    });
+  });
+
+  test('产品详情解析 overwhelming.embol 作为紧急联系人页引导文案', () {
+    const detail = ProductDetail(
+      resultCode: 200,
+      basicInfo: ProductBasicInfo(),
+      nextStep: ProductNextStep(),
+      emergencyContactPrompt: '',
+    );
+    expect(detail.emergencyContactPrompt, '');
+
+    final parsed = ProductDetail.fromJson(const {
+      ApiFields.applyResultCode: 200,
+      ApiFields.detailTips: {
+        ApiFields.detailTipEmergencyContact:
+            'Emergency contacts are only used to reach you.',
+        ApiFields.detailTipWork: 'work tip',
+      },
+    });
+    expect(
+      parsed.emergencyContactPrompt,
+      'Emergency contacts are only used to reach you.',
+    );
+    // 五条文案各管各的页，不会互相顶替。
+    expect(parsed.workInfoPrompt, 'work tip');
+    expect(parsed.personalInfoPrompt, '');
   });
 }

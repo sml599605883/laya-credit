@@ -14,6 +14,7 @@ class ProductDetail {
     this.livenessPrompt = '',
     this.personalInfoPrompt = '',
     this.workInfoPrompt = '',
+    this.emergencyContactPrompt = '',
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
@@ -44,6 +45,9 @@ class ProductDetail {
           : '',
       workInfoPrompt: tips is Map
           ? tips[ApiFields.detailTipWork]?.toString() ?? ''
+          : '',
+      emergencyContactPrompt: tips is Map
+          ? tips[ApiFields.detailTipEmergencyContact]?.toString() ?? ''
           : '',
     );
   }
@@ -78,6 +82,11 @@ class ProductDetail {
   ///
   /// 与另外几条同属 `overwhelming` 容器，不能互相顶替。
   final String workInfoPrompt;
+
+  /// 紧急联系人认证页顶部引导文案（`overwhelming.embol`）。
+  ///
+  /// 与另外几条同属 `overwhelming` 容器，不能互相顶替。
+  final String emergencyContactPrompt;
 }
 
 /// 产品信息（`priapi`）。

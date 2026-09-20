@@ -78,6 +78,19 @@ class SessionStore {
     _productDetailWorkPrompt = prompt.trim();
   }
 
+  /// 产品详情下发的紧急联系人认证页引导文案（`overwhelming.embol`）。
+  ///
+  /// 与其他认证页文案一样只在内存里缓存：产品详情一定先于认证页拉取。
+  String _productDetailEmergencyContactPrompt = '';
+
+  String get productDetailEmergencyContactPrompt =>
+      _productDetailEmergencyContactPrompt;
+
+  /// 写入产品详情下发的紧急联系人认证引导文案。
+  void saveProductDetailEmergencyContactPrompt(String prompt) {
+    _productDetailEmergencyContactPrompt = prompt.trim();
+  }
+
   /// 平台实现可能没有注册（例如单元测试环境）。拿不到实例时所有读写退化为空操作，
   /// 不能因为本地存储不可用就让 App 启动失败。
   SharedPreferencesAsync? get _preferences {
@@ -137,6 +150,7 @@ class SessionStore {
     _productDetailIdentitySuccessPrompt = '';
     _productDetailPersonalPrompt = '';
     _productDetailWorkPrompt = '';
+    _productDetailEmergencyContactPrompt = '';
     try {
       final preferences = _preferences;
       if (preferences == null) return;

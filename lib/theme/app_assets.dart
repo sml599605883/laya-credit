@@ -138,4 +138,14 @@ abstract final class AppAssets {
   /// `rgba(176,176,176,1)`，三层一致；用户提供的 `icon_common_go_h@3x.png`）。
   static const personalInfoAddressChevron =
       'assets/personal_info/personal_info_address_chevron.png';
+
+  // 紧急联系人认证页（蓝湖稿 `03-04 - 联系人信息`）
+  /// `Contact Information` 行尾的通讯录图标（设计稿 `thumbnail_11`，18x18，
+  /// 界面呈现 20x20 的绿色圆角方块 + 白色联系人剪影；
+  /// 用户提供的 `通讯录@3x.png`，60x60 = 20x20 @3x）。
+  ///
+  /// 关系下拉行尾的 6x10 深色箭头（设计稿 `thumbnail_3`）在 `assets/` 里没有切图，
+  /// 与个人信息页共用 [FieldChevron] 画笔还原，不走切图。
+  static const emergencyContactPicker =
+      'assets/emergency_contact/emergency_contact_picker.png';
 }

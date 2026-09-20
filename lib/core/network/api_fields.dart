@@ -314,6 +314,64 @@ abstract final class ApiFields {
   static const obfuscatePush3 = 'mediacies';
   static const obfuscatePush4 = 'wanderlusts';
 
+  // ---------- 认证项：紧急联系人（第四项）----------
+  //
+  // 接口文档「获取联系人信息（第四项）」（`/outsulk/liquidators`）与
+  // 「保存联系人信息（第四项）」（`/outsulk/stabiliment`）。
+  // 语义字段名取自 `7.map.html`：`emergent` / `relation` / `name` / `mobile` /
+  // `number1` / `dropdown` / `content` / `alternate_phone`。
+
+  /// 联系人对象（文档语义 `emergent`）。
+  static const emergencyContactEmergent = 'conopholis';
+
+  /// 联系人数组（文档语义 `list`）。与首页模块列表共用同一个混淆名。
+  static const emergencyContactList = 'kneeing';
+
+  /// 关系下拉的当前值（文档语义 `relation`）。
+  static const emergencyContactRelation = 'undersupplied';
+
+  /// 联系人姓名（文档语义 `name`）。与个人信息 / 工作信息的选项文案、
+  /// 地址层级名称共用同一个混淆名，三者语义不同。
+  static const emergencyContactName = 'harbingers';
+
+  /// 联系人手机号（文档语义 `mobile`）。
+  static const emergencyContactMobile = 'levering';
+
+  /// 联系人在接口里下发的位置编号（文档语义 `number1`）。
+  ///
+  /// 保存时必须原样回传下发值（`first` / `second` / `third`…），
+  /// 不能用列表下标代替。
+  static const emergencyContactNumber = 'canmaker';
+
+  /// 关系下拉的选项数组（文档语义 `dropdown`）。
+  static const emergencyContactDropdown = 'colocating';
+
+  /// 关系选项的展示文案（文档语义 `name`）。
+  static const emergencyContactOptionLabel = 'harbingers';
+
+  /// 关系选项的提交取值（文档语义 `type`）。与首页模块类型共用同一个混淆名。
+  static const emergencyContactOptionValue = 'liquidators';
+
+  /// 页面引导文案（文档语义 `content`，低版本或未灰度用户不下发字段）。
+  /// 与个人信息 / 工作信息的 `befleas` 是同一个混淆名，但属于不同接口。
+  static const emergencyContactTips = 'befleas';
+
+  /// 保存时的联系人 JSON 字符串（文档语义 `data`）。
+  static const emergencyContactSaveData = 'connectedly';
+
+  /// 获取联系人信息的混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscateEmergencyContact = 'aiel';
+
+  /// 保存联系人信息的混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscateSaveEmergencyContact = 'sciographic';
+
+  // ---------- 产品详情里的紧急联系人页文案 ----------
+  /// 紧急联系人认证页顶部引导文案（文档语义 `ext`）。
+  ///
+  /// 与身份 / 活体 / 个人信息 / 工作同属产品详情的 `overwhelming`（[detailTips]）容器，
+  /// 五个键各管一页，不能互相顶替。
+  static const detailTipEmergencyContact = 'embol';
+
   // ---------- 各接口的混淆字段（无业务含义，每次请求随机值）----------
   static const obfuscateSendSms = 'tectites';
   static const obfuscateLogin1 = 'interoscillate';
