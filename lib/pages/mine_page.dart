@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/config/api_environment.dart';
 import '../core/navigation/app_deep_link.dart';
+import '../core/navigation/app_navigator.dart';
 import '../core/ui/toast_helper.dart';
 import '../providers/login_provider.dart';
 import '../providers/network_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/tab_bar/app_tab_bar.dart';
+import 'widgets/account_retention_dialog.dart';
 
 /// 「Customer Service」分组标题（设计稿 `text_4`）。
 const _customerServiceTitle = 'Customer Service';
@@ -98,8 +100,10 @@ class MinePage extends ConsumerWidget {
           ),
           title: _customerServiceEntry,
           trailing: _Chevron(layout: layout),
-          // TODO(页面): 客服中心落地页尚未搭建，先弹占位提示。
-          onTap: () => ToastHelper.showMessage(_customerServiceEntry),
+          onTap: () => AppNavigator.toWebPath<void>(
+            path: AppNavigator.customerServicePath,
+            title: _customerServiceEntry,
+          ),
         ),
       ),
       SizedBox(height: layout.px(16)),
@@ -561,8 +565,10 @@ class _AboutUsCard extends ConsumerWidget {
             leading: _icon(AppAssets.servicePrivacy),
             title: 'Privacy Agreement',
             trailing: _Chevron(layout: layout),
-            // TODO(页面): 隐私协议页尚未搭建，协议地址走 WebView。
-            onTap: () => ToastHelper.showMessage('Privacy Agreement'),
+            onTap: () => AppNavigator.toWebPath<void>(
+              path: AppNavigator.privacyAgreementPath,
+              title: 'Privacy Agreement',
+            ),
           ),
           _EntryRow(
             key: const Key('mine-account-row'),
@@ -590,6 +596,10 @@ class _AboutUsCard extends ConsumerWidget {
   }
 
   /// 「Account」底部操作面板（设计稿 `07-01 - 个人中心-退出`）。
+  ///
+  /// Log out / Delete Account 都要先过一次挽留弹窗（设计稿
+  /// `07-01 - 个人中心-退出挽留弹窗` / `07-01 - 个人中心-注销挽留弹窗`），
+  /// 只有点了弹窗里的次要行动才真正退出 / 注销。
   Future<void> _showAccountActions(BuildContext context, WidgetRef ref) async {
     final action = await showModalBottomSheet<_AccountAction>(
       context: context,
@@ -600,15 +610,32 @@ class _AboutUsCard extends ConsumerWidget {
       shape: const RoundedRectangleBorder(),
       builder: (context) => _AccountActionSheet(layout: layout),
     );
-    if (action == null) return;
+    if (action == null || !context.mounted) return;
 
     switch (action) {
       case _AccountAction.logout:
-        // TODO(埋点): 退出登录需要上报埋点。
-        await ref.read(logoutProvider)();
+        await showAccountRetentionDialog(
+          context: context,
+          action: AccountRetentionAction.logout,
+          onExit: () async {
+            // TODO(埋点): 退出登录需要上报埋点。
+            await ref.read(logoutProvider)();
+            return true;
+          },
+        );
       case _AccountAction.deleteAccount:
-        // TODO(接口): 注销账号流程尚未接入。
-        ToastHelper.showMessage('Delete Account is not available yet');
+        await showAccountRetentionDialog(
+          context: context,
+          action: AccountRetentionAction.deleteAccount,
+          onExit: () async {
+            // TODO(埋点): 注销账号需要上报埋点。
+            final succeeded = await ref.read(deleteAccountProvider)();
+            if (!succeeded) {
+              ToastHelper.showError('Delete Account failed, please try again');
+            }
+            return succeeded;
+          },
+        );
       case _AccountAction.quit:
         // 设计稿里 Quit 是次要行动（灰色），按「关掉面板」处理。
         break;

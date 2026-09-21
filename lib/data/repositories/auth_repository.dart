@@ -81,4 +81,15 @@ class AuthRepository {
       parse: (_) {},
     );
   }
+
+  /// 注销账号。接口文档「注销账号」（`/outsulk/norseled`）。
+  Future<ApiResponse<void>> deleteAccount() {
+    return _client.get<void>(
+      ApiEndpoints.deleteAccount,
+      params: {
+        ApiFields.obfuscateDeleteAccount: ObfuscationHelper.randomParam(),
+      },
+      parse: (_) {},
+    );
+  }
 }

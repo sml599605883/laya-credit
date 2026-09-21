@@ -12,6 +12,7 @@ import '../../pages/login_page.dart';
 import '../../pages/mine_page.dart';
 import '../../pages/personal_info_page.dart';
 import '../../pages/stats_page.dart';
+import '../../pages/webview_page.dart';
 import '../../pages/work_information_page.dart';
 import '../../root_tab_page.dart';
 import 'app_routes.dart';
@@ -112,6 +113,17 @@ class BindCardPageArguments {
   final String orderNo;
 }
 
+/// 通用 H5 页入参。
+///
+/// [url] 是 H5 站点地址（协议 / 客服 / 订单详情 / 准入返回的 web 链接等）；
+/// [title] 是首帧标题，H5 加载出 title 后会被页面标题覆盖。
+class WebViewPageArguments {
+  const WebViewPageArguments({required this.url, this.title});
+
+  final String url;
+  final String? title;
+}
+
 /// 路由生成器：`MaterialApp.onGenerateRoute` 的唯一入口。
 ///
 /// 每个 case 负责把 `settings.arguments` 转成强类型的页面入参，
@@ -201,6 +213,16 @@ class AppRouteGenerator {
           (_) => BindCardPage(
             productId: bindArgs?.productId ?? '',
             orderNo: bindArgs?.orderNo ?? '',
+          ),
+        );
+
+      case AppRoutes.webView:
+        final webArgs = settings.arguments as WebViewPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => WebViewPage(
+            initialUrl: webArgs?.url ?? '',
+            initialTitle: webArgs?.title,
           ),
         );
 

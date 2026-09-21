@@ -90,6 +90,17 @@ abstract final class AppAssets {
   static const servicePrivacy = 'assets/mine/service_privacy.png';
   static const serviceAccount = 'assets/mine/service_account.png';
 
+  /// 「退出登录 / 注销账号」挽留弹窗的整卡切图（蓝湖稿
+  /// `07-01 - 个人中心-退出挽留弹窗` / `07-01 - 个人中心-注销挽留弹窗`，
+  /// 设计稿 `编组`，285x315 逻辑尺寸，用户提供的 `编组@3x.png`）：
+  /// 信封插画 + 标题 + 正文烘焙在这一张里，只有胶囊按钮文案（`text_3`）
+  /// 和插画下方的次要行动（`text_4`）由代码叠上去。
+  static const mineLogoutRetention = 'assets/mine/mine_logout_retention.png';
+
+  /// 注销挽留弹窗整卡切图（设计稿 `编组`，文案 `Are you sure?`）。
+  static const mineDeleteAccountRetention =
+      'assets/mine/mine_delete_account_retention.png';
+
   // 底部导航
   static const tabHomeActive = 'assets/navigation/tab_home_active.png';
   static const tabHomeInactive = 'assets/navigation/tab_home_inactive.png';

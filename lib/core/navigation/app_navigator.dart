@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/api_environment.dart';
 import 'app_route_generator.dart';
 import 'app_routes.dart';
 
@@ -104,6 +105,63 @@ class AppNavigator {
       arguments: LoginPageArguments(onLoginSuccess: onLoginSuccess),
     );
     return result ?? false;
+  }
+
+  /// 打开通用 H5 页。地址必须是 http/https；非法地址返回 null 并打日志。
+  ///
+  /// 与进入认证流程一致，会清掉返回栈里已有的认证页：用户从 H5 返回时
+  /// 直接回到入口页，而不是上一个半完成的认证页。
+  static Future<T?>? toWebView<T extends Object?>({
+    required String url,
+    String? title,
+  }) {
+    final uri = webViewUri(url);
+    if (uri == null) {
+      debugPrint('[AppNavigator] 无效的 WebView 地址: $url');
+      return null;
+    }
+    _warn(AppRoutes.webView);
+    return _navigator!.pushNamedAndRemoveUntil<T>(AppRoutes.webView, (
+      pageRoute,
+    ) {
+      final name = pageRoute.settings.name;
+      // 保留非认证流程的页面（首页 / 登录等）。
+      return name != null &&
+          name.isNotEmpty &&
+          !_certificationRoutes.contains(name);
+    }, arguments: WebViewPageArguments(url: uri.toString(), title: title));
+  }
+
+  /// 校验并规范化 H5 地址：仅放行带 host 的 http/https。
+  static Uri? webViewUri(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      return null;
+    }
+    return uri;
+  }
+
+  /// 用 H5 站点根地址 + 相对路径打开 WebView。
+  ///
+  /// TODO(混淆串): H5 路由路径待接口文档下发后替换（dali 用 `/#/Turbocharger` 等）。
+  static const privacyAgreementPath = '/#/PrivacyAgreement';
+  static const customerServicePath = '/#/CustomerService';
+
+  static Future<T?>? toWebPath<T extends Object?>({
+    required String path,
+    String? title,
+  }) {
+    final base = Uri.tryParse(ApiEnvironment.h5Base);
+    if (base == null || base.host.isEmpty) {
+      debugPrint('[AppNavigator] 无效的 H5 站点地址: ${ApiEnvironment.h5Base}');
+      return null;
+    }
+    return toWebView<T>(
+      url: base.resolve(path.trim()).toString(),
+      title: title,
+    );
   }
 
   /// 显示对话框（无需页面 context）。

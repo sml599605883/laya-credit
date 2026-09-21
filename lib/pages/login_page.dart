@@ -234,11 +234,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   /// 打开协议页。
-  ///
-  /// TODO(页面): 隐私政策 / 服务条款 H5 页尚未搭建（见 README「遗留问题」），
-  /// 沿用二级页占位提示；WebView 落地后改成 AppNavigator.toWebView(...)。
   void _openAgreement(String title) {
-    ToastHelper.showMessage('$title is not available');
+    AppNavigator.toWebPath<void>(
+      path: AppNavigator.privacyAgreementPath,
+      title: title,
+    );
   }
 
   Future<bool> _submit({bool showAgreementTip = true}) async {

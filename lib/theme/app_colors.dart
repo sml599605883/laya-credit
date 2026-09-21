@@ -209,6 +209,13 @@ abstract final class AppColors {
   /// 操作面板次要行动文案（Quit）。
   static const actionSheetTextSecondary = Color(0xFF5A5A5A);
 
+  // ---------- 退出 / 注销挽留弹窗（蓝湖稿 `07-01 - 个人中心-退出挽留弹窗`
+  // 与 `07-01 - 个人中心-注销挽留弹窗`） ----------
+
+  /// 弹窗主按钮（Track Now / Stay）文案色（设计稿 `text_3` rgba(56, 53, 54, 1)）。
+  /// 标题与正文烘焙在整卡切图里，只有按钮文案由代码叠加。
+  static const retentionPrimaryText = Color(0xFF383536);
+
   // ---------- 登录页（蓝湖稿 `01-02 - 登录`） ----------
 
   /// 卡片内字段标题文字色（Please enter mobile number / Verify with SMS Code）。

@@ -64,8 +64,12 @@ class _StubAppRepository extends AppRepository {
   final HomeData? home;
   final Object? failure;
 
+  /// 首页接口调用次数：用于断言刷新时机（首屏、退出登录回落首页等）。
+  int homeCalls = 0;
+
   @override
   Future<ApiResponse<HomeData>> getHomePage() async {
+    homeCalls++;
     if (failure case final error?) throw error;
     return ApiResponse(
       code: 0,
@@ -105,15 +109,24 @@ ApiResponse<HomeData> _homeResponse(List<String> notices) => ApiResponse(
 
 /// 登录/发码仓库桩：只记录调用，不发网络。
 class _StubAuthRepository extends AuthRepository {
-  _StubAuthRepository({this.failure, this.delay}) : super(_placeholderClient());
+  _StubAuthRepository({
+    this.failure,
+    this.delay,
+    this.deleteAccountFailure = false,
+  }) : super(_placeholderClient());
 
   final Object? failure;
 
   /// 模拟慢请求，用来观察请求进行中的 UI。
   final Duration? delay;
 
+  /// 注销接口返回业务失败（`code != 0`），验证失败时不会误清登录态。
+  final bool deleteAccountFailure;
+
   int sendCodeCalls = 0;
   int loginCalls = 0;
+  int logoutCalls = 0;
+  int deleteAccountCalls = 0;
 
   @override
   Future<ApiResponse<void>> sendSmsCode({
@@ -145,6 +158,21 @@ class _StubAuthRepository extends AuthRepository {
         smsMaxId: '1',
       ),
     );
+  }
+
+  @override
+  Future<ApiResponse<void>> logout() async {
+    logoutCalls++;
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
+  }
+
+  @override
+  Future<ApiResponse<void>> deleteAccount() async {
+    deleteAccountCalls++;
+    if (deleteAccountFailure) {
+      return const ApiResponse<void>(code: 400, message: 'failed', data: null);
+    }
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
   }
 }
 
@@ -2222,6 +2250,196 @@ void main() {
       sheet.bottom - tester.getRect(find.text('Quit')).bottom,
       greaterThanOrEqualTo(safeBottom),
     );
+  });
+
+  testWidgets('退出登录挽留弹窗：Track Now 只关弹窗，不发退出请求', (tester) async {
+    final authRepository = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      authRepository: authRepository,
+      repository: _StubAppRepository(),
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+
+    // 设计稿 `07-01 - 个人中心-退出挽留弹窗`：整卡用用户提供的 `编组@3x` 切图
+    // （标题 / 正文烘焙在图里），只有胶囊按钮文案和次要行动由代码叠加。
+    expect(_assetImage(AppAssets.mineLogoutRetention), findsOneWidget);
+    expect(find.text('Track Now'), findsOneWidget);
+    expect(find.text('Log Out'), findsOneWidget);
+
+    // 主按钮只关弹窗，不退出登录。
+    await tester.tap(find.byKey(const Key('account-retention-stay')));
+    await tester.pumpAndSettle();
+    expect(_assetImage(AppAssets.mineLogoutRetention), findsNothing);
+    expect(authRepository.logoutCalls, 0);
+  });
+
+  testWidgets('退出登录挽留弹窗：Log Out 真正退出并清掉登录态', (tester) async {
+    late ProviderContainer container;
+    final authRepository = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      authRepository: authRepository,
+      repository: _StubAppRepository(),
+      setUp: (c) {
+        container = c;
+        return c
+            .read(userSessionProvider.notifier)
+            .setSession(
+              token: 'test-session',
+              userId: '1',
+              phone: '9171234567',
+            );
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-retention-exit')));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.logoutCalls, 1);
+    expect(_assetImage(AppAssets.mineLogoutRetention), findsNothing);
+    expect(container.read(userSessionProvider).isLoggedIn, isFalse);
+  });
+
+  testWidgets('退出登录回落到首页时会重新拉首页数据', (tester) async {
+    final repository = _StubAppRepository();
+    await _pumpApp(
+      tester,
+      authRepository: _StubAuthRepository(),
+      repository: repository,
+      setUp: (c) => c
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+
+    // 首屏加载过一次。
+    expect(repository.homeCalls, 1);
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+
+    final beforeLogout = repository.homeCalls;
+    await tester.tap(find.byKey(const Key('account-retention-exit')));
+    await tester.pumpAndSettle();
+
+    // 回到首页时必须重新拉一次：游客态额度 / 订单与登录态不同。
+    expect(repository.homeCalls, greaterThan(beforeLogout));
+  });
+
+  testWidgets('注销挽留弹窗：Delete 调注销接口并清掉登录态', (tester) async {
+    late ProviderContainer container;
+    final authRepository = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      authRepository: authRepository,
+      repository: _StubAppRepository(),
+      setUp: (c) {
+        container = c;
+        return c
+            .read(userSessionProvider.notifier)
+            .setSession(
+              token: 'test-session',
+              userId: '1',
+              phone: '9171234567',
+            );
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+
+    // 设计稿 `07-01 - 个人中心-注销挽留弹窗`：同样用整卡切图，文案在图里。
+    expect(_assetImage(AppAssets.mineDeleteAccountRetention), findsOneWidget);
+    expect(find.text('Stay'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+
+    // 主按钮只关弹窗，不注销。
+    await tester.tap(find.byKey(const Key('account-retention-stay')));
+    await tester.pumpAndSettle();
+    expect(_assetImage(AppAssets.mineDeleteAccountRetention), findsNothing);
+    expect(authRepository.deleteAccountCalls, 0);
+    expect(container.read(userSessionProvider).isLoggedIn, isTrue);
+
+    // 再次打开并确认注销。
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-retention-exit')));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.deleteAccountCalls, 1);
+    expect(_assetImage(AppAssets.mineDeleteAccountRetention), findsNothing);
+    expect(container.read(userSessionProvider).isLoggedIn, isFalse);
+  });
+
+  testWidgets('注销接口失败时保留登录态，弹窗不关闭', (tester) async {
+    late ProviderContainer container;
+    final authRepository = _StubAuthRepository(deleteAccountFailure: true);
+    await _pumpApp(
+      tester,
+      authRepository: authRepository,
+      repository: _StubAppRepository(),
+      setUp: (c) {
+        container = c;
+        return c
+            .read(userSessionProvider.notifier)
+            .setSession(
+              token: 'test-session',
+              userId: '1',
+              phone: '9171234567',
+            );
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mine-account-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('account-retention-exit')));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.deleteAccountCalls, 1);
+    // 后端没删成功：弹窗留着、登录态不能清，避免用户以为账号已注销。
+    expect(_assetImage(AppAssets.mineDeleteAccountRetention), findsOneWidget);
+    expect(container.read(userSessionProvider).isLoggedIn, isTrue);
+  });
+
+  test('注销账号接口走 /outsulk/norseled 并带 sickee 混淆字段', () async {
+    expect(ApiEndpoints.deleteAccount, '/outsulk/norseled');
+    expect(ApiFields.obfuscateDeleteAccount, 'sickee');
+
+    final client = _RecordingClient();
+    await AuthRepository(client).deleteAccount();
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.deleteAccount);
+    expect(params[ApiFields.obfuscateDeleteAccount], isNotEmpty);
   });
 
   // ---------- 接口文档字段契约 ----------

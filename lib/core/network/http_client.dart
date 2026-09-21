@@ -77,27 +77,7 @@ class HttpClient {
   }
 
   void _onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    final commonParams = CommonParams.create(
-      deviceId: _device.deviceId,
-      market: _config.marketIdentifier,
-      appVersion: _device.appVersion,
-      deviceName: _device.modelName,
-      osVersion: _device.systemVersion,
-      advertisingId: _device.advertisingId,
-      sessionId: _getUserToken(),
-    );
-
-    // 签名只覆盖公共参数 + 接口路径，不包含业务参数、混淆字段和签名本身。
-    final signature = _signer.sign(
-      CommonParams.signable(commonParams, _normalizedPath(options.path)),
-    );
-
-    // 混淆字段每次请求随机生成，不参与签名。
-    final requestParams = <String, Object?>{
-      ...commonParams,
-      ApiProtocol.obfuscation: ObfuscationHelper.randomParam(),
-      ApiProtocol.signature: signature,
-    };
+    final requestParams = buildSignedQuery(options.path);
 
     // multipart 请求的字段已经装在 FormData 里，不能再当普通 form body 处理，
     // 否则这里会把整个 FormData 覆盖成 null、文件被静默丢掉。
@@ -123,6 +103,34 @@ class HttpClient {
     }
 
     handler.next(options);
+  }
+
+  /// 生成某个接口路径的「公共参数 + 混淆字段 + 签名」。
+  ///
+  /// 与 [_onRequest] 走同一套逻辑，供 H5 的 `publicParams` 桥动作复用：
+  /// H5 自己发起的请求也必须带完全一致的签名，否则后端会判 `code 400`。
+  Map<String, Object?> buildSignedQuery(String path) {
+    final commonParams = CommonParams.create(
+      deviceId: _device.deviceId,
+      market: _config.marketIdentifier,
+      appVersion: _device.appVersion,
+      deviceName: _device.modelName,
+      osVersion: _device.systemVersion,
+      advertisingId: _device.advertisingId,
+      sessionId: _getUserToken(),
+    );
+
+    // 签名只覆盖公共参数 + 接口路径，不包含业务参数、混淆字段和签名本身。
+    final signature = _signer.sign(
+      CommonParams.signable(commonParams, _normalizedPath(path)),
+    );
+
+    // 混淆字段每次请求随机生成，不参与签名。
+    return <String, Object?>{
+      ...commonParams,
+      ApiProtocol.obfuscation: ObfuscationHelper.randomParam(),
+      ApiProtocol.signature: signature,
+    };
   }
 
   void _onError(DioException error, ErrorInterceptorHandler handler) {

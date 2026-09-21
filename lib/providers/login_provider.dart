@@ -99,3 +99,26 @@ final logoutProvider = Provider<Future<void> Function()>((ref) {
     }
   };
 });
+
+/// 注销账号：先通知后端删除账号，成功后再清本地登录态。
+///
+/// 与 [logoutProvider] 不同，注销失败时**不能**清本地登录态——
+/// 后端没删成功就退出会让用户以为账号已注销，属于合规风险。
+/// 返回是否注销成功，由页面决定错误提示。
+final deleteAccountProvider = Provider<Future<bool> Function()>((ref) {
+  return () async {
+    try {
+      final repository = await ref.read(authRepositoryProvider.future);
+      final response = await repository.deleteAccount();
+      if (!response.isSuccess) {
+        debugPrint('[DeleteAccount] 后端返回失败: ${response.code}');
+        return false;
+      }
+    } catch (error) {
+      debugPrint('[DeleteAccount] 注销失败: $error');
+      return false;
+    }
+    await ref.read(userSessionProvider.notifier).clearSession();
+    return true;
+  };
+});

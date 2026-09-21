@@ -42,6 +42,9 @@ abstract final class AppRoutes {
   /// 绑卡页（认证第五项，打款账户）。
   static const bindCard = '/bind-card';
 
+  /// 通用 H5 页（协议、客服、订单详情、准入返回的 web 链接等）。
+  static const webView = '/webview';
+
   /// 全部路由（用于启动自检与埋点白名单）。
   static const List<String> all = [
     root,
@@ -57,6 +60,7 @@ abstract final class AppRoutes {
     workInfo,
     emergencyContact,
     bindCard,
+    webView,
   ];
 
   /// 路由名是否已注册。

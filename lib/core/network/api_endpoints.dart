@@ -14,6 +14,9 @@ abstract final class ApiEndpoints {
   /// 退出登录。GET
   static const logout = '/outsulk/crucians';
 
+  /// 注销账号。GET
+  static const deleteAccount = '/outsulk/norseled';
+
   /// APP 首页。GET
   static const homePage = '/outsulk/connectedly';
 

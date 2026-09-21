@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/navigation/navigation.dart';
+import '../core/navigation/app_deep_link.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/home_data.dart';
@@ -954,8 +955,24 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
       }
     }
 
-    // TODO(页面): banner 跳转目标可能是 H5 或原生路由，等 WebView / 详情页补齐后接入。
-    ToastHelper.showMessage('Banner target: ${banner.jumpUrl}');
+    // banner 跳转目标可能是 H5 或原生路由，统一走深链解析后再分发。
+    final link = const AppDeepLinkParser().parse(banner.jumpUrl);
+    switch (link.kind) {
+      case AppDeepLinkKind.webView:
+        await AppNavigator.toWebView<void>(url: link.url);
+      case AppDeepLinkKind.home:
+        AppNavigator.popToRoot();
+      case AppDeepLinkKind.login:
+        await AppNavigator.toLogin();
+      case AppDeepLinkKind.unsupported:
+      case AppDeepLinkKind.settings:
+      case AppDeepLinkKind.order:
+      case AppDeepLinkKind.productDetail:
+      case AppDeepLinkKind.recredit:
+      case AppDeepLinkKind.admission:
+        // TODO(页面): 其余跳转目标页面尚未搭建。
+        ToastHelper.showMessage('Banner target: ${banner.jumpUrl}');
+    }
   }
 }
 

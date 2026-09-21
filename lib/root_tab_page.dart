@@ -107,6 +107,15 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
     unawaited(ref.read(homeDataProvider.notifier).refresh());
   }
 
+  /// 回落到首页 Tab 并刷新（退出登录 / token 过期）。
+  ///
+  /// 登录态变化后额度、订单都会变，这里必须重新拉一次，
+  /// 对齐 dali_cash 的 `returnToHomeTab`。
+  void _returnToHome() {
+    if (_currentIndex != 0) setState(() => _currentIndex = 0);
+    _refreshHome();
+  }
+
   Future<void> _selectTab(int index) async {
     if (index == _currentIndex) return;
 
@@ -124,7 +133,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// 主动退出登录不会走这里，避免用户刚退出就被重新弹登录页。
   Future<void> _handleSessionExpired() async {
     if (!mounted) return;
-    if (_currentIndex != 0) setState(() => _currentIndex = 0);
+    _returnToHome();
     await _openLogin();
   }
 
@@ -145,7 +154,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
       if (previous?.isLoggedIn == true &&
           !next.isLoggedIn &&
           _requiresLogin(_currentIndex)) {
-        setState(() => _currentIndex = 0);
+        _returnToHome();
       }
     });
 

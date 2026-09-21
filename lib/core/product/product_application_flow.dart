@@ -346,14 +346,11 @@ class ProductApplicationFlow {
   }
 
   /// H5 跳转。
-  ///
-  /// TODO(页面): WebView 页面尚未搭建（README「其余接口未接入」）。
-  /// 落地后这里换成 `AppNavigator.toWebView(url: url)`。
   Future<void> _openWebPage(String url) async {
     if (url.isEmpty) {
       ToastHelper.showError('Invalid link');
       return;
     }
-    ToastHelper.showMessage('Web page is not available yet');
+    await AppNavigator.toWebView<void>(url: url);
   }
 }

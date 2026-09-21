@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import CFNetwork
+import StoreKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -49,6 +50,31 @@ import CFNetwork
         return
       }
       result(["host": host, "port": port])
+    }
+
+    // App Store 评分通道：H5 通过 WebView 桥的 `grade` 动作请求评分。
+    // 与风控/活体通道分开，避免把 StoreKit 逻辑混进风控 SDK。
+    let reviewChannel = FlutterMethodChannel(
+      name: "laya_credit/app_review",
+      binaryMessenger: registrar.messenger()
+    )
+    reviewChannel.setMethodCallHandler { call, result in
+      guard call.method == "requestAppReview" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      DispatchQueue.main.async {
+        guard
+          let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })
+        else {
+          result(nil)
+          return
+        }
+        SKStoreReviewController.requestReview(in: scene)
+        result(nil)
+      }
     }
   }
 }

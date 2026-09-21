@@ -476,6 +476,7 @@ abstract final class ApiFields {
   static const obfuscateLogin2 = 'preinscription';
   static const obfuscateLogout1 = 'vaccine';
   static const obfuscateLogout2 = 'carline';
+  static const obfuscateDeleteAccount = 'sickee';
   static const obfuscateHome1 = 'inchoacy';
   static const obfuscateHome2 = 'trifanious';
   static const obfuscateBannerClick = 'callista';
