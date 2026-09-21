@@ -9,6 +9,7 @@ import '../../core/network/obfuscation_helper.dart';
 import '../models/emergency_contact_data.dart';
 import '../models/face_token_result.dart';
 import '../models/id_verification_data.dart';
+import '../models/bind_card_data.dart';
 import '../models/personal_info_data.dart';
 
 /// 认证项相关接口（证件 / 活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡）。
@@ -265,9 +266,72 @@ class CertificationRepository {
         ApiFields.emergencyContactSaveData: jsonEncode(
           contacts.map((contact) => contact.toJson()).toList(growable: false),
         ),
-        ApiFields.obfuscateSaveEmergencyContact: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateSaveEmergencyContact:
+            ObfuscationHelper.randomParam(),
       },
       parse: (_) {},
+    );
+  }
+
+  /// 获取绑卡信息（认证第五项，`GET /outsulk/cussedly`）。
+  ///
+  /// 打款方式分组（E-wallet / Bank...）、每组的字段描述与下拉渠道全部由后端下发，
+  /// 页面只按描述渲染，不在客户端写死任何渠道或字段。
+  Future<ApiResponse<BindCardData>> getBindCardInfo({
+    required String productId,
+  }) {
+    return _client.get<BindCardData>(
+      ApiEndpoints.bindCardInfo,
+      params: {
+        ApiFields.productId: productId,
+        ApiFields.obfuscateBindCardInfo1: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateBindCardInfo2: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? BindCardData.fromJson(data.cast<String, dynamic>())
+          : const BindCardData(),
+    );
+  }
+
+  /// 提交绑卡（认证第五项，`POST /outsulk/superidealness`）。
+  ///
+  /// [fields] 的 key 用获取接口下发的 `crucians` 原样回传；唯一例外是打款渠道
+  /// 字段（下发 key 为语义串 `channelCode`），提交时要改成
+  /// `ApiFields.bindCardSubmitChannel`。
+  ///
+  /// 返回 `code == 20000` 时表示后端要求先做活体：把活体结果填进
+  /// [faceType] / [livenessId] / [image] / [bizId] / [license]，再带同样的
+  /// [fields] 调一次本接口。
+  Future<ApiResponse<Map<String, dynamic>>> submitBindCard({
+    required String productId,
+    required String cardType,
+    required Map<String, String> fields,
+    String faceType = '',
+    String livenessId = '',
+    String image = '',
+    String bizId = '',
+    String license = '',
+  }) {
+    final params = <String, Object?>{
+      ApiFields.bindCardSubmitProductId: productId,
+      ApiFields.bindCardSubmitType: cardType,
+      ...fields,
+      ApiFields.uploadFaceType: faceType,
+      ApiFields.uploadLivenessId: livenessId,
+      ApiFields.uploadFileField: image,
+      ApiFields.uploadBizId: bizId,
+      ApiFields.uploadLivenessLicense: license,
+      ApiFields.obfuscateSubmitBindCard: ObfuscationHelper.randomParam(),
+    };
+    // 渠道字段改名：下发 key 是 `channelCode`，提交要换成 `entertainer`。
+    final channel = params.remove(BindCardField.channelKey);
+    if (channel != null) params[ApiFields.bindCardSubmitChannel] = channel;
+
+    return _client.post<Map<String, dynamic>>(
+      ApiEndpoints.submitBindCard,
+      params: params,
+      parse: (data) =>
+          data is Map ? data.cast<String, dynamic>() : <String, dynamic>{},
     );
   }
 }

@@ -33,6 +33,9 @@ const _taskTypeWork = 'TrussvilleUninstructively';
 /// 认证项 `taskType`：紧急联系人。
 const _taskTypeEmergencyContact = 'Thriftiness';
 
+/// 认证项 `taskType`：绑卡（打款账户）。
+const _taskTypeBindCard = 'Bespattered';
+
 class ProductApplicationFlow {
   ProductApplicationFlow({
     required this.repository,
@@ -122,6 +125,12 @@ class ProductApplicationFlow {
       sessionStore.saveProductDetailWorkPrompt(response.data.workInfoPrompt);
       sessionStore.saveProductDetailEmergencyContactPrompt(
         response.data.emergencyContactPrompt,
+      );
+      sessionStore.saveProductDetailBindCardPrompt(
+        response.data.bindCardPrompt,
+      );
+      sessionStore.saveProductDetailBindCardBottomPrompt(
+        response.data.bindCardBottomPrompt,
       );
       return response.data;
     } on ApiException catch (error) {
@@ -236,7 +245,6 @@ class ProductApplicationFlow {
       return;
     }
 
-    // TODO(页面): 紧急联系人 / 绑卡页尚未搭建。
     // 紧急联系人：条数与关系选项全部由后端下发，页面只按描述渲染。
     if (step.taskType == _taskTypeEmergencyContact) {
       AppNavigator.pushTopLevelCertification(
@@ -246,7 +254,19 @@ class ProductApplicationFlow {
       return;
     }
 
-    // TODO(页面): 绑卡页尚未搭建。
+    // 绑卡：打款方式分组与字段描述全部由后端下发，页面只按描述渲染。
+    // 提交后若后端要求活体（`code == 20000`），页面用产品详情的订单号取 token。
+    if (step.taskType == _taskTypeBindCard) {
+      AppNavigator.pushTopLevelCertification(
+        AppRoutes.bindCard,
+        arguments: BindCardPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+        ),
+      );
+      return;
+    }
+
     final title = step.title.isEmpty ? 'certification' : step.title;
     ToastHelper.showMessage('Please complete $title');
   }

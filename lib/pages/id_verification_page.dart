@@ -68,71 +68,44 @@ class IdVerificationPage extends ConsumerWidget {
     final layout = AppLayout.of(context);
     final idVerification = ref.watch(idVerificationProvider(productId));
 
-    return Scaffold(
-      // 设计稿 `page` 底色 `rgba(245,245,245)`。
-      backgroundColor: AppColors.idVerifyBackground,
-      body: Stack(
+    return CertificationScaffold(
+      navTitle: _navTitle,
+      // 这张稿的头图自带「ID Verification」标题，页面不再叠引导段落。
+      headerAsset: AppAssets.idVerifyHeader,
+      headerHeight: _headerHeight,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SingleChildScrollView(
-            child: Stack(
-              children: [
-                // 头图通栏：宽度铺满，高度按 375pt 设计稿等比换算。
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Image.asset(
-                    AppAssets.idVerifyHeader,
-                    height: layout.px(_headerHeight),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 卡片顶边比头图底边高 19pt，两块内容由 Stack 叠出来。
-                    SizedBox(height: layout.px(_headerHeight - _cardOverlap)),
-                    Padding(
-                      padding: layout.edgeInsets(
-                        left: AppSpacing.pageHorizontal,
-                        right: AppSpacing.pageHorizontal,
-                        bottom: _pageBottom,
-                      ),
-                      child: idVerification.when(
-                        loading: () => SizedBox(
-                          height: layout.px(_stateHeight),
-                          child: const LoadingView(),
-                        ),
-                        error: (error, _) => SizedBox(
-                          height: layout.px(_stateHeight),
-                          child: ErrorView(
-                            message: switch (error) {
-                              ApiException(:final message) => message,
-                              _ => 'Failed to load, please try again',
-                            },
-                            onRetry: () => ref.invalidate(
-                              idVerificationProvider(productId),
-                            ),
-                          ),
-                        ),
-                        data: (data) => _IdTypeGroups(
-                          layout: layout,
-                          data: data,
-                          onSelected: _onIdTypeSelected,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+          // 卡片顶边比头图底边高 19pt，两块内容由 Stack 叠出来。
+          SizedBox(height: layout.px(_headerHeight - _cardOverlap)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+              bottom: _pageBottom,
             ),
-          ),
-          // 导航浮层固定在头图上：设计稿内容正好一屏放得下，小屏滚动时返回按钮
-          // 也不能跟着滚出屏幕，否则用户没有出口。
-          BackNavBar(
-            layout: layout,
-            title: _navTitle,
-            onBack: () => AppNavigator.pop(),
+            child: idVerification.when(
+              loading: () => SizedBox(
+                height: layout.px(_stateHeight),
+                child: const LoadingView(),
+              ),
+              error: (error, _) => SizedBox(
+                height: layout.px(_stateHeight),
+                child: ErrorView(
+                  message: switch (error) {
+                    ApiException(:final message) => message,
+                    _ => 'Failed to load, please try again',
+                  },
+                  onRetry: () =>
+                      ref.invalidate(idVerificationProvider(productId)),
+                ),
+              ),
+              data: (data) => _IdTypeGroups(
+                layout: layout,
+                data: data,
+                onSelected: _onIdTypeSelected,
+              ),
+            ),
           ),
         ],
       ),

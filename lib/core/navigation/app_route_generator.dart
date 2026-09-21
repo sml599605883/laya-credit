@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/identity_recognition.dart';
+import '../../pages/bind_card_page.dart';
 import '../../pages/emergency_contact_page.dart';
 import '../../pages/face_verification_page.dart';
 import '../../pages/home_page.dart';
@@ -100,6 +101,17 @@ class EmergencyContactPageArguments {
   final String productId;
 }
 
+/// 绑卡页入参（蓝湖稿 `03-05 - 绑定账户`，认证第五项）。
+///
+/// 打款方式分组与字段描述都由页面自己按 [productId] 拉取；
+/// [orderNo] 是活体 token 接口的 `resex`，由产品申请流程从产品详情带下来。
+class BindCardPageArguments {
+  const BindCardPageArguments({required this.productId, this.orderNo = ''});
+
+  final String productId;
+  final String orderNo;
+}
+
 /// 路由生成器：`MaterialApp.onGenerateRoute` 的唯一入口。
 ///
 /// 每个 case 负责把 `settings.arguments` 转成强类型的页面入参，
@@ -175,10 +187,21 @@ class AppRouteGenerator {
         );
 
       case AppRoutes.emergencyContact:
-        final contactArgs = settings.arguments as EmergencyContactPageArguments?;
+        final contactArgs =
+            settings.arguments as EmergencyContactPageArguments?;
         return _route<void>(
           settings,
           (_) => EmergencyContactPage(productId: contactArgs?.productId ?? ''),
+        );
+
+      case AppRoutes.bindCard:
+        final bindArgs = settings.arguments as BindCardPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => BindCardPage(
+            productId: bindArgs?.productId ?? '',
+            orderNo: bindArgs?.orderNo ?? '',
+          ),
         );
 
       case AppRoutes.login:

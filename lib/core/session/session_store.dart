@@ -91,6 +91,29 @@ class SessionStore {
     _productDetailEmergencyContactPrompt = prompt.trim();
   }
 
+  /// 产品详情下发的绑卡认证页引导文案（`overwhelming.mobilization`）。
+  ///
+  /// 与其他认证页文案一样只在内存里缓存：产品详情一定先于认证页拉取。
+  String _productDetailBindCardPrompt = '';
+
+  String get productDetailBindCardPrompt => _productDetailBindCardPrompt;
+
+  /// 写入产品详情下发的绑卡页引导文案。
+  void saveProductDetailBindCardPrompt(String prompt) {
+    _productDetailBindCardPrompt = prompt.trim();
+  }
+
+  /// 产品详情下发的绑卡页底部提示文案（`overwhelming.revision`）。
+  String _productDetailBindCardBottomPrompt = '';
+
+  String get productDetailBindCardBottomPrompt =>
+      _productDetailBindCardBottomPrompt;
+
+  /// 写入产品详情下发的绑卡页底部提示文案。
+  void saveProductDetailBindCardBottomPrompt(String prompt) {
+    _productDetailBindCardBottomPrompt = prompt.trim();
+  }
+
   /// 平台实现可能没有注册（例如单元测试环境）。拿不到实例时所有读写退化为空操作，
   /// 不能因为本地存储不可用就让 App 启动失败。
   SharedPreferencesAsync? get _preferences {
@@ -151,6 +174,8 @@ class SessionStore {
     _productDetailPersonalPrompt = '';
     _productDetailWorkPrompt = '';
     _productDetailEmergencyContactPrompt = '';
+    _productDetailBindCardPrompt = '';
+    _productDetailBindCardBottomPrompt = '';
     try {
       final preferences = _preferences;
       if (preferences == null) return;

@@ -4,7 +4,6 @@ import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_exception.dart';
-import '../core/navigation/navigation.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/emergency_contact_data.dart';
 import '../data/models/personal_info_data.dart';
@@ -13,7 +12,7 @@ import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
-import '../widgets/back_nav_bar.dart';
+import '../widgets/certification_scaffold.dart';
 import '../widgets/field_chevron.dart';
 import '../widgets/state_views.dart';
 import '../widgets/upload_button.dart';
@@ -33,10 +32,6 @@ const _fallbackPrompt =
     'respect every contact\'s\n'
     'privacy.';
 
-/// 头图高度（设计稿 `box_1`，375x213，复用证件上传页那张不带标题的
-/// 绿色渐变 + 吉祥物切图）。
-const _headerHeight = 213.0;
-
 /// 引导段落相对导航行的下移量。
 ///
 /// 设计稿 `text-wrapper_6 { margin-top: 26 }`，导航行 24pt 高；
@@ -45,10 +40,6 @@ const _promptGap = 18.0;
 
 /// 引导段落宽度（设计稿 `text_4 { width: 186px }`）。
 const _promptWidth = 186.0;
-
-/// 引导段字号 / 行高（设计稿 `text_4`：16/19）。
-const _promptFontSize = 16.0;
-const _promptLineHeight = 19.0;
 
 /// 进度缎带的顶边（设计稿 `text-wrapper_3 { top: 185 }`）。
 const _ribbonTop = 185.0;
@@ -168,7 +159,6 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
-    final safeTop = MediaQuery.paddingOf(context).top;
     final data = ref.watch(emergencyContactProvider(widget.productId));
 
     // 接口的 `befleas` 只在拿到数据后才知道；产品详情下发的那条一定先到。
@@ -183,74 +173,27 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
 
     data.whenData(_ensureContacts);
 
-    return Scaffold(
-      // 设计稿 `page` 底色 `rgba(245,245,245)`。
-      backgroundColor: AppColors.idVerifyBackground,
-      body: GestureDetector(
-        // 空白区域点击收起键盘，子级（行 / 按钮）优先响应。
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              child: Stack(
-                children: [
-                  // 头图通栏：绿色渐变 + 吉祥物整块切图。
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Image.asset(
-                      AppAssets.idVerifyHeaderBlank,
-                      height: layout.px(_headerHeight),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  // 引导段落浮在头图上：设计稿顶边 104 是「设计稿状态栏 + 导航行 + 26」，
-                  // 导航行自己让开了安全区，所以这里也把安全区补回来。
-                  Positioned(
-                    top: safeTop + layout.px(BackNavBar.height + _promptGap),
-                    left: layout.px(AppSpacing.pageHorizontal),
-                    child: SizedBox(
-                      width: layout.px(_promptWidth),
-                      child: Text(
-                        prompt,
-                        style: TextStyle(
-                          color: AppColors.idVerifyHeaderText,
-                          fontSize: layout.px(_promptFontSize),
-                          fontWeight: FontWeight.w700,
-                          // 设计稿：`font-size: 16px; line-height: 19px`。
-                          height: _promptLineHeight / _promptFontSize,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(height: layout.px(_ribbonTop)),
-                      Padding(
-                        padding: layout.edgeInsets(
-                          left: AppSpacing.pageHorizontal,
-                          right: AppSpacing.pageHorizontal,
-                        ),
-                        child: _buildCard(layout, data),
-                      ),
-                      SizedBox(height: layout.px(AppSpacing.md)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            BackNavBar(
-              layout: layout,
-              title: _navTitle,
-              onBack: () => AppNavigator.pop(),
-            ),
-          ],
-        ),
-      ),
+    return CertificationScaffold(
+      navTitle: _navTitle,
+      prompt: prompt,
+      promptGap: _promptGap,
+      promptWidth: _promptWidth,
+      dismissKeyboardOnTap: true,
       bottomNavigationBar: _buildBottomBar(layout),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: layout.px(_ribbonTop)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+            ),
+            child: _buildCard(layout, data),
+          ),
+          SizedBox(height: layout.px(AppSpacing.md)),
+        ],
+      ),
     );
   }
 

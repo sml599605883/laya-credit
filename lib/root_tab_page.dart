@@ -7,6 +7,7 @@ import 'core/navigation/navigation.dart';
 import 'pages/home_page.dart';
 import 'pages/mine_page.dart';
 import 'pages/stats_page.dart';
+import 'providers/home_provider.dart';
 import 'providers/session_provider.dart';
 import 'theme/theme.dart';
 import 'widgets/tab_bar/app_tab_bar.dart';
@@ -23,7 +24,8 @@ class RootTabPage extends ConsumerStatefulWidget {
   ConsumerState<RootTabPage> createState() => _RootTabPageState();
 }
 
-class _RootTabPageState extends ConsumerState<RootTabPage> {
+class _RootTabPageState extends ConsumerState<RootTabPage>
+    with WidgetsBindingObserver, RouteAware {
   int _currentIndex = 0;
 
   /// 防止连点 Tab 叠加打开多个登录页。
@@ -31,12 +33,19 @@ class _RootTabPageState extends ConsumerState<RootTabPage> {
 
   StreamSubscription<void>? _sessionExpirySubscription;
 
+  /// 生命周期恢复刷新用：区分「从后台回来」与「首次 inactive→resumed」，
+  /// 后者只认一次，避免权限弹窗 / 分享面板等瞬时 inactive 反复触发刷新。
+  bool _wasInactive = false;
+  bool _wasInBackground = false;
+  bool _inactiveResumeRefreshConsumed = false;
+
   /// 首页允许游客浏览，其余 Tab 需要登录。
   static bool _requiresLogin(int index) => index != 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _sessionExpirySubscription = ref
         .read(sessionExpirySignalProvider)
         .events
@@ -44,9 +53,58 @@ class _RootTabPageState extends ConsumerState<RootTabPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _sessionExpirySubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive) {
+      _wasInactive = true;
+      return;
+    }
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasInBackground = true;
+      return;
+    }
+    if (state != AppLifecycleState.resumed) return;
+
+    final resumedFromBackground = _wasInBackground;
+    final firstInactiveResume =
+        _wasInactive && !_inactiveResumeRefreshConsumed;
+    _wasInactive = false;
+    _wasInBackground = false;
+    if (!resumedFromBackground && !firstInactiveResume) return;
+    if (!resumedFromBackground) _inactiveResumeRefreshConsumed = true;
+    // 停在子页面（认证 / 活体等）时不刷，避免无谓请求。
+    if (_isTopRoute) _refreshHome();
+  }
+
+  /// 从子页面（认证流程 / 产品详情等）返回根容器时刷新首页，
+  /// 对齐 dali_cash 的 `onRouteChanged`。
+  @override
+  void didPopNext() => _refreshHome();
+
+  /// 本路由是否处于最上层。
+  bool get _isTopRoute => ModalRoute.of(context)?.isCurrent ?? true;
+
+  /// 仅在首页 Tab 可见时刷新。
+  void _refreshHome() {
+    if (_currentIndex != 0) return;
+    unawaited(ref.read(homeDataProvider.notifier).refresh());
   }
 
   Future<void> _selectTab(int index) async {
@@ -58,6 +116,8 @@ class _RootTabPageState extends ConsumerState<RootTabPage> {
     }
 
     setState(() => _currentIndex = index);
+    // 切回首页时刷新，对齐 dali_cash 的 `selectTab`。
+    _refreshHome();
   }
 
   /// token 过期：回到首页 Tab 并弹出登录页。

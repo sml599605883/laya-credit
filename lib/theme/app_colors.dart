@@ -238,6 +238,55 @@ abstract final class AppColors {
   /// 分割线。
   static const divider = Color(0xFFE6E6E6);
 
+  // ---------- 绑卡页（蓝湖稿 `03-05 - 绑定账户`，认证第五项） ----------
+
+  /// 顶部打款方式 Tab 的选中底色（设计稿 `text-wrapper_5` rgba(195,231,95,1)）。
+  static const bindCardTabActiveBackground = Color(0xFFC3E75F);
+
+  /// 选中 Tab 的文案色（设计稿 `text_8` rgba(19,19,19,1)）。
+  static const bindCardTabActiveText = Color(0xFF131313);
+
+  /// 未选中 Tab 的文案色（设计稿 `text_9` / `text_10` rgba(22,22,22,1)）。
+  static const bindCardTabText = Color(0xFF161616);
+
+  /// 字段标题色（设计稿 `text_11` 等 rgba(51,51,51,1)）。
+  static const bindCardFieldTitle = Color(0xFF333333);
+
+  /// 取值行文案色（设计稿 `text_12` 等 rgba(51,51,51,1)）。
+  static const bindCardFieldValue = Color(0xFF333333);
+
+  /// 取值行未填时的占位文案色（设计稿 `text_14` rgba(183,183,183,1)）。
+  static const bindCardFieldHint = Color(0xFFB7B7B7);
+
+  /// 卡片底部的红色提示文案色（设计稿 `text_6` rgba(254,41,92,1)）。
+  static const bindCardBottomPrompt = Color(0xFFFE295C);
+
+  /// 自动填充气泡的底色（设计稿 `group_3` rgba(0,0,0,0.59)）。
+  static const bindCardSuggestionBackground = Color(0x96000000);
+
+  // ---------- 绑卡页的单选面板（蓝湖稿 `认证-绑定电子钱包-选择`） ----------
+
+  /// 面板遮罩（设计稿 `group_4` rgba(0,0,0,0.5)）。
+  static const bindCardSheetBarrier = Color(0x80000000);
+
+  /// 渠道行文案色（设计稿 `text-group_1` / `text-group_2` rgba(24,28,23,1)）。
+  static const bindCardOptionText = Color(0xFF181C17);
+
+  /// 维护中渠道的提示文案色（设计稿 `text_17` rgba(254,41,92,1)）。
+  static const bindCardOptionHint = Color(0xFFFE295C);
+
+  /// 渠道 logo 的一圈浅色描边（设计稿 `block_7` rgba(255,250,250,1)）。
+  static const bindCardOptionLogoBorder = Color(0xFFFFFAFA);
+
+  /// 面板里的行分隔线（设计稿 `block_3` / `block_5` rgba(241,241,242,1)）。
+  static const bindCardSheetDivider = Color(0xFFF1F1F2);
+
+  /// 面板里 `Done` 上方的分组间隔带（设计稿 `block_6` rgba(244,244,244,1)）。
+  static const bindCardSheetGap = Color(0xFFF4F4F4);
+
+  /// `Done` 文案色（设计稿 `text_18` rgba(90,90,90,1)）。
+  static const bindCardSheetDoneText = Color(0xFF5A5A5A);
+
   static const white = Color(0xFFFFFFFF);
   static const black = Color(0xFF000000);
 }

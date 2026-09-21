@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/personal_info_data.dart';
@@ -12,7 +11,7 @@ import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/work_info_provider.dart';
 import '../theme/theme.dart';
-import '../widgets/back_nav_bar.dart';
+import '../widgets/certification_scaffold.dart';
 import '../widgets/field_chevron.dart';
 import '../widgets/state_views.dart';
 import '../widgets/upload_button.dart';
@@ -30,10 +29,6 @@ enum _CertificationFormKind { personal, work }
 /// 导航标题（个人信息稿 `text_26` / 工作信息稿 `text_27`）。
 const _navTitlePersonal = 'Basic identity information';
 const _navTitleWork = 'Job information';
-
-/// 头图高度（设计稿 `block_1` 的 `蒙版`，375x213，复用证件上传页那张
-/// 不带标题的绿色渐变 + 吉祥物切图）。
-const _headerHeight = 213.0;
 
 /// 引导段落相对导航行的下移量。
 ///
@@ -226,7 +221,6 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
-    final safeTop = MediaQuery.paddingOf(context).top;
     final info = ref.watch(_formProvider);
 
     // 表单接口的 `befleas` 只在拿到数据后才知道；产品详情下发的那条一定先到。
@@ -243,77 +237,30 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
 
     info.whenData(_ensureForm);
 
-    return Scaffold(
-      // 设计稿 `page` 底色 `rgba(245,245,245)`。
-      backgroundColor: AppColors.idVerifyBackground,
-      body: GestureDetector(
-        // 空白区域点击收起键盘，子级（输入框 / 字段 / 按钮）优先响应。
-        behavior: HitTestBehavior.translucent,
-        onTap: _dismissKeyboard,
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              // 拖动列表同样收起键盘，避免键盘挡住下方字段。
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              child: Stack(
-                children: [
-                  // 头图通栏：绿色渐变 + 吉祥物整块切图。
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Image.asset(
-                      AppAssets.idVerifyHeaderBlank,
-                      height: layout.px(_headerHeight),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  // 引导段落浮在头图上：设计稿顶边 104 是「设计稿状态栏 + 导航行 + 18」，
-                  // 导航行自己让开了安全区，所以这里也把安全区补回来；
-                  // 工作信息稿的整体上移 10pt 由 [_promptGap] 承担。
-                  Positioned(
-                    top: safeTop + layout.px(BackNavBar.height + _promptGap),
-                    left: layout.px(AppSpacing.pageHorizontal),
-                    child: SizedBox(
-                      width: layout.px(_promptWidth),
-                      child: Text(
-                        prompt,
-                        style: TextStyle(
-                          color: AppColors.idVerifyHeaderText,
-                          fontSize: layout.px(_promptFontSize),
-                          fontWeight: FontWeight.w700,
-                          // 设计稿：个人信息 16/19，工作信息 14/17。
-                          height: _promptLineHeight / _promptFontSize,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(height: layout.px(_ribbonTop)),
-                      Padding(
-                        padding: layout.edgeInsets(
-                          left: AppSpacing.pageHorizontal,
-                          right: AppSpacing.pageHorizontal,
-                        ),
-                        child: _buildCard(layout, info),
-                      ),
-                      SizedBox(height: layout.px(AppSpacing.md)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            BackNavBar(
-              layout: layout,
-              title: _navTitle,
-              onBack: () => AppNavigator.pop(),
-            ),
-          ],
-        ),
-      ),
+    return CertificationScaffold(
+      navTitle: _navTitle,
+      prompt: prompt,
+      promptGap: _promptGap,
+      promptWidth: _promptWidth,
+      promptFontSize: _promptFontSize,
+      promptLineHeight: _promptLineHeight,
+      dismissKeyboardOnTap: true,
+      dismissKeyboardOnDrag: true,
       bottomNavigationBar: _buildBottomBar(layout, info),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: layout.px(_ribbonTop)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+            ),
+            child: _buildCard(layout, info),
+          ),
+          SizedBox(height: layout.px(AppSpacing.md)),
+        ],
+      ),
     );
   }
 
@@ -481,6 +428,9 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         SizedBox(
           height: layout.px(_rowHeight),
           child: Stack(
+            // Stack 默认是 loose，非 Positioned 的 Row 会缩到内容高度、贴着行顶；
+            // 撑成 48pt 让 Row 的 crossAxisAlignment.center 把取值行垂直居中。
+            fit: StackFit.expand,
             children: [
               Row(
                 children: [

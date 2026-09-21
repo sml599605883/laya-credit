@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,7 @@ import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/data/models/face_token_result.dart';
+import 'package:laya_credit/data/models/bind_card_data.dart';
 import 'package:laya_credit/data/models/emergency_contact_data.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
@@ -33,6 +36,7 @@ import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/face_verification_page.dart';
+import 'package:laya_credit/pages/bind_card_page.dart';
 import 'package:laya_credit/pages/emergency_contact_page.dart';
 import 'package:laya_credit/pages/home_page.dart';
 import 'package:laya_credit/pages/id_confirm_page.dart';
@@ -41,6 +45,7 @@ import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
 import 'package:laya_credit/pages/personal_info_page.dart';
 import 'package:laya_credit/pages/work_information_page.dart';
+import 'package:laya_credit/providers/home_provider.dart';
 import 'package:laya_credit/providers/liveness_provider.dart';
 import 'package:laya_credit/providers/media_provider.dart';
 import 'package:laya_credit/providers/network_provider.dart';
@@ -71,6 +76,32 @@ class _StubAppRepository extends AppRepository {
     );
   }
 }
+
+/// 可控首页仓库桩：每次请求都挂起，由测试决定返回顺序，
+/// 用来验证并发刷新的 last-wins（对齐 dali_cash）。
+class _ControllableHomeRepository extends AppRepository {
+  _ControllableHomeRepository() : super(_placeholderClient());
+
+  final List<Completer<ApiResponse<HomeData>>> requests = [];
+
+  @override
+  Future<ApiResponse<HomeData>> getHomePage() {
+    final completer = Completer<ApiResponse<HomeData>>();
+    requests.add(completer);
+    return completer.future;
+  }
+}
+
+ApiResponse<HomeData> _homeResponse(List<String> notices) => ApiResponse(
+  code: 0,
+  message: 'success',
+  data: HomeData(
+    banners: const [],
+    product: null,
+    orders: const [],
+    notices: notices,
+  ),
+);
 
 /// 登录/发码仓库桩：只记录调用，不发网络。
 class _StubAuthRepository extends AuthRepository {
@@ -571,6 +602,245 @@ class _StubCertificationRepository extends CertificationRepository {
     if (saveEmergencyContactFailure case final error?) throw error;
     return const ApiResponse<void>(code: 0, message: 'success', data: null);
   }
+
+  /// 绑卡表单（认证第五项）：分组 / 字段 / 选项口径取接口文档
+  /// 「获取绑卡信息（第五项）」，三个 Tab 与蓝湖稿 03-05 对齐。
+  static const bindCardData = BindCardData(
+    prompt: '',
+    bottomPrompt:
+        'Incorrect account numbers cause payout failure. '
+        'Double-check all digits.',
+    groups: [
+      BindCardGroup(
+        label: 'E-wallet',
+        type: '1',
+        fields: [
+          BindCardField(
+            title: 'Select your recipient E-wallet',
+            placeholder: 'Please select',
+            key: 'channelCode',
+            control: BindCardControl.selection,
+            options: [
+              BindCardOption(
+                label: 'GCash e-wallet',
+                value: 'GCASH',
+                logoUrl: 'https://cdn.test/gcash.png',
+                available: false,
+              ),
+              BindCardOption(
+                label: 'PayMaya e-wallet',
+                value: 'PAYMAYA',
+                logoUrl: 'https://cdn.test/paymaya.png',
+                available: true,
+              ),
+              BindCardOption(
+                label: 'GrabPay e-wallet',
+                value: 'GRABPAY',
+                logoUrl: 'https://cdn.test/grabpay.png',
+                available: true,
+              ),
+            ],
+            isNumeric: false,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+          BindCardField(
+            title: 'First name',
+            placeholder: 'Please enter',
+            key: 'firstName',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: false,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: 'Anna',
+          ),
+          BindCardField(
+            title: 'Middle name',
+            placeholder: 'Please enter',
+            key: 'middleName',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: false,
+            isOptional: true,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+          BindCardField(
+            title: 'Last name',
+            placeholder: 'Please enter',
+            key: 'lastName',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: false,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+          BindCardField(
+            title: 'E-wallet Account',
+            placeholder: 'Please enter your E-Wallet account',
+            key: 'cardNo',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: true,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+          BindCardField(
+            title: 'Repeat E-wallet Account',
+            placeholder: 'Ensure the account number is correct',
+            key: 'confirmCardNo',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: true,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+        ],
+      ),
+      BindCardGroup(
+        label: 'Outstanding',
+        type: '2',
+        fields: [
+          BindCardField(
+            title: 'Select your recipient Bank',
+            placeholder: 'Please select',
+            key: 'channelCode',
+            control: BindCardControl.selection,
+            options: [
+              BindCardOption(
+                label: 'BDO Unibank',
+                value: 'BDO',
+                logoUrl: '',
+                available: true,
+              ),
+            ],
+            isNumeric: false,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+          BindCardField(
+            title: 'Bank Account',
+            placeholder: 'Please enter your bank account',
+            key: 'cardNo',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: true,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+        ],
+      ),
+      BindCardGroup(
+        label: 'Overdue',
+        type: '3',
+        fields: [
+          BindCardField(
+            title: 'Overdue Account',
+            placeholder: 'Please enter your account',
+            key: 'cardNo',
+            control: BindCardControl.text,
+            options: [],
+            isNumeric: true,
+            isOptional: false,
+            initialDisplayValue: '',
+            initialSubmitValue: '',
+            suggestedValue: '',
+          ),
+        ],
+      ),
+    ],
+  );
+
+  /// 记录每次拉取绑卡表单的产品 id。
+  final List<String> bindCardInfoCalls = [];
+
+  /// 绑卡表单返回，默认走 [bindCardData]。
+  BindCardData? bindCard;
+
+  /// 置为异常时绑卡表单接口直接抛出，用来测错误态。
+  Object? bindCardFailure;
+
+  /// 接口延迟，用来测 Loading 态。
+  Duration? bindCardDelay;
+
+  @override
+  Future<ApiResponse<BindCardData>> getBindCardInfo({
+    required String productId,
+  }) async {
+    bindCardInfoCalls.add(productId);
+    if (bindCardDelay case final wait?) await Future<void>.delayed(wait);
+    if (bindCardFailure case final error?) throw error;
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: bindCard ?? bindCardData,
+    );
+  }
+
+  /// 每次提交绑卡的入参（渠道字段已在仓库层改名成 `entertainer`）。
+  final List<
+    ({
+      String cardType,
+      Map<String, String> fields,
+      String faceType,
+      String livenessId,
+      String image,
+      String license,
+    })
+  >
+  submitBindCardCalls = [];
+
+  /// 逐次返回的提交状态码：第一个 `20000` 触发活体，随后成功。
+  List<int> submitBindCardCodes = const [0];
+
+  /// 置为异常时提交接口直接抛出。
+  Object? submitBindCardFailure;
+
+  @override
+  Future<ApiResponse<Map<String, dynamic>>> submitBindCard({
+    required String productId,
+    required String cardType,
+    required Map<String, String> fields,
+    String faceType = '',
+    String livenessId = '',
+    String image = '',
+    String bizId = '',
+    String license = '',
+  }) async {
+    submitBindCardCalls.add((
+      cardType: cardType,
+      fields: Map<String, String>.from(fields),
+      faceType: faceType,
+      livenessId: livenessId,
+      image: image,
+      license: license,
+    ));
+    if (submitBindCardFailure case final error?) throw error;
+    final index = submitBindCardCalls.length - 1;
+    final code = index < submitBindCardCodes.length
+        ? submitBindCardCodes[index]
+        : 0;
+    return ApiResponse(
+      code: code,
+      message: code == 0 ? 'success' : 'Liveness required',
+      data: const {'moonshade': 123},
+    );
+  }
 }
 
 /// 证件照服务桩：不弹系统 UI，直接返回固定路径。
@@ -971,6 +1241,53 @@ void _openEmergencyContactPage(WidgetTester tester, {String productId = '7'}) {
     AppRoutes.emergencyContact,
     arguments: EmergencyContactPageArguments(productId: productId),
   );
+}
+
+/// 直接打开绑卡认证页（走和产品申请流程一样的路由与入参）。
+void _openBindCardPage(
+  WidgetTester tester, {
+  String productId = '7',
+  String orderNo = 'ORDER-1',
+}) {
+  AppNavigator.push(
+    AppRoutes.bindCard,
+    arguments: BindCardPageArguments(productId: productId, orderNo: orderNo),
+  );
+}
+
+/// 填满绑卡页 E-wallet 分组的必填项（渠道 / 名 / 姓 / 账号 / 确认账号）。
+Future<void> _fillBindCardForm(
+  WidgetTester tester, {
+  String channel = 'PAYMAYA',
+  String firstName = 'Anna',
+  String lastName = 'Cruz',
+  String account = '1234567890',
+  String? confirm,
+}) async {
+  await tester.tap(find.byKey(const Key('bind-card-field-channelCode')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(Key('bind-card-option-$channel')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('bind-card-option-done')));
+  await tester.pumpAndSettle();
+
+  await tester.enterText(
+    find.byKey(const Key('bind-card-field-firstName')),
+    firstName,
+  );
+  await tester.enterText(
+    find.byKey(const Key('bind-card-field-lastName')),
+    lastName,
+  );
+  await tester.enterText(
+    find.byKey(const Key('bind-card-field-cardNo')),
+    account,
+  );
+  await tester.enterText(
+    find.byKey(const Key('bind-card-field-confirmCardNo')),
+    confirm ?? account,
+  );
+  await tester.pumpAndSettle();
 }
 
 /// 读取登录页协议行的勾选切图，用来判断当前是否勾选。
@@ -1453,6 +1770,39 @@ void main() {
 
     expect(find.byType(ErrorView), findsOneWidget);
     expect(find.text('网络连接失败，请检查网络设置'), findsOneWidget);
+  });
+
+  test('首页并发刷新时只采纳最后一次请求的结果', () async {
+    final repository = _ControllableHomeRepository();
+    final container = ProviderContainer(
+      overrides: [
+        appRepositoryProvider.overrideWith((ref) async => repository),
+        // 遮蔽真实 BotToast，单测只关心请求竞态。
+        homeLoadingIndicatorProvider.overrideWithValue(
+          HomeLoadingIndicator(show: () {}, hide: () {}),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(homeDataProvider.notifier);
+    await pumpEventQueue();
+    repository.requests[0].complete(_homeResponse(['initial']));
+    await container.read(homeDataProvider.future);
+    expect(container.read(homeDataProvider).value?.notices, ['initial']);
+
+    // 两次刷新前后脚发出：后发起的先返回，先发起的慢一拍才返回。
+    final stale = notifier.refresh();
+    final latest = notifier.refresh();
+    await pumpEventQueue();
+    expect(repository.requests, hasLength(3));
+    repository.requests[2].complete(_homeResponse(['latest']));
+    await latest;
+    repository.requests[1].complete(_homeResponse(['stale']));
+    await stale;
+
+    // 慢的旧请求回来后不能覆盖新数据。
+    expect(container.read(homeDataProvider).value?.notices, ['latest']);
   });
 
   testWidgets('未登录时点击受保护的 Tab 会跳转登录页', (tester) async {
@@ -2203,7 +2553,7 @@ void main() {
         resultCode: 200,
         basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
         nextStep: ProductNextStep(
-          taskType: 'Bespattered',
+          taskType: 'UnhandledStep',
           title: 'Informasi bank',
         ),
       ),
@@ -3232,6 +3582,16 @@ void main() {
     );
     expect(headerRect.bottom - ribbonRect.top, closeTo(28 * _designScale, 1));
 
+    // 输入框取值行也要撑满 48pt 并垂直居中，不缩到文字高度贴着行顶
+    // （选项行的 Align 本来就会撑满，拿输入框才测得出问题）。
+    final valueRow = find
+        .ancestor(
+          of: find.byKey(const Key('personal-info-field-offer')),
+          matching: find.byType(Row),
+        )
+        .first;
+    expect(tester.getSize(valueRow).height, closeTo(48 * _designScale, 0.5));
+
     // 字段行距 94pt（标题 22 + 8 + 行 48 + 字段间距 16）。
     double centerY(Finder finder) => tester.getCenter(finder).dy;
     expect(
@@ -4224,6 +4584,48 @@ void main() {
     expect(certificationRepository.emergencyContactCalls, ['1']);
   });
 
+  testWidgets('产品详情下一步是绑卡时进入绑卡页并带上产品 id 与订单号', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-9'),
+        nextStep: ProductNextStep(
+          taskType: 'Bespattered',
+          title: 'Informasi bank',
+        ),
+      ),
+    );
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BindCardPage), findsOneWidget);
+    final page = tester.widget<BindCardPage>(find.byType(BindCardPage));
+    expect(page.productId, '1');
+    // 提交后要活体会用到订单号，必须从产品详情带下来。
+    expect(page.orderNo, 'ORDER-9');
+    expect(certificationRepository.bindCardInfoCalls, ['1']);
+  });
+
   test('个人信息表单解析两套控件类型命名', () {
     // 值映射给的是 `enum` / `txt` / `citySelect`，
     // 响应示例给的是 `stepped` / `onto` / `stage`，两套都要认得。
@@ -4471,5 +4873,475 @@ void main() {
     // 五条文案各管各的页，不会互相顶替。
     expect(parsed.workInfoPrompt, 'work tip');
     expect(parsed.personalInfoPrompt, '');
+  });
+
+  testWidgets('绑卡页按蓝湖稿 03-05 渲染头图、进度缎带与打款方式表单', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    // 分组 / 字段按产品 id 从接口拉取，客户端不写死。
+    expect(certificationRepository.bindCardInfoCalls, ['7']);
+
+    // 头图 / 返回按钮 / 进度缎带 / Upload 底图都是设计稿切图。
+    expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.personalInfoProgressRibbon), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+
+    expect(find.text('Account management'), findsOneWidget);
+    expect(find.text('100%'), findsOneWidget);
+
+    // 打款方式 Tab 由接口下发（设计稿 E-wallet 选中）。
+    expect(find.text('E-wallet'), findsOneWidget);
+    expect(find.text('Outstanding'), findsOneWidget);
+    expect(find.text('Overdue'), findsOneWidget);
+
+    // 字段标题与占位文案照接口下发原样展示。
+    expect(find.text('Select your recipient E-wallet'), findsOneWidget);
+    expect(find.text('Please select'), findsOneWidget);
+    expect(find.text('First name'), findsOneWidget);
+    expect(find.text('Middle name'), findsOneWidget);
+    expect(find.text('Last name'), findsOneWidget);
+    expect(find.text('E-wallet Account'), findsOneWidget);
+    expect(find.text('Repeat E-wallet Account'), findsOneWidget);
+    expect(find.text('Please enter'), findsNWidgets(3));
+    expect(find.text('Please enter your E-Wallet account'), findsOneWidget);
+
+    // 底部红字提示取接口下发的 revision。
+    expect(
+      find.text(
+        'Incorrect account numbers cause payout failure. '
+        'Double-check all digits.',
+      ),
+      findsOneWidget,
+    );
+
+    // 输入框取值行也要撑满 48pt 并垂直居中，不缩到文字高度贴着行顶
+    // （选项行的 Align 本来就会撑满，拿输入框才测得出问题）。
+    final valueRow = find
+        .ancestor(
+          of: find.byKey(const Key('bind-card-field-firstName')),
+          matching: find.byType(Row),
+        )
+        .first;
+    expect(tester.getSize(valueRow).height, closeTo(48 * _designScale, 0.5));
+
+    // 缎带顶边比头图下沿高 28pt（设计稿 185 与 213）。
+    final headerRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyHeaderBlank),
+    );
+    final ribbonRect = tester.getRect(
+      _assetImage(AppAssets.personalInfoProgressRibbon),
+    );
+    expect(headerRect.bottom - ribbonRect.top, closeTo(28 * _designScale, 1));
+  });
+
+  testWidgets('绑卡页引导文案优先用产品详情下发的 overwhelming.mobilization', (tester) async {
+    const apiPrompt =
+        'Confirm the account status and ensure the smooth arrival of cash.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailBindCardPrompt(apiPrompt);
+      },
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text(apiPrompt), findsOneWidget);
+    expect(find.textContaining('Check that your receiving'), findsNothing);
+  });
+
+  testWidgets('绑卡页后端不下发引导文案时用设计稿兜底引导段', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Check that your receiving\n'
+        'account is active, belongs\n'
+        'to you, and can receive\n'
+        'funds before continuing.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('绑卡页切换打款方式 Tab 显示对应分组的字段', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Outstanding'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select your recipient Bank'), findsOneWidget);
+    expect(find.text('Bank Account'), findsOneWidget);
+    expect(find.text('E-wallet Account'), findsNothing);
+  });
+
+  testWidgets('绑卡页渠道字段弹单选面板，维护中渠道给提示且 Done 回填', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bind-card-field-channelCode')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('GCash e-wallet'), findsOneWidget);
+    expect(find.text('PayMaya e-wallet'), findsOneWidget);
+    expect(find.text('GrabPay e-wallet'), findsOneWidget);
+    // 维护中的渠道仍可选中，只在名字下面补一行红字。
+    expect(
+      find.text('Under maintenance. Loans may be delayed'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('bind-card-option-PAYMAYA')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bind-card-option-done')));
+    await tester.pumpAndSettle();
+
+    // Done 后把渠道名回填到行上，占位文案消失。
+    expect(find.text('PayMaya e-wallet'), findsOneWidget);
+    expect(find.text('Please select'), findsNothing);
+  });
+
+  testWidgets('绑卡页输入框聚焦且为空时弹建议气泡，关闭后不再弹', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bind-card-field-firstName')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('bind-card-suggestion-firstName')),
+      findsOneWidget,
+    );
+    expect(find.text('Anna'), findsOneWidget);
+    // 关闭按钮用设计稿切图，不要在代码里重画。
+    expect(_assetImage(AppAssets.bindCardSuggestionClose), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('bind-card-suggestion-close-firstName')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('bind-card-suggestion-firstName')),
+      findsNothing,
+    );
+    // 已经填过的字段不会再冒气泡。
+    expect(find.text('Anna'), findsNothing);
+  });
+
+  testWidgets('绑卡页账号不一致时不发请求', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    await _fillBindCardForm(tester, account: '1234567890', confirm: '098765');
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account numbers do not match'), findsOneWidget);
+    expect(certificationRepository.submitBindCardCalls, isEmpty);
+  });
+
+  testWidgets('绑卡页提交按下发 key 回传字段并继续下一步', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      productRepository: productRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    await _fillBindCardForm(tester);
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    final submission = certificationRepository.submitBindCardCalls.single;
+    expect(submission.cardType, '1');
+    // 页面按接口下发的 `crucians` 原样回传；改名发生在仓库层（见仓库单测）。
+    expect(submission.fields[BindCardField.channelKey], 'PAYMAYA');
+    expect(submission.fields['firstName'], 'Anna');
+    expect(submission.fields['cardNo'], '1234567890');
+
+    // 提交成功后再拉产品详情，走下一步认证。
+    expect(productRepository.detailCalls, greaterThan(0));
+    expect(find.byType(BindCardPage), findsNothing);
+  });
+
+  testWidgets('绑卡页提交返回 20000 时先做活体再补交一次', (tester) async {
+    _mockCameraPermission(1);
+    final certificationRepository = _StubCertificationRepository()
+      ..submitBindCardCodes = const [20000, 0];
+    final livenessGateway = _StubLivenessGateway();
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+      productRepository: productRepository,
+    );
+    _openBindCardPage(tester, orderNo: 'ORDER-9');
+    await tester.pumpAndSettle();
+
+    await _fillBindCardForm(tester);
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // 第一次提交没有活体参数。
+    expect(certificationRepository.submitBindCardCalls, hasLength(2));
+    expect(certificationRepository.submitBindCardCalls.first.faceType, '');
+    expect(certificationRepository.submitBindCardCalls.first.image, '');
+
+    // 活体 token 用订单号取（绑卡类型 1），SDK 用下发的授权码拉起。
+    expect(certificationRepository.faceTokenCalls, ['ORDER-9']);
+    expect(livenessGateway.licenses, ['LICENSE-1']);
+
+    // 补交带上活体结果与原字段。
+    final retry = certificationRepository.submitBindCardCalls.last;
+    expect(retry.faceType, '7');
+    expect(retry.livenessId, 'LIVE-1');
+    expect(retry.license, 'LICENSE-1');
+    expect(retry.image, isNotEmpty);
+    expect(retry.fields[BindCardField.channelKey], 'PAYMAYA');
+    expect(retry.fields['firstName'], 'Anna');
+
+    expect(productRepository.detailCalls, greaterThan(0));
+  });
+
+  testWidgets('绑卡页接口失败给错误态与重试入口', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    certificationRepository.bindCardFailure = const ApiException(
+      type: ApiFailureType.business,
+      message: 'Bind card unavailable',
+      code: 500,
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ErrorView), findsOneWidget);
+    expect(find.text('Bind card unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+
+    // Riverpod 3 默认会对失败的 provider 做指数退避重试，次数不可预期；
+    // 只断言「点 Retry 会再发起一次请求」，重试成功后渲染出字段。
+    final callsBeforeRetry = certificationRepository.bindCardInfoCalls.length;
+    certificationRepository.bindCardFailure = null;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(
+      certificationRepository.bindCardInfoCalls.length,
+      greaterThan(callsBeforeRetry),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('First name'), findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+  });
+
+  testWidgets('绑卡页接口请求中显示 Loading', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..bindCardDelay = const Duration(milliseconds: 300);
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(LoadingView), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingView), findsNothing);
+    expect(find.text('First name'), findsOneWidget);
+  });
+
+  testWidgets('绑卡页后端不下发分组时走空态而不是空表单', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    certificationRepository.bindCard = const BindCardData();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No payment methods available'), findsOneWidget);
+
+    // 空表单不能提交。
+    await tester.tap(find.text('Upload'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(certificationRepository.submitBindCardCalls, isEmpty);
+  });
+
+  test('绑卡信息解析分组 / 渠道选项与维护状态', () {
+    final data = BindCardData.fromJson(const {
+      ApiFields.bindCardTips: 'Check your account',
+      ApiFields.bindCardBottomTips: 'Double-check all digits',
+      ApiFields.bindCardGroups: [
+        {
+          ApiFields.bindCardGroupLabel: 'E-wallet',
+          ApiFields.bindCardGroupType: '1',
+          ApiFields.bindCardGroupFields: [
+            {
+              ApiFields.bindCardFieldTitle: 'Select your recipient E-wallet',
+              ApiFields.bindCardFieldPlaceholder: 'Please select',
+              ApiFields.bindCardFieldKey: 'channelCode',
+              // 值映射给的是混淆名，也要认得。
+              ApiFields.bindCardFieldControl: 'Obesity',
+              ApiFields.bindCardFieldOptions: [
+                {
+                  ApiFields.bindCardOptionLabel: 'GCash e-wallet',
+                  ApiFields.bindCardOptionValue: 'GCASH',
+                  ApiFields.bindCardOptionLogo: 'https://x/g.png',
+                  ApiFields.bindCardOptionStatus: 0,
+                },
+                {
+                  ApiFields.bindCardOptionLabel: 'PayMaya e-wallet',
+                  ApiFields.bindCardOptionValue: 'PAYMAYA',
+                  ApiFields.bindCardOptionStatus: 1,
+                },
+              ],
+            },
+            {
+              ApiFields.bindCardFieldTitle: 'First name',
+              ApiFields.bindCardFieldKey: 'firstName',
+              ApiFields.bindCardFieldControl: 'txt',
+              ApiFields.bindCardFieldSuggested: ' Anna ',
+            },
+            // 没有 title / key 的脏字段直接丢掉。
+            {ApiFields.bindCardFieldControl: 'txt'},
+          ],
+        },
+        // 没有字段的分组不渲染成空 Tab。
+        {
+          ApiFields.bindCardGroupLabel: 'Empty',
+          ApiFields.bindCardGroupType: '9',
+          ApiFields.bindCardGroupFields: [],
+        },
+      ],
+    });
+
+    expect(data.prompt, 'Check your account');
+    expect(data.bottomPrompt, 'Double-check all digits');
+    expect(data.groups, hasLength(1));
+    final group = data.groups.single;
+    expect(group.label, 'E-wallet');
+    expect(group.type, '1');
+    expect(group.fields.map((field) => field.key), [
+      'channelCode',
+      'firstName',
+    ]);
+
+    final channel = group.fields.first;
+    expect(channel.control, BindCardControl.selection);
+    expect(channel.isSelectable, isTrue);
+    // 维护中（`catchpenny == 0`）仍可选中，只是标不可用。
+    expect(channel.options.first.available, isFalse);
+    // 银行不下发 `catchpenny`，缺省按可用。
+    expect(channel.options[1].available, isTrue);
+
+    final name = group.fields[1];
+    expect(name.control, BindCardControl.text);
+    expect(name.suggestedValue, 'Anna');
+  });
+
+  test('绑卡信息没有下发分组时按空处理', () {
+    // 低版本 / 未灰度用户：`aminate` 缺失或为空。
+    expect(BindCardData.fromJson(const {}).isEmpty, isTrue);
+    expect(
+      BindCardData.fromJson(const {ApiFields.bindCardGroups: []}).isEmpty,
+      isTrue,
+    );
+  });
+
+  test('获取绑卡信息接口带产品 id 与业务混淆字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).getBindCardInfo(productId: '7');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.bindCardInfo);
+    expect(params[ApiFields.productId], '7');
+    expect(params[ApiFields.obfuscateBindCardInfo1], isNotEmpty);
+    expect(params[ApiFields.obfuscateBindCardInfo2], isNotEmpty);
+  });
+
+  test('提交绑卡把 channelCode 改名 entertainer 并带上活体参数', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).submitBindCard(
+      productId: '7',
+      cardType: '1',
+      fields: const {
+        'channelCode': 'PAYMAYA',
+        'firstName': 'Anna',
+        'cardNo': '1234567890',
+      },
+      faceType: '7',
+      livenessId: 'LIVE-1',
+      image: 'ZmFrZQ==',
+      license: 'LICENSE-1',
+    );
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.submitBindCard);
+    expect(params[ApiFields.bindCardSubmitProductId], '7');
+    expect(params[ApiFields.bindCardSubmitType], '1');
+    // 下发 key `channelCode` 在上送前换成 `entertainer`，原 key 不能出现。
+    expect(params[ApiFields.bindCardSubmitChannel], 'PAYMAYA');
+    expect(params.containsKey(BindCardField.channelKey), isFalse);
+    expect(params['firstName'], 'Anna');
+    expect(params[ApiFields.uploadFaceType], '7');
+    expect(params[ApiFields.uploadLivenessId], 'LIVE-1');
+    expect(params[ApiFields.uploadLivenessLicense], 'LICENSE-1');
+    expect(params[ApiFields.uploadFileField], 'ZmFrZQ==');
+    expect(params[ApiFields.obfuscateSubmitBindCard], isNotEmpty);
   });
 }

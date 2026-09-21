@@ -139,6 +139,12 @@ abstract final class AppAssets {
   static const personalInfoAddressChevron =
       'assets/personal_info/personal_info_address_chevron.png';
 
+  // 绑卡页（蓝湖稿 `03-05 - 绑定账户`）
+  /// 自动填充气泡右侧的关闭按钮（设计稿 `thumbnail_4` 一族，12x12，
+  /// 白色实心圆 + 深色叉号；用户提供的 `拍照备份@3x.png`，36x36 @3x）。
+  static const bindCardSuggestionClose =
+      'assets/bind_card/bind_card_suggestion_close.png';
+
   // 紧急联系人认证页（蓝湖稿 `03-04 - 联系人信息`）
   /// `Contact Information` 行尾的通讯录图标（设计稿 `thumbnail_11`，18x18，
   /// 界面呈现 20x20 的绿色圆角方块 + 白色联系人剪影；

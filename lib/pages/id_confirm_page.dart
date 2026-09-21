@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/identity_recognition.dart';
@@ -9,15 +8,12 @@ import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
-import '../widgets/back_nav_bar.dart';
+import '../widgets/certification_scaffold.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/upload_button.dart';
 
 /// 导航标题（设计稿 `text_10`）。
 const _navTitle = 'ID Verification';
-
-/// 头图高度（设计稿 `section_1`，375x213）。
-const _headerHeight = 213.0;
 
 /// 引导段落相对导航行的下移量（设计稿：导航行底边 78 -> 段落顶边 112）。
 ///
@@ -142,7 +138,6 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
-    final safeTop = MediaQuery.paddingOf(context).top;
 
     // 引导文案由产品详情 `overwhelming.bocking` 下发，没下发时用设计稿兜底。
     final cachedPrompt = ref
@@ -151,85 +146,42 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
         .trim();
     final prompt = cachedPrompt.isEmpty ? _fallbackPrompt : cachedPrompt;
 
-    return Scaffold(
-      // 设计稿 `page` 底色 `rgba(245,245,245)`。
-      backgroundColor: AppColors.idVerifyBackground,
-      body: Stack(
+    return CertificationScaffold(
+      navTitle: _navTitle,
+      prompt: prompt,
+      promptGap: _promptGap,
+      promptWidth: _promptWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SingleChildScrollView(
-            child: Stack(
-              children: [
-                // 头图通栏：宽度铺满，高度按 375pt 设计稿等比换算。
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Image.asset(
-                    AppAssets.idVerifyHeaderBlank,
-                    height: layout.px(_headerHeight),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                // 引导段落浮在头图上：设计稿的顶边 112 是「设计稿状态栏 + 导航行 + 26」，
-                // 导航行自己让开了安全区，所以这里也把安全区补回来。
-                Positioned(
-                  top: safeTop + layout.px(BackNavBar.height + _promptGap),
-                  left: layout.px(AppSpacing.pageHorizontal),
-                  child: SizedBox(
-                    width: layout.px(_promptWidth),
-                    child: Text(
-                      prompt,
-                      style: TextStyle(
-                        color: AppColors.idVerifyHeaderText,
-                        fontSize: layout.px(16),
-                        fontWeight: FontWeight.w700,
-                        // 设计稿：`font-size: 16px; line-height: 19px`。
-                        height: 19 / 16,
-                      ),
-                    ),
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(height: layout.px(_cardTop)),
-                    Padding(
-                      padding: layout.edgeInsets(
-                        left: AppSpacing.pageHorizontal,
-                        right: AppSpacing.pageHorizontal,
-                      ),
-                      child: _RecognitionCard(
-                        layout: layout,
-                        nameController: _nameController,
-                        idNumberController: _idNumberController,
-                        birthDateController: _birthDateController,
-                        imageUrl: widget.recognition.imageUrl,
-                        onPickBirthDate: _pickBirthDate,
-                      ),
-                    ),
-                    SizedBox(height: layout.px(_cardToButtonGap)),
-                    Padding(
-                      padding: layout.edgeInsets(
-                        left: AppSpacing.pageHorizontal,
-                        right: AppSpacing.pageHorizontal,
-                      ),
-                      child: UploadButton(
-                        layout: layout,
-                        enabled: !_isSubmitting,
-                        onTap: _save,
-                      ),
-                    ),
-                    SizedBox(height: layout.px(_buttonBottom)),
-                  ],
-                ),
-              ],
+          SizedBox(height: layout.px(_cardTop)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+            ),
+            child: _RecognitionCard(
+              layout: layout,
+              nameController: _nameController,
+              idNumberController: _idNumberController,
+              birthDateController: _birthDateController,
+              imageUrl: widget.recognition.imageUrl,
+              onPickBirthDate: _pickBirthDate,
             ),
           ),
-          BackNavBar(
-            layout: layout,
-            title: _navTitle,
-            onBack: () => AppNavigator.pop(),
+          SizedBox(height: layout.px(_cardToButtonGap)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+            ),
+            child: UploadButton(
+              layout: layout,
+              enabled: !_isSubmitting,
+              onTap: _save,
+            ),
           ),
+          SizedBox(height: layout.px(_buttonBottom)),
         ],
       ),
     );

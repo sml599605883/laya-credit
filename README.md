@@ -29,7 +29,7 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 `/id-upload`（证件上传，见第 13 条）、`/id-confirm`（证件信息确认，见第 14 条）、
 `/face-verification`（人脸识别，见第 15 条）、
 `/personal-info`（个人信息，见第 16 条）、`/work-info`（工作信息，见第 17 条）、
-`/emergency-contact`（紧急联系人，见第 18 条）。
+`/emergency-contact`（紧急联系人，见第 18 条）、`/bind-card`（绑卡，见第 19 条）。
 
 ### 2. 状态管理用什么
 
@@ -143,8 +143,7 @@ lib/
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：订单、上报、H5 相关接口尚未落地。
    「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
-   H5 地址需要 WebView、认证项还缺绑卡页、
-   原生 `recredit` 需要重新授信 loading 页。相关分支见
+   H5 地址需要 WebView、原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
    第二项（证件上传页）已按设计稿落地并接上上传接口（见第 13 条），
@@ -152,7 +151,8 @@ lib/
    第四项（活体 / 人脸识别）也已落地并接上 token / 上传接口（见第 15 条），
    个人信息认证项也已落地并接上表单 / 保存接口（见第 16 条），
    工作信息认证项也已落地（见第 17 条），
-   紧急联系人认证项也已落地并接上获取 / 保存接口（见第 18 条）。
+   紧急联系人认证项也已落地并接上获取 / 保存接口（见第 18 条），
+   绑卡认证项也已落地并接上获取 / 提交接口（见第 19 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -530,6 +530,51 @@ lib/
       `overwhelming` 容器，不能互相顶替。
     - **已知偏差**：进度文案 `75%` 先按设计稿写死（读法同第 16 / 17 条）；
       `Upload` 按钮文案沿用共用组件 `lib/widgets/upload_button.dart`。
+
+19. **绑卡（打款账户）认证页已按蓝湖稿 `03-05 - 绑定账户` 还原**
+    （`/bind-card`，`BindCardPage`，认证项 `taskType` `Bespattered`）。
+    - 页面分三段：通栏头图（复用证件上传页的 `id_verify_header_blank.png`，
+      与个人信息 / 工作信息 / 紧急联系人页同款）、白卡（343 宽，卡顶是带 `100%` 的粉红
+      进度缎带）、底部**固定**操作条（白底 + 上方 `0 -5px 6px rgba(233,233,233,0.5)` 投影 +
+      343x48 柠檬绿 `Upload`，上方是接口下发的红色提示文案）。
+    - **进度缎带与 Upload 底图都直接复用**：`personal_info_progress_ribbon.png`、
+      `id_verify_upload_button.png`，本页不新增切图。
+    - 页面进入即拉表单：`GET /outsulk/cussedly`（`tartarizing`=产品 id、
+      `albuminose` / `scaraboid`=混淆字段，`CertificationRepository.getBindCardInfo`）
+      下发 `connectedly.aminate[]`，每个分组含 `upbear`（Tab 文案）、`liquidators`
+      （`cardType`）、嵌套 `aminate[]`（字段数组）。字段：`upbear` 标题、`amias` 占位、
+      `crucians` 的**业务 key**（提交时原样回传，前端不写死）、`lipson` 控件类型、
+      `lazy` 数字键盘、`als` 是否可选、`fed` 当前值、`brownsboro` 自动填充建议值；
+      选项：`liquidators` 取值 / `harbingers` 展示名 / `salish` logo / `catchpenny`
+      状态（`1` 可用 / `0` 维护中，**银行分组不下发时按可用**）。
+    - 控件类型同时认短名与混淆名：`enum` / `Obesity`→枚举、`txt` / `Ori`→输入框、
+      `citySelect` / `CumingsAgami`→地址；认不出的字段直接丢掉，不渲染成空行。
+      E-wallet 分组实测还会下发打款渠道字段，下发 key 是语义串 `channelCode`。
+    - 交互：顶部 Tab 切换分组（重启该分组的控制器）；打款渠道行点击弹
+      `showBindCardOptionSheet`（`lib/pages/widgets/bind_card_option_sheet.dart`），
+      每行是「logo + 渠道名」，维护中的渠道名字下方补一行红字但**仍可选中**，
+      当前选中行尾打勾，点 `Done` 才把展示文案 + `liquidators` 写回行；
+      输入框聚焦且为空、且接口下发了 `brownsboro` 时，行尾弹深色「一键填充」气泡
+      （点气泡把本分组所有空的输入框一次填满，点叉号则该字段本次不再弹）。
+    - 提交：`POST /outsulk/superidealness`（`CertificationRepository.submitBindCard`），
+      `tartarizing`=产品 id、`heterological`=`cardType`、字段按下发 `crucians` 原样回传，
+      唯一例外是 `channelCode` 上送前改名成 `entertainer`（`nonabsolutely` 是混淆字段）。
+      返回 `crucians == 20000` 表示后端要求先做活体：先取 token（`type = 1`），
+      拉起活体 SDK，再把 `bassein` / `gargantua` / `attach` / `musculopallial` 连同原字段
+      **重提交一次**；成功后再交给 `ProductApplicationFlow.continueProductDetailFlow`
+      走下一步认证。提交前校验必填项 + 两次账号一致。
+      Loading / Error（带 `Retry`）/ Empty（`No payment methods available`）三态齐全。
+    - 引导文案优先级：产品详情 `overwhelming.mobilization`（文档语义 `bind_card`，
+      见第 15 条同款缓存机制）→ 表单接口 `befleas` → 设计稿四行兜底；
+      底部红字取表单接口 `revision`（产品详情 `overwhelming.revision` 作兜底）。
+    - **已知偏差**：进度文案 `100%` 先按设计稿写死（读法同第 16 / 17 / 18 条）；
+      渠道 logo 走后端下发的远端 URL（`RemoteImage`，加载失败隐藏），本页不落本地切图；
+      维护中的红字提示 `Under maintenance. Loans may be delayed` 接口只下发状态、
+      没有文案字段，属客户端常量；气泡的关闭按钮用用户提供的切图
+      `bind_card_suggestion_close.png`（原 `拍照备份@3x.png`，12x12），
+      单选框的对勾 `assets/` 没有切图、按设计稿尺寸用 `CustomPainter` 还原；
+      **改卡场景（成功返回的 `moonshade` 绑卡 id）尚未接入**。
+      相关测试见 `test/widget_test.dart` 的「绑卡页…」用例与两条仓库层用例。
 
 ## 常用命令
 

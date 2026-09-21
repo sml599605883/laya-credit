@@ -15,6 +15,8 @@ class ProductDetail {
     this.personalInfoPrompt = '',
     this.workInfoPrompt = '',
     this.emergencyContactPrompt = '',
+    this.bindCardPrompt = '',
+    this.bindCardBottomPrompt = '',
   });
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
@@ -48,6 +50,12 @@ class ProductDetail {
           : '',
       emergencyContactPrompt: tips is Map
           ? tips[ApiFields.detailTipEmergencyContact]?.toString() ?? ''
+          : '',
+      bindCardPrompt: tips is Map
+          ? tips[ApiFields.detailTipBindCard]?.toString() ?? ''
+          : '',
+      bindCardBottomPrompt: tips is Map
+          ? tips[ApiFields.detailTipBindCardBottom]?.toString() ?? ''
           : '',
     );
   }
@@ -87,6 +95,14 @@ class ProductDetail {
   ///
   /// 与另外几条同属 `overwhelming` 容器，不能互相顶替。
   final String emergencyContactPrompt;
+
+  /// 绑卡认证页顶部引导文案（`overwhelming.mobilization`）。
+  ///
+  /// 与另外几条同属 `overwhelming` 容器，不能互相顶替。
+  final String bindCardPrompt;
+
+  /// 绑卡认证页底部提示文案（`overwhelming.revision`）。
+  final String bindCardBottomPrompt;
 }
 
 /// 产品信息（`priapi`）。

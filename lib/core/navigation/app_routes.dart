@@ -39,6 +39,9 @@ abstract final class AppRoutes {
   /// 紧急联系人认证页（紧急联系人认证项）。
   static const emergencyContact = '/emergency-contact';
 
+  /// 绑卡页（认证第五项，打款账户）。
+  static const bindCard = '/bind-card';
+
   /// 全部路由（用于启动自检与埋点白名单）。
   static const List<String> all = [
     root,
@@ -53,6 +56,7 @@ abstract final class AppRoutes {
     personalInfo,
     workInfo,
     emergencyContact,
+    bindCard,
   ];
 
   /// 路由名是否已注册。

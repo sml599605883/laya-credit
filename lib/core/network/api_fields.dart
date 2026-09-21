@@ -372,6 +372,104 @@ abstract final class ApiFields {
   /// 五个键各管一页，不能互相顶替。
   static const detailTipEmergencyContact = 'embol';
 
+  // ---------- 认证项：绑卡（第五项）----------
+  //
+  // 接口文档「获取绑卡信息（第五项）」（`/outsulk/cussedly`）与「提交绑卡（第五项）」
+  // （`/outsulk/superidealness`）。字段描述结构与个人信息 / 工作信息同族，
+  // 但选项多带 logo（`salish`）与维护状态（`catchpenny`），
+  // 页面文案则换成 `befleas`（顶部）/ `revision`（底部）。
+
+  /// 分组数组（文档语义 `list`）。与首页模块列表共用同一个混淆名。
+  static const bindCardGroups = 'aminate';
+
+  /// 分组的展示名（文档语义 `title`），如 E-wallet / Bank。
+  static const bindCardGroupLabel = 'upbear';
+
+  /// 分组的卡片类型（文档语义 `cardType`），提交时原样回传。
+  /// 与首页模块类型共用同一个混淆名。
+  static const bindCardGroupType = 'liquidators';
+
+  /// 分组下的字段数组（文档语义 `list`）。与 [bindCardGroups] 同名不同层。
+  static const bindCardGroupFields = 'aminate';
+
+  /// 字段标题（文档语义 `title`）。
+  static const bindCardFieldTitle = 'upbear';
+
+  /// 字段占位文案（文档语义 `placeholder`）。与个人信息 / 工作信息同名不同接口。
+  static const bindCardFieldPlaceholder = 'amias';
+
+  /// **提交绑卡的业务 key**（文档语义 `key`）。服务端下发，前端不要写死。
+  static const bindCardFieldKey = 'crucians';
+
+  /// 控件类型（文档语义 `type`），取值见 `BindCardControl`。
+  static const bindCardFieldControl = 'lipson';
+
+  /// 是否数字键盘（文档语义 `number_keyboard`，1 是 / 0 否）。
+  static const bindCardFieldNumeric = 'lazy';
+
+  /// 选项数组（文档语义 `options`）。
+  static const bindCardFieldOptions = 'overwhelming';
+
+  /// 字段当前值（文档语义 `value`）。
+  static const bindCardFieldValue = 'fed';
+
+  /// 是否可选（文档语义 `optional`，1 可选 / 0 必填）。
+  static const bindCardFieldOptional = 'als';
+
+  /// 自动填充的建议值（文档语义 `displayValue`）：输入框聚焦且为空时，
+  /// 页面用它弹「一键填充」气泡。
+  static const bindCardFieldSuggested = 'brownsboro';
+
+  /// 选项展示名（文档语义 `name`）。
+  static const bindCardOptionLabel = 'harbingers';
+
+  /// 选项提交取值（文档语义 `value`）。
+  static const bindCardOptionValue = 'liquidators';
+
+  /// 选项 logo（文档语义 `logo`）。
+  static const bindCardOptionLogo = 'salish';
+
+  /// 选项状态（文档语义 `status`，1 可用 / 0 维护中）。
+  /// 维护中的渠道仍可选中，页面只补一行提示。
+  static const bindCardOptionStatus = 'catchpenny';
+
+  /// 页面顶部引导文案（文档语义 `content` 的绑卡一条）。
+  static const bindCardTips = 'befleas';
+
+  /// 页面底部提示文案（文档语义 `bind_card_bottom`）。
+  static const bindCardBottomTips = 'revision';
+
+  /// 获取绑卡信息的两个混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscateBindCardInfo1 = 'albuminose';
+  static const obfuscateBindCardInfo2 = 'scaraboid';
+
+  /// 提交绑卡的产品 id。
+  static const bindCardSubmitProductId = 'tartarizing';
+
+  /// 提交绑卡的卡片类型（取分组下发的 `liquidators`）。
+  /// 与上传接口的卡类型字段共用同一个混淆名。
+  static const bindCardSubmitType = 'heterological';
+
+  /// 提交绑卡的打款渠道：下发 key 是语义串 `channelCode`，
+  /// 提交时要换成这个混淆名。
+  static const bindCardSubmitChannel = 'entertainer';
+
+  /// 提交绑卡返回的绑卡 id（文档语义 `bindId`，改卡场景要用）。
+  static const bindCardSubmitBindId = 'moonshade';
+
+  /// 提交绑卡的混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscateSubmitBindCard = 'nonabsolutely';
+
+  // ---------- 产品详情里的绑卡页文案 ----------
+  /// 绑卡认证页顶部引导文案（文档语义 `bind_card`）。
+  ///
+  /// 与身份 / 活体 / 个人信息 / 工作 / 紧急联系人同属产品详情的
+  /// `overwhelming`（[detailTips]）容器，各键各管一页，不能互相顶替。
+  static const detailTipBindCard = 'mobilization';
+
+  /// 绑卡认证页底部提示文案（文档语义 `bind_card_bottom`）。
+  static const detailTipBindCardBottom = 'revision';
+
   // ---------- 各接口的混淆字段（无业务含义，每次请求随机值）----------
   static const obfuscateSendSms = 'tectites';
   static const obfuscateLogin1 = 'interoscillate';

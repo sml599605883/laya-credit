@@ -61,4 +61,10 @@ abstract final class ApiEndpoints {
 
   /// 保存联系人信息（认证第四项）。POST
   static const saveEmergencyContacts = '/outsulk/stabiliment';
+
+  /// 获取绑卡信息（认证第五项）：打款渠道分组与字段描述。GET
+  static const bindCardInfo = '/outsulk/cussedly';
+
+  /// 提交绑卡（认证第五项）。POST
+  static const submitBindCard = '/outsulk/superidealness';
 }

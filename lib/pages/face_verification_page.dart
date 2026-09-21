@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/media/identity_photo_permission.dart';
@@ -14,14 +13,11 @@ import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
-import '../widgets/back_nav_bar.dart';
+import '../widgets/certification_scaffold.dart';
 import '../widgets/upload_button.dart';
 
 /// 导航标题（设计稿 `text_10`）。
 const _navTitle = 'Face verification';
-
-/// 头图高度（设计稿 `section_1`，375x213，复用证件上传页那张没有标题的切图）。
-const _headerHeight = 213.0;
 
 /// 引导段落相对导航行的下移量（设计稿：段落顶边 112，与证件信息确认页一致）。
 const _promptGap = 26.0;
@@ -80,7 +76,6 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
-    final safeTop = MediaQuery.paddingOf(context).top;
 
     // 引导文案由产品详情 `overwhelming.seisin` 下发，没下发时用设计稿兜底。
     final cachedPrompt = ref
@@ -89,84 +84,42 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
         .trim();
     final prompt = cachedPrompt.isEmpty ? _fallbackPrompt : cachedPrompt;
 
-    return Scaffold(
-      // 设计稿 `page` 底色 `rgba(245,245,245)`。
-      backgroundColor: AppColors.idVerifyBackground,
-      body: Stack(
+    return CertificationScaffold(
+      navTitle: _navTitle,
+      prompt: prompt,
+      promptGap: _promptGap,
+      promptWidth: _promptWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SingleChildScrollView(
-            child: Stack(
-              children: [
-                // 头图通栏：复用证件上传页那张不带标题的绿色渐变 + 吉祥物。
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Image.asset(
-                    AppAssets.idVerifyHeaderBlank,
-                    height: layout.px(_headerHeight),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                // 引导段落浮在头图上（设计稿顶边 112，补回安全区）。
-                Positioned(
-                  top: safeTop + layout.px(BackNavBar.height + _promptGap),
-                  left: layout.px(AppSpacing.pageHorizontal),
-                  child: SizedBox(
-                    width: layout.px(_promptWidth),
-                    child: Text(
-                      prompt,
-                      style: TextStyle(
-                        color: AppColors.idVerifyHeaderText,
-                        fontSize: layout.px(16),
-                        fontWeight: FontWeight.w700,
-                        // 设计稿：`font-size: 16px; line-height: 19px`。
-                        height: 19 / 16,
-                      ),
-                    ),
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(height: layout.px(_demoTop)),
-                    Padding(
-                      padding: layout.edgeInsets(
-                        left: AppSpacing.pageHorizontal,
-                        right: AppSpacing.pageHorizontal,
-                      ),
-                      child: AspectRatio(
-                        aspectRatio: _demoAspectRatio,
-                        child: Image.asset(
-                          AppAssets.faceVerifyDemo,
-                          fit: BoxFit.fill,
-                          semanticLabel: prompt,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: layout.px(_demoToButtonGap)),
-                    Padding(
-                      padding: layout.edgeInsets(
-                        left: AppSpacing.pageHorizontal,
-                        right: AppSpacing.pageHorizontal,
-                      ),
-                      child: UploadButton(
-                        layout: layout,
-                        enabled: !_isVerifying,
-                        onTap: _startVerification,
-                      ),
-                    ),
-                    SizedBox(height: layout.px(_buttonBottom)),
-                  ],
-                ),
-              ],
+          SizedBox(height: layout.px(_demoTop)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+            ),
+            child: AspectRatio(
+              aspectRatio: _demoAspectRatio,
+              child: Image.asset(
+                AppAssets.faceVerifyDemo,
+                fit: BoxFit.fill,
+                semanticLabel: prompt,
+              ),
             ),
           ),
-          BackNavBar(
-            layout: layout,
-            title: _navTitle,
-            onBack: () => AppNavigator.pop(),
+          SizedBox(height: layout.px(_demoToButtonGap)),
+          Padding(
+            padding: layout.edgeInsets(
+              left: AppSpacing.pageHorizontal,
+              right: AppSpacing.pageHorizontal,
+            ),
+            child: UploadButton(
+              layout: layout,
+              enabled: !_isVerifying,
+              onTap: _startVerification,
+            ),
           ),
+          SizedBox(height: layout.px(_buttonBottom)),
         ],
       ),
     );
