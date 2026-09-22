@@ -28,7 +28,7 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
   （WebView / 首页 / 登录 / 订单列表）在那里面处理，其余目标由各调用点在自己的
   `onUnhandled` 里补后续动作（例如准入流程要接着走认证步骤），避免每个入口各写一份 switch。
 
-目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`，
+目前注册的路由：`/`（Tab 容器）、`/home`、`/progress`（进度列表，见第 22 条）、`/mine`、`/login`，
 以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）、
 `/id-upload`（证件上传，见第 13 条）、`/id-confirm`（证件信息确认，见第 14 条）、
 `/face-verification`（人脸识别，见第 15 条）、
@@ -170,7 +170,8 @@ lib/
    改动前**不要**再从设计稿 PNG 里裁切或从蓝湖下载素材：`assets/` 里没有的素材直接忽略。
    其余页面（个人中心以外的二级页）仍待补齐。
 6. **底部导航** 已按蓝湖稿还原为悬浮胶囊（200x48）+ 三个 40pt 圆形按钮，选中态是柠檬绿实心圆；
-   设计稿没有文字标签，代码里只保留 `Semantics` 文案。**Stats 页的定位**仍需与设计确认。
+   设计稿没有文字标签，代码里只保留 `Semantics` 文案；中间 Tab 已按设计稿 `02-03 - 首页-进度`
+   落成进度列表页（见第 22 条），路由 `/progress`、Tab key `tab-progress`。
    根 Scaffold 开了 `extendBody`：页面内容一直铺到屏幕底部、从胶囊下方穿过，不再被截在胶囊顶边；
    新增 Tab 页时，滚动容器必须把 `AppTabBar.overlapHeight(context)` 加到底部内边距上，
    否则最后一条内容会滚不出胶囊的遮挡区（`test/widget_test.dart` 有对应回归测试）。
@@ -733,6 +734,39 @@ lib/
     - **遗留风险**：分页只在滚动到距底部 120pt 时触发，触屏设备上在惯性滚动结束前就会预取，
       属于预期行为；真机上仍建议确认一次「翻到最后一页不再转圈」。空态插画在本环境 golden 里
       渲染为空白（属测试 harness 限制），需要真机 / 模拟器目检。
+
+22. **进度列表页已按蓝湖稿 `02-03 - 首页-进度` 还原**（正常 / 无数据 / 全部进度分类三张稿，
+    路由 `/progress`，即底部导航中间的 Tab；原先的占位 `StatsPage` 已删除）。
+    - **数据源**：首页接口 `GET /outsulk/connectedly` 的 `Broadtoothed`（`PROCESS_LIST`）模块，
+      也就是 `HomeData.orders` —— 与首页借款进度卡同一份数据，**不是**订单列表接口
+      `POST /outsulk/gundy`。页面直接 `ref.watch(homeDataProvider)`，下拉刷新走同一个 notifier。
+      进入进度 Tab 时 `RootTabPage._refreshHomeData()` 会重新拉一次（首页 / 进度共用数据源，
+      个人中心不拉），否则进度页会一直显示上次进入时缓存的数据。
+    - **卡片三层结构**（尺寸全部取自设计稿 CSS）：底层深色衬底（343 宽、相对卡顶下沉 41pt、
+      圆角 12，左右各露出 12pt）+ 白色卡身（319 宽、圆角 12，产品行 + 金额 / 日期小表）
+      + 底部状态条（343 宽，有按钮 54 / 无按钮 26）。白卡有按钮 149pt、无按钮 121pt，
+      金额 / 日期小表 140x48、间距 15，卡片之间 12pt。新增颜色令牌见 `AppColors.progress*`
+      （粉红 `#FE295C`、深衬底 `#12180A` / `#372529`、小表 `#F7F7F7` 等）。
+    - **状态分档**按后端 `satin`（`HomeOrderCardStatus`）：待还款 `Repayment Due` / 已逾期 `Past Due`
+      = 粉红状态条 + 一颗 `Change`；放款中 `Awaiting Funds` / 审核中 `In Review` = 柠檬绿条、无按钮；
+      放款失败 `Transfer Unsuccessful` = 柠檬绿条 + `Try again` + `Change`。后端状态文案
+      （`cuboid`）为空时回落到设计稿文案，金额 / 日期字段名（`lepidophyllum` / `obsequeence`）同理。
+    - **空态**复用 `assets/home/home_progress_empty.png`（138x102）+ `No progress yet`（14pt）；
+      错误态用共用 `ErrorView`，两者都带下拉刷新。页面内容整体包在
+      `SafeArea(bottom: false)` 里（设计稿标题中心距屏幕顶 67pt = 安全区 + 标题块 46 的一半），
+      标题不会被状态栏 / 刘海遮挡。
+    - **按钮行为**（口径参照 fund_nexus 的 `ProgressPage`）：`Change` 进原生收款账户列表页
+      `LoanConfirmPage`（`/loan-confirm`），换绑成功后打开返回的订单详情地址；卡片整体点击与
+      `Try again` 都打开后端下发的 `jumpUrl`（订单详情），统一走 `AppNavigator.openDeepLink`。
+    - **已知偏差 / 遗留风险**：本项目 `PROCESS_LIST` 只下发订单号 / 产品 id / `jumpUrl`，
+      **没有独立的「重试放款」接口**，所以 `Try again` 先回落订单详情 H5
+      （fund_nexus 那边是 `retryProgressOrder`，接入后再换）；`Change` 的「新增账户」分支
+      直接进绑卡页改卡模式并打开返回地址，未接埋点。中间的 Tab 切图常量仍叫 `tabStats*`
+      （PNG 文件名未改，避免无谓重命名）。
+    - 相关测试见 `test/progress_page_test.dart`（顶部安全区 88pt 刘海下标题不越界、空态、
+      进度卡逐张渲染、五种状态分档与按钮数量、状态文案回落、下拉刷新重新拉取、错误态重试；
+      用假 `AppRepository` 挂到 `appRepositoryProvider`，页面跑真实 `homeDataProvider`）
+      与 `test/widget_test.dart` 的「切到进度 Tab 会刷新首页数据源」。
 
 ## 常用命令
 

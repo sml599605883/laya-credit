@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 import 'app_tab_item.dart';
 
-/// 底部导航（Home / Stats / Mine）。
+/// 底部导航（Home / Progress / Mine）。
 ///
 /// 蓝湖稿（02-01 首页 / 07-01 个人中心）：一枚悬浮的深色胶囊，
 /// 内部横向排三个圆形按钮，选中态是柠檬绿实心圆 + 深色图标。
@@ -78,8 +78,8 @@ class AppTabBar extends StatelessWidget {
                 onTap: () => onSelected(0),
               ),
               AppTabItem(
-                key: const Key('tab-stats'),
-                label: 'Stats',
+                key: const Key('tab-progress'),
+                label: 'Progress',
                 activeIcon: AppAssets.tabStatsActive,
                 inactiveIcon: AppAssets.tabStatsInactive,
                 selected: currentIndex == 1,

@@ -361,6 +361,35 @@ abstract final class AppColors {
   /// 空态提示文案色（设计稿 `text-group_1` rgba(24,28,23,1)）。
   static const orderEmptyText = Color(0xFF181C17);
 
+  // ---------- 进度列表页（蓝湖稿 `02-03 - 首页-进度`） ----------
+
+  /// 进度卡底层深色衬底（设计稿 `box_1` rgba(18,24,10,1)）：柠檬绿状态条用。
+  static const progressCardBase = Color(0xFF12180A);
+
+  /// 进度卡底层深色衬底（设计稿 `group_5` rgba(55,37,41,1)）：粉红状态条用。
+  static const progressCardBaseRose = Color(0xFF372529);
+
+  /// 进度卡白色卡身（设计稿 `group_6` rgba(255,255,255,1)）。
+  static const progressCardSurface = Color(0xFFFFFFFF);
+
+  /// 进度卡状态文案 / 粉红状态条（设计稿 `text_8`、`group_13` rgba(254,41,92,1)）。
+  static const progressStatusPink = Color(0xFFFE295C);
+
+  /// 进度卡状态文案（设计稿 `text_33` / `text_39` rgba(18,24,10,1)）：未到期的绿色状态。
+  static const progressStatusDark = Color(0xFF12180A);
+
+  /// 进度卡产品名文案色（设计稿 `text_7` rgba(51,51,51,1)）。
+  static const progressProductName = Color(0xFF333333);
+
+  /// 进度卡小表底色（设计稿 `text-wrapper_4` rgba(247,247,247,1)）。
+  static const progressMetricSurface = Color(0xFFF7F7F7);
+
+  /// 进度卡小表主数值文字色（设计稿 `text_9` rgba(5,36,11,1)）。
+  static const progressMetricValue = Color(0xFF05240B);
+
+  /// 进度卡小表字段名文字色（设计稿 `text_10` rgba(152,161,154,1)）。
+  static const progressMetricLabel = Color(0xFF98A19A);
+
   static const white = Color(0xFFFFFFFF);
   static const black = Color(0xFF000000);
 }

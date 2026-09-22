@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/navigation/navigation.dart';
 import 'pages/home_page.dart';
 import 'pages/mine_page.dart';
-import 'pages/stats_page.dart';
+import 'pages/progress_page.dart';
 import 'providers/home_provider.dart';
 import 'providers/session_provider.dart';
 import 'theme/theme.dart';
@@ -90,20 +90,24 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
     if (!resumedFromBackground && !firstInactiveResume) return;
     if (!resumedFromBackground) _inactiveResumeRefreshConsumed = true;
     // 停在子页面（认证 / 活体等）时不刷，避免无谓请求。
-    if (_isTopRoute) _refreshHome();
+    if (_isTopRoute) _refreshHomeData();
   }
 
-  /// 从子页面（认证流程 / 产品详情等）返回根容器时刷新首页，
+  /// 从子页面（认证流程 / 产品详情等）返回根容器时刷新首页数据，
   /// 对齐 dali_cash 的 `onRouteChanged`。
   @override
-  void didPopNext() => _refreshHome();
+  void didPopNext() => _refreshHomeData();
 
   /// 本路由是否处于最上层。
   bool get _isTopRoute => ModalRoute.of(context)?.isCurrent ?? true;
 
-  /// 仅在首页 Tab 可见时刷新。
-  void _refreshHome() {
-    if (_currentIndex != 0) return;
+  /// 刷新首页接口数据。
+  ///
+  /// 首页 Tab（0）与进度 Tab（1）共用同一份 `homeDataProvider`（进度卡来自
+  /// 首页接口的 `PROCESS_LIST` 模块），所以这两个 Tab 可见时都要刷；
+  /// 个人中心（2）是纯本地内容，不拉接口。
+  void _refreshHomeData() {
+    if (_currentIndex == 2) return;
     unawaited(ref.read(homeDataProvider.notifier).refresh());
   }
 
@@ -113,7 +117,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// 对齐 dali_cash 的 `returnToHomeTab`。
   void _returnToHome() {
     if (_currentIndex != 0) setState(() => _currentIndex = 0);
-    _refreshHome();
+    _refreshHomeData();
   }
 
   Future<void> _selectTab(int index) async {
@@ -125,8 +129,8 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
     }
 
     setState(() => _currentIndex = index);
-    // 切回首页时刷新，对齐 dali_cash 的 `selectTab`。
-    _refreshHome();
+    // 切到首页 / 进度时刷新它们共用的数据源，对齐 dali_cash 的 `selectTab`。
+    _refreshHomeData();
   }
 
   /// token 过期：回到首页 Tab 并弹出登录页。
@@ -168,7 +172,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
         index: _currentIndex,
         children: [
           HomePage(isActive: _currentIndex == 0),
-          StatsPage(isActive: _currentIndex == 1),
+          const ProgressPage(),
           MinePage(isActive: _currentIndex == 2),
         ],
       ),

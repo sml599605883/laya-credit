@@ -13,7 +13,7 @@ import '../../pages/loan_confirm_page.dart';
 import '../../pages/mine_page.dart';
 import '../../pages/order_list_page.dart';
 import '../../pages/personal_info_page.dart';
-import '../../pages/stats_page.dart';
+import '../../pages/progress_page.dart';
 import '../../pages/webview_page.dart';
 import '../../pages/work_information_page.dart';
 import '../../root_tab_page.dart';
@@ -170,8 +170,8 @@ class AppRouteGenerator {
       case AppRoutes.home:
         return _route<void>(settings, (_) => const HomePage());
 
-      case AppRoutes.stats:
-        return _route<void>(settings, (_) => const StatsPage());
+      case AppRoutes.progress:
+        return _route<void>(settings, (_) => const ProgressPage());
 
       case AppRoutes.mine:
         return _route<void>(settings, (_) => const MinePage());

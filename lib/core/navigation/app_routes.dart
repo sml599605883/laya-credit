@@ -9,8 +9,8 @@ abstract final class AppRoutes {
   /// 首页 Tab。
   static const home = '/home';
 
-  /// 统计 Tab。
-  static const stats = '/stats';
+  /// 进度 Tab（底部导航中间，蓝湖稿 `02-03 - 首页-进度`）。
+  static const progress = '/progress';
 
   /// 个人中心 Tab。
   static const mine = '/mine';
@@ -55,7 +55,7 @@ abstract final class AppRoutes {
   static const List<String> all = [
     root,
     home,
-    stats,
+    progress,
     mine,
     login,
     idVerification,

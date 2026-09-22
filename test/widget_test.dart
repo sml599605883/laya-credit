@@ -1956,13 +1956,34 @@ void main() {
     expect(find.byKey(const Key('login-phone-field')), findsOneWidget);
   });
 
-  testWidgets('未登录时统计 Tab 同样需要登录', (tester) async {
+  testWidgets('未登录时进度 Tab 同样需要登录', (tester) async {
     await _pumpApp(tester, repository: _StubAppRepository());
 
-    await tester.tap(find.byKey(const Key('tab-stats')));
+    await tester.tap(find.byKey(const Key('tab-progress')));
     await tester.pumpAndSettle();
 
     expect(find.text('Please enter mobile number'), findsOneWidget);
+  });
+
+  testWidgets('切到进度 Tab 会刷新首页数据源', (tester) async {
+    // 进度卡来自首页接口的 PROCESS_LIST，与首页共用 homeDataProvider；
+    // 进入进度 Tab 必须重新拉一次，否则展示的是上次的旧数据。
+    final repository = _StubAppRepository();
+    await _pumpApp(
+      tester,
+      repository: repository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+    // 首屏首页接口已拉一次。
+    expect(repository.homeCalls, 1);
+
+    await tester.tap(find.byKey(const Key('tab-progress')));
+    await tester.pumpAndSettle();
+
+    expect(repository.homeCalls, 2);
+    expect(find.text('No progress yet'), findsOneWidget);
   });
 
   testWidgets('登录页在未填手机号时禁用获取验证码与提交', (tester) async {
