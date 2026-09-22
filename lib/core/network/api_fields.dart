@@ -540,4 +540,72 @@ abstract final class ApiFields {
   /// 账户列表的两个混淆字段（文档语义 `LIMPIDITY` / `ZANY`，每次请求随机值）。
   static const obfuscateLoanAccounts1 = 'thurberia';
   static const obfuscateLoanAccounts2 = 'chondroid';
+
+  // ---------- 订单列表（`POST /outsulk/gundy`） ----------
+  //
+  // 接口文档 `5.order.html#订单列表`。注意这里的订单号是 `pirate`（与产品详情同名字段），
+  // **不是** 活体 token 的 `resex`；产品 id 是 `podostemon`，也与首页的 `tartarizing` 不同。
+
+  /// 筛选状态：4 全部 / 7 进行中 / 6 待还款 / 5 已结清。
+  static const orderListStatus = 'butterpaste';
+
+  /// 页码，第一页传 1。
+  static const orderListPage = 'tripodical';
+
+  /// 每页条数，传 50。
+  static const orderListPageSize = 'downstater';
+
+  /// 订单数组（与首页模块列表同名 `kneeing`，但语义无关）。
+  static const orderListItems = 'kneeing';
+
+  /// 总页数。
+  static const orderListTotalPages = 'contraception';
+
+  /// 订单 id。
+  static const orderListOrderId = 'gasking';
+
+  /// 订单号。
+  static const orderListOrderNo = 'pirate';
+
+  /// 产品 id。
+  static const orderListProductId = 'podostemon';
+
+  /// 产品名称。
+  static const orderListProductName = 'heartfelt';
+
+  /// 产品 Logo 地址。
+  static const orderListProductLogo = 'bathtubs';
+
+  /// 订单状态码。
+  static const orderListStatusCode = 'polyphonist';
+
+  /// 订单状态文案。
+  static const orderListStatusText = 'minivan';
+
+  /// 已格式化的金额文案。
+  static const orderListAmountText = 'grassroots';
+
+  /// 金额标签。
+  static const orderListAmountLabel = 'modest';
+
+  /// 主按钮文案（为空表示该状态不展示按钮）。
+  static const orderListActionText = 'curitiba';
+
+  /// 老版本跳转地址（订单详情页）。
+  static const orderListLegacyTarget = 'rondelle';
+
+  /// 日期标签。
+  static const orderListDateLabel = 'devexity';
+
+  /// 日期值。
+  static const orderListDateValue = 'hospitalizes';
+
+  /// 逾期天数。
+  static const orderListOverdueDays = 'ozonic';
+
+  /// 卡片点击跳转地址（订单详情页）。
+  static const orderListCardTarget = 'danubian';
+
+  /// 按钮点击跳转地址（还款详情页）。
+  static const orderListActionTarget = 'trans';
 }

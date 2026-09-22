@@ -11,11 +11,13 @@ import '../../pages/id_verification_page.dart';
 import '../../pages/login_page.dart';
 import '../../pages/loan_confirm_page.dart';
 import '../../pages/mine_page.dart';
+import '../../pages/order_list_page.dart';
 import '../../pages/personal_info_page.dart';
 import '../../pages/stats_page.dart';
 import '../../pages/webview_page.dart';
 import '../../pages/work_information_page.dart';
 import '../../root_tab_page.dart';
+import 'app_deep_link.dart';
 import 'app_routes.dart';
 
 /// 证件选择页入参。认证项按产品下发，必须带上产品 id。
@@ -144,6 +146,15 @@ class WebViewPageArguments {
   final String? title;
 }
 
+/// 订单列表页入参（蓝湖稿 `05-01 - 订单列表`）。
+///
+/// [status] 是个人中心订单入口四个图标各自带下来的筛选状态，默认「全部」。
+class OrderListPageArguments {
+  const OrderListPageArguments({this.status = OrderFilterStatus.all});
+
+  final OrderFilterStatus status;
+}
+
 /// 路由生成器：`MaterialApp.onGenerateRoute` 的唯一入口。
 ///
 /// 每个 case 负责把 `settings.arguments` 转成强类型的页面入参，
@@ -244,6 +255,15 @@ class AppRouteGenerator {
           (_) => LoanConfirmPage(
             productId: loanArgs?.productId ?? '',
             orderNo: loanArgs?.orderNo ?? '',
+          ),
+        );
+
+      case AppRoutes.orderList:
+        final orderArgs = settings.arguments as OrderListPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => OrderListPage(
+            initialStatus: orderArgs?.status ?? OrderFilterStatus.all,
           ),
         );
 

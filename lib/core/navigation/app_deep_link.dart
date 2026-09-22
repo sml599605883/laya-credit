@@ -100,8 +100,13 @@ class AppDeepLink {
 class AppDeepLinkParser {
   const AppDeepLinkParser();
 
+  /// App 专属协议（文档 `7.map.html#Scheme`）：`ph://laya-credit/ios/<别名>`。
   static const _scheme = 'ph';
   static const _host = 'laya-credit';
+
+  /// 订单列表深链携带筛选状态的参数名（`butterpaste`，取值 4/7/6/5，
+  /// 与订单列表接口的业务字段同名）。
+  static const _orderStatusParam = 'butterpaste';
 
   AppDeepLink parse(String rawTarget) {
     final trimmed = rawTarget.trim();
@@ -153,9 +158,9 @@ class AppDeepLinkParser {
       ),
       AppDeepLinkAlias.order => AppDeepLink(
         kind: AppDeepLinkKind.order,
-        route: AppRoutes.mine,
+        route: AppRoutes.orderList,
         orderStatus: OrderFilterStatus.fromValue(
-          uri.queryParameters['status'] ?? '',
+          uri.queryParameters[_orderStatusParam] ?? '',
         ),
         raw: rawTarget,
       ),

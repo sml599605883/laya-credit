@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config/api_environment.dart';
+import 'app_deep_link.dart';
 import 'app_route_generator.dart';
 import 'app_routes.dart';
 
@@ -111,6 +114,51 @@ class AppNavigator {
       arguments: LoginPageArguments(onLoginSuccess: onLoginSuccess),
     );
     return result ?? false;
+  }
+
+  /// 打开订单列表页。
+  ///
+  /// [status] 来自个人中心入口或深链（文档别名 `AsepticizingCriminalist`），
+  /// 为 null 时默认「全部」。
+  static Future<T?> openOrderList<T extends Object?>({
+    OrderFilterStatus? status,
+  }) {
+    return push<T>(
+      AppRoutes.orderList,
+      arguments: OrderListPageArguments(
+        status: status ?? OrderFilterStatus.all,
+      ),
+    );
+  }
+
+  /// 统一分发已经解析好的深链目标。
+  ///
+  /// 首页 banner、WebView 桥、准入结果里的跳转地址都从这里走一处，
+  /// 避免每个调用点各写一份 switch（漏接页面时各页表现不一致）。
+  ///
+  /// 这里只处理**页面已存在**的目标：H5 / 首页 / 登录 / 订单列表。
+  /// 产品详情、准入、重新授信、设置等目标的后续动作在各调用点不一样
+  /// （例如准入流程要接着走认证步骤），所以交给 [onUnhandled]。
+  static Future<void> openDeepLink(
+    AppDeepLink link, {
+    required FutureOr<void> Function(AppDeepLink link) onUnhandled,
+  }) async {
+    switch (link.kind) {
+      case AppDeepLinkKind.webView:
+        await toWebView<void>(url: link.url);
+      case AppDeepLinkKind.home:
+        popToRoot();
+      case AppDeepLinkKind.login:
+        await toLogin();
+      case AppDeepLinkKind.order:
+        await openOrderList<void>(status: link.orderStatus);
+      case AppDeepLinkKind.productDetail:
+      case AppDeepLinkKind.admission:
+      case AppDeepLinkKind.recredit:
+      case AppDeepLinkKind.settings:
+      case AppDeepLinkKind.unsupported:
+        await onUnhandled(link);
+    }
   }
 
   /// 打开通用 H5 页。地址必须是 http/https；非法地址返回 null 并打日志。

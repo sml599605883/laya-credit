@@ -80,4 +80,7 @@ abstract final class ApiEndpoints {
   ///
   /// 返回订单详情页地址，由调用方决定用 WebView 还是原生页打开。
   static const changeBankCard = '/outsulk/bathtubs';
+
+  /// 订单列表。POST
+  static const orderList = '/outsulk/gundy';
 }

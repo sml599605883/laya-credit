@@ -323,41 +323,44 @@ class ProductApplicationFlow {
   }
 
   /// 按准入结果里的跳转地址分发。
+  ///
+  /// 文档：`liquidators=1` 走 H5，`=0` 走原生。原生目标交给
+  /// [AppNavigator.openDeepLink] 统一处理，它没有页面承载的目标在这里补后续动作。
   Future<void> _openJump(String target, int jumpType, String productId) async {
-    // 文档：liquidators=1 走 H5，=0 走原生。
     if (jumpType == 1) {
       await _openWebPage(target);
       return;
     }
 
-    final link = const AppDeepLinkParser().parse(target);
-    switch (link.kind) {
-      case AppDeepLinkKind.webView:
-        await _openWebPage(link.url);
-      case AppDeepLinkKind.home:
-        AppNavigator.popToRoot();
-      case AppDeepLinkKind.login:
-        await AppNavigator.toLogin();
-      case AppDeepLinkKind.productDetail:
-        await continueProductDetailFlow(
-          link.productId.isNotEmpty ? link.productId : productId,
-        );
-      case AppDeepLinkKind.admission:
-        // TODO(页面): 准入页（`Isaria`）本身就是本流程，正常不会作为跳转目标下发；
-        // 真出现时按新一次申请处理（当前会命中 _isProcessing 防连点，这里先提示）。
-        ToastHelper.showMessage('Admission link is not supported here');
-      case AppDeepLinkKind.order:
-        // TODO(页面): 订单列表页尚未搭建。
-        ToastHelper.showMessage('Order page is not available yet');
-      case AppDeepLinkKind.settings:
-        // TODO(页面): 设置页尚未搭建。
-        ToastHelper.showMessage('Settings page is not available yet');
-      case AppDeepLinkKind.recredit:
-        // TODO(页面): 重新授信 loading 页尚未搭建。
-        ToastHelper.showMessage('Credit review page is not available yet');
-      case AppDeepLinkKind.unsupported:
-        ToastHelper.showError('Invalid link');
-    }
+    await AppNavigator.openDeepLink(
+      const AppDeepLinkParser().parse(target),
+      onUnhandled: (link) async {
+        switch (link.kind) {
+          case AppDeepLinkKind.productDetail:
+            await continueProductDetailFlow(
+              link.productId.isNotEmpty ? link.productId : productId,
+            );
+          case AppDeepLinkKind.admission:
+            // TODO(页面): 准入页（`Isaria`）本身就是本流程，正常不会作为跳转目标下发；
+            // 真出现时按新一次申请处理（当前会命中 _isProcessing 防连点，这里先提示）。
+            ToastHelper.showMessage('Admission link is not supported here');
+          case AppDeepLinkKind.settings:
+            // TODO(页面): 设置页尚未搭建。
+            ToastHelper.showMessage('Settings page is not available yet');
+          case AppDeepLinkKind.recredit:
+            // TODO(页面): 重新授信 loading 页尚未搭建。
+            ToastHelper.showMessage('Credit review page is not available yet');
+          case AppDeepLinkKind.unsupported:
+            ToastHelper.showError('Invalid link');
+          case AppDeepLinkKind.webView:
+          case AppDeepLinkKind.home:
+          case AppDeepLinkKind.login:
+          case AppDeepLinkKind.order:
+            // 已由 AppNavigator.openDeepLink 处理，不会回调到这里。
+            break;
+        }
+      },
+    );
   }
 
   /// H5 跳转。

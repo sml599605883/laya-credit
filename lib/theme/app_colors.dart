@@ -322,6 +322,45 @@ abstract final class AppColors {
   /// 渠道 logo 的 1pt 描边（设计稿「蒙版」border rgba(151,151,151,1)）。
   static const loanConfirmLogoBorder = Color(0xFF979797);
 
+  // ---------- 订单列表页（蓝湖稿 `05-01 - 订单列表`） ----------
+
+  /// 选中筛选胶囊的底色（设计稿 `text-wrapper_2` rgba(195,231,95,1)）。
+  /// 与订单卡主按钮同色。
+  static const orderTabActiveBackground = Color(0xFFC3E75F);
+
+  /// 选中筛选胶囊的文案色（设计稿 `text_4` rgba(19,19,19,1)）。
+  static const orderTabActiveText = Color(0xFF131313);
+
+  /// 未选中筛选项文案色（设计稿 `text_5` / `text_6` / `text_7` rgba(51,51,51,1)）。
+  static const orderTabText = Color(0xFF333333);
+
+  /// 订单卡产品名文案色（设计稿 `text-group_1` rgba(60,60,60,1)）。
+  static const orderProductName = Color(0xFF3C3C3C);
+
+  /// 进行中订单的状态文案色（设计稿 `text_8` 实测取色 rgba(195,231,95,1)）。
+  static const orderStatusActive = Color(0xFFC3E75F);
+
+  /// 逾期订单的状态文案色（设计稿 `text_8` 实测取色 rgba(254,41,92,1)）。
+  static const orderStatusOverdue = Color(0xFFFE295C);
+
+  /// 已结清 / 终态订单的状态文案色（设计稿 `text_14` rgba(51,51,51,1)）。
+  static const orderStatusNeutral = Color(0xFF333333);
+
+  /// 订单卡内金额 / 日期小表的底色（设计稿 `section_2` rgba(245,245,245,1)）。
+  static const orderMetricBackground = Color(0xFFF5F5F5);
+
+  /// 小表两格之间的竖线（设计稿 `group_1` rgba(220,220,220,1)）。
+  static const orderMetricDivider = Color(0xFFDCDCDC);
+
+  /// 小表主数值文字色（设计稿 `text_9` / `text_11` rgba(51,51,51,1)）。
+  static const orderMetricValue = Color(0xFF333333);
+
+  /// 小表字段名文字色（设计稿 `text_10` / `text_12` rgba(153,153,153,1)）。
+  static const orderMetricLabel = Color(0xFF999999);
+
+  /// 空态提示文案色（设计稿 `text-group_1` rgba(24,28,23,1)）。
+  static const orderEmptyText = Color(0xFF181C17);
+
   static const white = Color(0xFFFFFFFF);
   static const black = Color(0xFF000000);
 }

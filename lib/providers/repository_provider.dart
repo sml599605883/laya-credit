@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/certification_repository.dart';
+import '../data/repositories/order_repository.dart';
 import '../data/repositories/product_repository.dart';
 import 'network_provider.dart';
 
@@ -31,3 +32,8 @@ final certificationRepositoryProvider = FutureProvider<CertificationRepository>(
     return CertificationRepository(client);
   },
 );
+
+final orderRepositoryProvider = FutureProvider<OrderRepository>((ref) async {
+  final client = await ref.watch(httpClientProvider.future);
+  return OrderRepository(client);
+});

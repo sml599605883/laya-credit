@@ -23,6 +23,10 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 - `MaterialApp.navigatorKey` 指向 `AppNavigator.navigatorKey`，支付回调、推送、会话过期等没有页面 `context` 的场景也能跳转。
 - 页面栈操作只暴露 4 个语义化方法：`push` / `replace` / `resetTo`（清栈）/ `pop`。
 - 侧滑返回保持 Flutter 默认（iOS 可返回）。若某个流程需要禁止中途返回，只改该路由对应的 Route 实现，不要全局关闭。
+- 后端 / 首页 banner / H5 桥下发的跳转地址先经 `AppDeepLinkParser` 解析，再统一走
+  `AppNavigator.openDeepLink(link, onUnhandled: ...)` 分发；只有页面已存在的目标
+  （WebView / 首页 / 登录 / 订单列表）在那里面处理，其余目标由各调用点在自己的
+  `onUnhandled` 里补后续动作（例如准入流程要接着走认证步骤），避免每个入口各写一份 switch。
 
 目前注册的路由：`/`（Tab 容器）、`/home`、`/stats`、`/mine`、`/login`，
 以及认证流程的二级页 `/id-verification`（证件选择，见第 12 条）、
@@ -30,7 +34,8 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 `/face-verification`（人脸识别，见第 15 条）、
 `/personal-info`（个人信息，见第 16 条）、`/work-info`（工作信息，见第 17 条）、
 `/emergency-contact`（紧急联系人，见第 18 条）、`/bind-card`（绑卡，见第 19 条）、
-`/loan-confirm`（借款确认 / 收款账户列表，见第 20 条）。
+`/loan-confirm`（借款确认 / 收款账户列表，见第 20 条）、
+`/order-list`（订单列表，见第 21 条）。
 
 ### 2. 状态管理用什么
 
@@ -142,7 +147,7 @@ lib/
    与 `kneeing` 里的 `BANNER` 模块不是同一个东西，需要设计确认它在首页的位置。
 3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
-4. **其余接口未接入**：订单、上报、H5 相关接口尚未落地。
+4. **其余接口未接入**：上报、H5 相关接口尚未落地（订单列表接口已接入，见第 21 条）。
    「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
    H5 地址需要 WebView、原生 `recredit` 需要重新授信 loading 页。相关分支见
    `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
@@ -155,6 +160,7 @@ lib/
    紧急联系人认证项也已落地并接上获取 / 保存接口（见第 18 条），
    绑卡认证项也已落地并接上获取 / 提交接口（见第 19 条），
    借款确认页（收款账户列表）也已落地并接上账户列表 / 更换银行卡接口（见第 20 条）。
+  订单列表页也已落地并接上订单列表接口（见第 21 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -195,8 +201,9 @@ lib/
     - `Website` 的域名与 `APP Version` 的版本号在设计稿里是 `xxxxx.com` / `v1.00` 占位，
       代码里分别取 `ApiEnvironment.h5Base` 的域名和安装包真实版本（`deviceParamsProvider`）。
       官网正式域名待产品确认后换成独立配置项。
-    - 设计稿的订单入口是 All / Outstanding / Overdue / Settled，而订单筛选状态文档只有
-      4 全部 / 7 进行中 / 6 待还款 / 5 已结清：`Overdue` 没有对应取值，暂时不传状态值（只展示、不跳转）。
+    - 设计稿的订单入口是 All / Outstanding / Overdue / Settled，对应订单筛选状态文档的
+      4 全部 / 7 进行中 / 6 待还款 / 5 已结清（`Outstanding→7`、`Overdue→6`、`Settled→5`），
+      四个入口都带上状态进订单列表页（见第 21 条）。
     - 设计稿没有独立的「退出登录」按钮，退出入口挪到 About Us 的 `Account` 行，
       弹出设计稿 `07-01 - 个人中心-退出` 的底部面板（Log out / Delete Account / Quit）。
       `Delete Account` 尚未接入；`Quit` 按「关掉面板」处理。
@@ -671,6 +678,61 @@ lib/
     - 相关测试见 `test/widget_test.dart` 的「借款确认页…」用例、
       「认证全部完成后进借款确认页…」「绑卡页改卡模式…」「WebView 桥 changeAccount…」
       用例、三条「用户账户列表…」用例与一条「更换银行卡接口…」用例。
+
+21. **订单列表页已按蓝湖稿 `05-01 - 订单列表` 还原**（有订单 / 无订单两态，`/order-list`，
+    `OrderListPage`）。
+    - 页面结构：薄荷底 `AppColors.surfaceMint` + 二级页通用 `BackNavBar`（标题 `Loan List`）；
+      下面一行四等分筛选项 `View All` / `Unpaid` / `Late` / `Paid`，选中项是柠檬绿胶囊
+      （radius 22、16pt Bold），未选中 12pt 常规；再往下是订单卡列表，间距 12、左右 16。
+      订单卡白底 radius 8、内边距 12：首行「14x14 产品 logo（radius 2）+ 产品名 14pt +
+      右对齐状态文案」；中间是 `#F5F5F5` 小表（金额 / 日期两列，中间 1pt `#DCDCDC` 竖线，
+      值 14pt、字段名 12pt）；只有进行中的卡才在最下面补一颗满宽 38pt 柠檬绿主按钮
+      （radius pill，文案由后端下发）。空态不居中，距筛选项 248pt 放 138x102 插画 +
+      `No information available`（用户提供的 `位图备份 8@3x.png`，已改名
+      `assets/mine/order_list_empty.png` 并登记到 `AppAssets.orderListEmpty`）。
+    - **接口**：`POST /outsulk/gundy`（`ApiEndpoints.orderList`），入参
+      `butterpaste` 筛选状态（4 / 7 / 6 / 5）+ `tripodical` 页码 + `downstater` 每页条数
+      （每页固定 50，页码由分页逻辑给），返回
+      `kneeing[]` 订单数组 + `contraception` 总页数。字段口径只认本项目
+      `5.order.html#订单列表`：`gasking` 订单 id、`pirate` 订单号、`podostemon` 产品 id、
+      `heartfelt` 产品名、`bathtubs` logo、`polyphonist` 状态码、`minivan` 状态文案、
+      `grassroots` / `modest` 金额与说明、`curitiba` 按钮文案、`rondelle` 兜底跳转地址、
+      `devexity` / `hospitalizes` 日期字段名与值、`ozonic` 逾期天数、`danubian` 卡片跳转地址、
+      `trans` 按钮跳转地址。卡片跳转优先 `danubian`，缺失时回落老字段 `rondelle`。
+      所有 `Map` 解析都做了缺字段回落，缺数组时按空列表处理。
+    - **分页**：接口按页下发（每页 50），返回的 `contraception`（总页数）决定还有没有下一页。
+      `OrderListNotifier` 把「已加载到第几页」「是否在加载下一页」「下一页是否失败」放进
+      `OrderListState`：列表滚到距底部 120pt 时自动 `loadMore()`，结果追加在已加载数据后面；
+      没有下一页 / 在途 / 当前是错误态时 `loadMore()` 直接返回，所以反复触底不会重复请求。
+      加载中转圈、失败时底部给一个重试入口（设计稿没有这一块，字号与主色沿用页面），
+      **翻页失败不会清掉已加载的订单**。切换筛选项会回到列表顶部；下拉刷新整页重来，
+      请求序号保证在途的旧分页结果不会接到新列表后面。
+    - **状态配色按 `polyphonist` 分三档**（设计稿三种状态）：`179` 待还款 = 柠檬绿、
+      `180` 逾期 = 品牌红、其余（`Settled` 等终态）= 深灰；只有 `179` / `180` 展示主按钮。
+      `ozonic`（逾期天数）照常解析，但不参与配色，留给后续需要精确天数的场景。
+    - **四个入口都接上了**：个人中心的 All / Outstanding / Overdue / Settled 分别带
+      4 / 7 / 6 / 5 进本页；深链别名 `AsepticizingCriminalist` 的筛选参数名是
+      `butterpaste`（文档示例 `ph://laya-credit/ios/AsepticizingCriminalist?butterpaste=6`），
+      缺省回落「全部」。卡片点 `danubian`、按钮点 `trans`：`http(s)` 直连 WebView，
+      `/` 开头拼 `ApiEnvironment.h5Base` 走 `AppNavigator.toWebPath`。
+    - **跳转节点**（对齐参照项目 peso_shield 后确认无遗漏）：参照项目只有
+      个人中心、WebView 桥、申请流程三个入口；本项目在三者的基础上多出首页 banner
+      （`jumpUrl` 里的原生 `order` 目标）。四个来源全部收敛到 `AppNavigator.openOrderList`，
+      深链分发统一走 `AppNavigator.openDeepLink`（见第 1 条），各入口不再各写一份 switch。
+      首页借款进度卡仍是纯展示、按钮回调未接（本任务明确不做），本页只承接筛选入口与深链。
+    - 与参照项目 peso_shield / fund_nexus 的差异：状态分档只看 `polyphonist`（不额外引入
+      对方的状态枚举）、筛选参数字段名用本项目文档的 `butterpaste`、统一入口命名为
+      `openDeepLink` / `openOrderList` 而不照搬对方的 `navigateRawTarget` 结构；
+      订单卡的排版 / 字段全部来自本项目设计稿与接口文档。
+    - 相关测试见 `test/order_list_test.dart`：字段解析、状态分档（179 / 180 / 其它）、
+      深链别名与 `butterpaste` 参数、统一入口 `openDeepLink` 的分发（order 目标进本页并带状态、
+      无页面承载的目标交回 `onUnhandled`）、空态与有订单两态渲染、终态不展示主按钮，
+      以及分页三条：触底追加下一页、只有一页时不再请求、翻页失败保留数据并可重试。
+      分页用例用假仓库（`implements OrderRepository`）挂到 `orderRepositoryProvider` 上，
+      页面跑的是真实 notifier / 滚动监听逻辑。
+    - **遗留风险**：分页只在滚动到距底部 120pt 时触发，触屏设备上在惯性滚动结束前就会预取，
+      属于预期行为；真机上仍建议确认一次「翻到最后一页不再转圈」。空态插画在本环境 golden 里
+      渲染为空白（属测试 harness 限制），需要真机 / 模拟器目检。
 
 ## 常用命令
 

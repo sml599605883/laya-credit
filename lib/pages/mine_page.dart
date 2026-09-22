@@ -253,12 +253,13 @@ class _OrderCard extends StatelessWidget {
 
   /// 设计稿 `list_3` 的四个筛选项。
   ///
-  /// TODO(接口): 订单筛选状态文档里只有 4 全部 / 7 进行中 / 6 待还款 / 5 已结清，
-  /// 设计稿的 `Overdue` 没有对应取值，等后端确认后再补。
-  static const _entries = <(String, String, OrderFilterStatus?)>[
+  /// 四个入口按位置对应订单列表页的四个筛选项
+  /// （`All`/`Outstanding`/`Overdue`/`Settled` ↔ `View All`/`Unpaid`/`Late`/`Paid`），
+  /// 状态码沿用接口文档 `5.order.html#订单列表` 的 4/7/6/5。
+  static const _entries = <(String, String, OrderFilterStatus)>[
     ('All', AppAssets.orderAll, OrderFilterStatus.all),
-    ('Outstanding', AppAssets.orderOutstanding, OrderFilterStatus.toRepay),
-    ('Overdue', AppAssets.orderOverdue, null),
+    ('Outstanding', AppAssets.orderOutstanding, OrderFilterStatus.inProgress),
+    ('Overdue', AppAssets.orderOverdue, OrderFilterStatus.toRepay),
     ('Settled', AppAssets.orderSettled, OrderFilterStatus.settled),
   ];
 
@@ -308,9 +309,8 @@ class _OrderCard extends StatelessWidget {
                       layout: layout,
                       label: label,
                       icon: icon,
-                      onTap: () => ToastHelper.showMessage(
-                        'Orders: $label${status == null ? '' : ' (${status.value})'}',
-                      ),
+                      onTap: () =>
+                          AppNavigator.openOrderList<void>(status: status),
                     ),
                 ],
               ),

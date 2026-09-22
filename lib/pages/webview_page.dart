@@ -349,21 +349,12 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
 
   Future<void> _navigateInternal(String raw) async {
     final link = const AppDeepLinkParser().parse(raw);
-    switch (link.kind) {
-      case AppDeepLinkKind.webView:
-        await AppNavigator.toWebView<void>(url: link.url);
-      case AppDeepLinkKind.home:
-        AppNavigator.popToRoot();
-      case AppDeepLinkKind.login:
-        await AppNavigator.toLogin();
-      case AppDeepLinkKind.unsupported:
-      case AppDeepLinkKind.settings:
-      case AppDeepLinkKind.order:
-      case AppDeepLinkKind.productDetail:
-      case AppDeepLinkKind.recredit:
-      case AppDeepLinkKind.admission:
-        debugPrint('[WebView] 暂不支持的内部跳转: $raw');
-    }
+    await AppNavigator.openDeepLink(
+      link,
+      onUnhandled: (target) {
+        debugPrint('[WebView] 暂不支持的内部跳转: ${target.raw}');
+      },
+    );
   }
 
   Future<bool> _openExternal(Uri uri) async {

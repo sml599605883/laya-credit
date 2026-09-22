@@ -83,6 +83,10 @@ abstract final class AppAssets {
   static const orderOverdue = 'assets/mine/order_overdue.png';
   static const orderSettled = 'assets/mine/order_settled.png';
 
+  /// 订单列表空态插画（蓝湖稿 `05-01 - 订单列表-无订单` 的 `box_1`，138x102；
+  /// 用户提供的 `位图备份 8@3x.png`）。开箱图带一圈透明留白，按 contain 摆放。
+  static const orderListEmpty = 'assets/mine/order_list_empty.png';
+
   /// 服务入口图标（设计稿 20x20；颜色是切图自带的 `rgba(102,102,102)`，不要再着色）。
   static const serviceCustomer = 'assets/mine/service_customer.png';
   static const serviceWebsite = 'assets/mine/service_website.png';

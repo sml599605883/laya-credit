@@ -957,22 +957,13 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
 
     // banner 跳转目标可能是 H5 或原生路由，统一走深链解析后再分发。
     final link = const AppDeepLinkParser().parse(banner.jumpUrl);
-    switch (link.kind) {
-      case AppDeepLinkKind.webView:
-        await AppNavigator.toWebView<void>(url: link.url);
-      case AppDeepLinkKind.home:
-        AppNavigator.popToRoot();
-      case AppDeepLinkKind.login:
-        await AppNavigator.toLogin();
-      case AppDeepLinkKind.unsupported:
-      case AppDeepLinkKind.settings:
-      case AppDeepLinkKind.order:
-      case AppDeepLinkKind.productDetail:
-      case AppDeepLinkKind.recredit:
-      case AppDeepLinkKind.admission:
+    await AppNavigator.openDeepLink(
+      link,
+      onUnhandled: (target) {
         // TODO(页面): 其余跳转目标页面尚未搭建。
-        ToastHelper.showMessage('Banner target: ${banner.jumpUrl}');
-    }
+        ToastHelper.showMessage('Banner target: ${target.raw}');
+      },
+    );
   }
 }
 
