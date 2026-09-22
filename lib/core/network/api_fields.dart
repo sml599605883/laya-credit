@@ -537,6 +537,17 @@ abstract final class ApiFields {
   /// 更换银行卡返回的跳转地址（文档语义 `redirectUrl`，订单详情页）。
   static const changeBankCardRedirectUrl = 'kopis';
 
+  // ---------- 原卡重试确认订单（`POST /outsulk/resex`） ----------
+  //
+  // 接口文档 `8.h5.html#原卡重试确认订单`。订单号字段是 `pirate`（与产品详情 /
+  // 订单列表同名），返回的订单详情页地址是 `kopis`。
+
+  /// 原卡重试的订单号。
+  static const retryConfirmOrderNo = 'pirate';
+
+  /// 原卡重试返回的订单详情页地址。
+  static const retryConfirmJumpUrl = 'kopis';
+
   /// 账户列表的两个混淆字段（文档语义 `LIMPIDITY` / `ZANY`，每次请求随机值）。
   static const obfuscateLoanAccounts1 = 'thurberia';
   static const obfuscateLoanAccounts2 = 'chondroid';

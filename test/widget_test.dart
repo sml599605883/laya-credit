@@ -960,6 +960,24 @@ class _StubCertificationRepository extends CertificationRepository {
     if (changeBankCardFailure case final error?) throw error;
     return ApiResponse(code: 0, message: 'success', data: changeBankCardUrl);
   }
+
+  /// 每次「原卡重试确认订单」的订单号。
+  final List<String> retryOrderCalls = [];
+
+  /// 置为异常时重试接口直接抛出。
+  Object? retryOrderFailure;
+
+  /// 重试成功返回的订单详情页地址。
+  String retryOrderUrl = 'https://h5.example.com/order/9';
+
+  @override
+  Future<ApiResponse<String>> retryOrderConfirm({
+    required String orderNo,
+  }) async {
+    retryOrderCalls.add(orderNo);
+    if (retryOrderFailure case final error?) throw error;
+    return ApiResponse(code: 0, message: 'success', data: retryOrderUrl);
+  }
 }
 
 /// 证件照服务桩：不弹系统 UI，直接返回固定路径。
@@ -1022,9 +1040,13 @@ class _StubProductRepository extends ProductRepository {
   final ProductApplyResult applyResult;
   final ProductDetail detail;
 
+  /// 认证全部完成后 `getOrderPushUrl` 换回的确认用款 H5 地址。
+  String pushUrl = 'https://h5.example.com/confirm/1';
+
   /// (productId, apiRemind)
   final List<(String, int)> applyCalls = [];
   int detailCalls = 0;
+  int pushUrlCalls = 0;
 
   @override
   Future<ApiResponse<ProductApplyResult>> applyProduct({
@@ -1041,6 +1063,17 @@ class _StubProductRepository extends ProductRepository {
   }) async {
     detailCalls++;
     return ApiResponse(code: 0, message: 'success', data: detail);
+  }
+
+  @override
+  Future<ApiResponse<String>> getOrderPushUrl({
+    required String orderNo,
+    required String amount,
+    required String loanTerm,
+    required String termType,
+  }) async {
+    pushUrlCalls++;
+    return ApiResponse(code: 0, message: 'success', data: pushUrl);
   }
 }
 
@@ -1984,6 +2017,58 @@ void main() {
 
     expect(repository.homeCalls, 2);
     expect(find.text('No progress yet'), findsOneWidget);
+  });
+
+  testWidgets('进度卡 Try again 调原卡重试确认订单并打开返回的订单详情地址', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..retryOrderUrl = 'https://h5.example.com/order/9';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: null,
+          orders: [
+            HomeOrderCard(
+              orderNo: 'ORD-9',
+              productId: 7,
+              productName: 'Cash Moca',
+              productLogo: '',
+              title: 'Credit activation progress',
+              displayAmount: '₱20.000',
+              amountText: 'Loan Amount',
+              date: '12-07-2024',
+              dateText: 'Loan Date',
+              orderStatusText: '',
+              status: HomeOrderCardStatus.failed1,
+              progressText: '',
+              steps: [],
+              // 重试接口拿到地址前，卡片上那份旧地址不该被打开。
+              jumpUrl: 'https://h5.example.com/stale',
+            ),
+          ],
+          notices: [],
+        ),
+      ),
+      certificationRepository: certificationRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+
+    await tester.tap(find.byKey(const Key('tab-progress')));
+    await tester.pumpAndSettle();
+    expect(find.text('Try again'), findsOneWidget);
+
+    await tester.tap(find.text('Try again'));
+    // WebView 首帧自带 loading 指示器，pumpAndSettle 不会收敛，按帧推进即可。
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    // 只带订单号调重试接口，拿它返回的地址开 H5，不回落卡片上的 jumpUrl。
+    expect(certificationRepository.retryOrderCalls, ['ORD-9']);
+    expect(find.byType(WebViewPage), findsOneWidget);
   });
 
   testWidgets('登录页在未填手机号时禁用获取验证码与提交', (tester) async {
@@ -5878,7 +5963,7 @@ void main() {
     expect(find.text('BDO'), findsOneWidget);
   });
 
-  testWidgets('借款确认页没有可选账户时走空态而不是空列表', (tester) async {
+  testWidgets('借款确认页没有可选账户时自动把「去绑卡」回给调用方', (tester) async {
     final certificationRepository = _StubCertificationRepository()
       ..userAccounts = const LoanConfirmData();
     await _pumpApp(
@@ -5886,7 +5971,7 @@ void main() {
       repository: _StubAppRepository(),
       certificationRepository: certificationRepository,
     );
-    AppNavigator.push(
+    final popped = AppNavigator.push<LoanConfirmResult>(
       AppRoutes.loanConfirm,
       arguments: const LoanConfirmPageArguments(
         productId: '7',
@@ -5895,9 +5980,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No payment methods available'), findsOneWidget);
-    // 空态也要留 Add other payment methods 给用户去绑卡。
-    expect(_assetImage(AppAssets.loanConfirmAddMethod), findsOneWidget);
+    // 一笔可选账户都没有时不再停在空态等用户点，自动回「要新增账户」，
+    // 由调用方接着压绑卡页的改卡模式（口径对齐 peso_shield）。
+    expect(await popped, isA<LoanConfirmAddPaymentMethod>());
+    expect(find.byType(LoanConfirmPage), findsNothing);
   });
 
   testWidgets('借款确认页 Add other payment methods 把「去绑卡」回给调用方', (tester) async {
@@ -5926,17 +6012,15 @@ void main() {
     expect(find.byType(LoanConfirmPage), findsNothing);
   });
 
-  testWidgets('认证全部完成后进借款确认页，Upload 换绑后打开订单详情 WebView', (tester) async {
+  testWidgets('认证全部完成后换确认用款 H5 地址并打开 WebView', (tester) async {
     final productRepository = _StubProductRepository(
       detail: const ProductDetail(
         resultCode: 200,
         basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
-        // 认证全部完成：没有下一步认证项 → 直接进借款确认页。
+        // 认证全部完成：没有下一步认证项 → 换地址进确认用款 WebView。
         nextStep: ProductNextStep(),
       ),
     );
-    final certificationRepository = _StubCertificationRepository()
-      ..changeBankCardUrl = 'https://h5.example.com/order/9';
     await _pumpApp(
       tester,
       repository: _StubAppRepository(
@@ -5948,7 +6032,7 @@ void main() {
         ),
       ),
       productRepository: productRepository,
-      certificationRepository: certificationRepository,
+      certificationRepository: _StubCertificationRepository(),
       setUp: (container) async {
         await container
             .read(userSessionProvider.notifier)
@@ -5957,22 +6041,13 @@ void main() {
     );
 
     await tester.tap(find.text('180 Days'));
-    await tester.pumpAndSettle();
-
-    // 产品 id 从首页卡片带下来，账户列表按它拉。
-    expect(find.byType(LoanConfirmPage), findsOneWidget);
-    expect(certificationRepository.userAccountsCalls, ['1']);
-
-    await tester.tap(find.text('Upload'), warnIfMissed: false);
     // WebView 首帧自带 loading 指示器，pumpAndSettle 不会收敛，按帧推进即可。
     for (var i = 0; i < 12; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(certificationRepository.changeBankCardCalls, [
-      (orderNo: 'ORDER-1', bindId: '555'),
-    ]);
-    // 换绑成功后由流程打开订单详情页，确认页从返回栈里清掉。
+    // 认证做完后不再进原生账号列表，而是换地址直接打开订单 H5。
+    expect(productRepository.pushUrlCalls, 1);
     expect(find.byType(WebViewPage), findsOneWidget);
     expect(find.byType(LoanConfirmPage), findsNothing);
   });
@@ -6163,5 +6238,18 @@ void main() {
     expect(params[ApiFields.changeBankCardBindId], '555');
     expect(params[ApiFields.obfuscateChangeBankCard], isNotEmpty);
     expect(response.data, 'https://h5.example.com/order/1');
+  });
+
+  test('原卡重试确认订单接口只带订单号并解析订单详情地址', () async {
+    final client = _PayloadRecordingClient({
+      ApiFields.retryConfirmJumpUrl: 'https://h5.example.com/order/9',
+    });
+    final response = await CertificationRepository(client)
+        .retryOrderConfirm(orderNo: 'ORD-9');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.orderRetryConfirm);
+    expect(params[ApiFields.retryConfirmOrderNo], 'ORD-9');
+    expect(response.data, 'https://h5.example.com/order/9');
   });
 }

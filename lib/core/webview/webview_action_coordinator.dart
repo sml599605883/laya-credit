@@ -19,6 +19,17 @@ typedef WebViewAsyncAction = Future<void> Function();
 typedef WebViewMessageAction = Future<void> Function(String message);
 typedef WebViewLogger = void Function(String message);
 
+/// action 执行失败时抛出。[message] 会原样展示给用户，
+/// 避免把 `ApiException(...)` 这类内部前缀透出到 Toast。
+class WebViewActionException implements Exception {
+  const WebViewActionException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// 桥接 action 的纯逻辑分发器。
 ///
 /// 与 `InAppWebViewController`、页面生命周期完全解耦：所有副作用都通过构造
@@ -78,8 +89,7 @@ class WebViewActionCoordinator {
         ),
       };
     } catch (error) {
-      final message = error.toString().trim();
-      final resolved = message.isEmpty ? 'Unable to complete action' : message;
+      final resolved = _resolveErrorMessage(error);
       await showError?.call(resolved);
       return WebViewResult.failure(resolved);
     }
@@ -100,13 +110,15 @@ class WebViewActionCoordinator {
   }
 
   WebViewResult _ignoreGooglePlay(WebViewRequest request) {
-    final package = _value(request, WebViewFields.appPkg, fallbackToRaw: true);
+    // H5 直接把包名（裸串）作为 data 下发。
+    final package = request.rawDataString;
     logger?.call('Google Play action ignored on iOS: package=$package');
     return const WebViewResult.success();
   }
 
   Future<WebViewResult> _openUrl(WebViewRequest request) async {
-    final rawUrl = _value(request, WebViewFields.url, fallbackToRaw: true);
+    // H5 直接把链接（裸串）作为 data 下发。
+    final rawUrl = request.rawDataString;
     final uri = Uri.tryParse(rawUrl);
     if (rawUrl.isEmpty || uri == null || uri.scheme.isEmpty) {
       return const WebViewResult.failure('Invalid url');
@@ -180,12 +192,15 @@ class WebViewActionCoordinator {
     return const WebViewResult.success();
   }
 
-  String _value(
-    WebViewRequest request,
-    String key, {
-    bool fallbackToRaw = false,
-  }) {
-    final mapped = request.data[key]?.toString().trim() ?? '';
-    return mapped.isNotEmpty || !fallbackToRaw ? mapped : request.rawDataString;
+  String _value(WebViewRequest request, String key) =>
+      request.data[key]?.toString().trim() ?? '';
+
+  static String _resolveErrorMessage(Object error) {
+    if (error is WebViewActionException) {
+      final text = error.message.trim();
+      if (text.isNotEmpty) return text;
+    }
+    final text = error.toString().trim();
+    return text.isEmpty ? 'Unable to complete action' : text;
   }
 }

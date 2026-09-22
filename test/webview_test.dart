@@ -6,44 +6,51 @@ import 'package:laya_credit/pages/webview_page.dart';
 
 void main() {
   group('WebViewContract', () {
-    test('handler 与 action 串非空且互不相同', () {
-      expect(WebViewContract.handler.trim(), isNotEmpty);
-      const actions = <String>[
-        WebViewActions.uploadRisk,
-        WebViewActions.openGooglePlay,
-        WebViewActions.openUrl,
-        WebViewActions.close,
-        WebViewActions.home,
-        WebViewActions.grade,
-        WebViewActions.retryOrder,
-        WebViewActions.changeAccount,
-        WebViewActions.publicParams,
-      ];
-      expect(actions.toSet(), hasLength(actions.length));
-      expect(actions.every((action) => action.trim().isNotEmpty), isTrue);
+    test('handler 与 action 串与 Web 端契约一致', () {
+      expect(WebViewContract.handler, 'ph_laya_credit_ios');
+      expect(WebViewActions.uploadRisk, 'laya_credit_rqHm8jp3XV4JDoI');
+      expect(WebViewActions.openGooglePlay, 'laya_credit_lgr5GnQLGtwyPTU');
+      expect(WebViewActions.openUrl, 'laya_credit_LSfHZrCEnU8pobX');
+      expect(WebViewActions.close, 'laya_credit_DPs6pJccZSPgIRr');
+      expect(WebViewActions.home, 'laya_credit_3hmzdF0IOBcBQCB');
+      expect(WebViewActions.grade, 'laya_credit_YTIqoTjNxGdF8Fz');
+      expect(WebViewActions.retryOrder, 'laya_credit_3ooUbdYzl5XA9WD');
+      expect(WebViewActions.changeAccount, 'laya_credit_5vBBE3uRdizNLo7');
+      expect(WebViewActions.publicParams, 'laya_credit_IoIRBP06E3v1dGA');
+      expect(WebViewFields.productId, 'podostemon');
+      expect(WebViewFields.orderNo, 'pirate');
     });
 
     test('解析 JSON 字符串信封', () {
       final request = WebViewRequest.decode(
         '{"action":"${WebViewActions.uploadRisk}","callbackId":"cb-1",'
-        '"data":{"productId":"p-1","orderNo":42}}',
+        '"data":{"${WebViewFields.productId}":"p-1","${WebViewFields.orderNo}":42}}',
       );
       expect(request.action, WebViewActions.uploadRisk);
       expect(request.callbackId, 'cb-1');
       expect(request.expectsCallback, isTrue);
-      expect(request.data['productId'], 'p-1');
-      expect(request.data['orderNo'], 42);
+      expect(request.data[WebViewFields.productId], 'p-1');
+      expect(request.data[WebViewFields.orderNo], 42);
     });
 
     test('兼容 name / payload / callback 别名', () {
       final request = WebViewRequest.decode({
-        'name': WebViewActions.openUrl,
+        'name': WebViewActions.uploadRisk,
         'callback': 'cb-2',
-        'payload': '{"url":"https://h5.example/a"}',
+        'payload': '{"${WebViewFields.productId}":"p-2"}',
       });
-      expect(request.action, WebViewActions.openUrl);
+      expect(request.action, WebViewActions.uploadRisk);
       expect(request.callbackId, 'cb-2');
-      expect(request.data['url'], 'https://h5.example/a');
+      expect(request.data[WebViewFields.productId], 'p-2');
+    });
+
+    test('裸串 data（openUrl / publicParams）原样保留', () {
+      final request = WebViewRequest.decode({
+        'action': WebViewActions.openUrl,
+        'data': 'https://h5.example/a',
+      });
+      expect(request.data, isEmpty);
+      expect(request.rawDataString, 'https://h5.example/a');
     });
 
     test('畸形 JSON 退化成空 action 且不抛异常', () {
@@ -72,7 +79,7 @@ void main() {
       final result = await coordinator.dispatch(
         WebViewRequest.decode({
           'action': WebViewActions.openUrl,
-          'data': {'url': 'https://h5.example/a'},
+          'data': 'https://h5.example/a',
         }),
       );
       expect(result.code, 0);
@@ -87,7 +94,7 @@ void main() {
       await coordinator.dispatch(
         WebViewRequest.decode({
           'action': WebViewActions.openUrl,
-          'data': {'url': 'ph://laya-credit/ios/DrivepipeAlphyl'},
+          'data': 'ph://laya-credit/ios/DrivepipeAlphyl',
         }),
       );
       expect(navigated, ['ph://laya-credit/ios/DrivepipeAlphyl']);
@@ -128,7 +135,10 @@ void main() {
       final result = await coordinator.dispatch(
         WebViewRequest.decode({
           'action': WebViewActions.uploadRisk,
-          'data': {'productId': 'p-1', 'orderNo': 'o-1'},
+          'data': {
+            WebViewFields.productId: 'p-1',
+            WebViewFields.orderNo: 'o-1',
+          },
         }),
       );
       expect(result.code, 0);
@@ -168,12 +178,30 @@ void main() {
       final result = await coordinator.dispatch(
         WebViewRequest.decode({
           'action': WebViewActions.retryOrder,
-          'data': {'orderNo': 'o-1'},
+          'data': {WebViewFields.orderNo: 'o-1'},
         }),
       );
       expect(result.code, -1);
       expect(errors, isNotEmpty);
       expect(loading, 0);
+    });
+
+    test('action 抛 WebViewActionException 时原样透出文案', () async {
+      final errors = <String>[];
+      final coordinator = WebViewActionCoordinator(
+        retryOrder: (orderNo) async =>
+            throw const WebViewActionException('No original card'),
+        showError: (message) async => errors.add(message),
+      );
+      final result = await coordinator.dispatch(
+        WebViewRequest.decode({
+          'action': WebViewActions.retryOrder,
+          'data': {WebViewFields.orderNo: 'o-1'},
+        }),
+      );
+      expect(result.code, -1);
+      expect(result.message, 'No original card');
+      expect(errors, ['No original card']);
     });
   });
 

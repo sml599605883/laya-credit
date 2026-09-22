@@ -66,6 +66,9 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
   /// 已经把哪一份接口数据铺到选中态上，避免 build 里重复初始化。
   LoanConfirmData? _syncedData;
 
+  /// 空列表只自动跳一次绑卡页，避免 rebuild / 重拉时重复 pop。
+  bool _autoBindCardScheduled = false;
+
   /// 提交换绑进行中：挡住 `Upload`，避免同一笔订单提交两次。
   bool _isSubmitting = false;
 
@@ -74,7 +77,10 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
     final layout = AppLayout.of(context);
     final info = ref.watch(loanConfirmProvider(widget.productId));
 
-    info.whenData(_ensureSelection);
+    info.whenData((data) {
+      _ensureSelection(data);
+      _scheduleAutoBindCard(data);
+    });
 
     return Scaffold(
       backgroundColor: AppColors.surfaceMint,
@@ -121,7 +127,11 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
     );
   }
 
-  /// 没有任何可选账户时的兜底文案；`Add other payment methods` 仍然可点。
+  /// 没有任何可选账户时的兜底文案。
+  ///
+  /// 正常情况下这一帧画完 [LoanConfirmAddPaymentMethod] 就自动 pop 了
+  /// （见 [_scheduleAutoBindCard]），这里只是返回前的兜底；`Add other payment
+  /// methods` 仍然可点，pop 不出去时用户还有手动入口。
   Widget _buildEmptyState(AppLayout layout) {
     return Padding(
       padding: layout.edgeInsets(
@@ -145,6 +155,23 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
     if (identical(_syncedData, data)) return;
     _syncedData = data;
     _selectedId = data.selectedId;
+  }
+
+  /// 后端一笔可选账户都没下发时，自动走「新增账户」。
+  ///
+  /// 页面自己拉账户，所以空列表由本页判定：把 [LoanConfirmAddPaymentMethod]
+  /// 交回调用方，由调用方压绑卡页的改卡模式，用户不用再点一次
+  /// `Add other payment methods`。口径对齐 peso_shield 的
+  /// `getUserBankAccounts(...).isEmpty` → 直接进绑卡页。
+  ///
+  /// pop 要等这一帧画完（`whenData` 在 build 里命中），所以走 post-frame 回调。
+  void _scheduleAutoBindCard(LoanConfirmData data) {
+    if (!data.isEmpty || _autoBindCardScheduled) return;
+    _autoBindCardScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      AppNavigator.pop<LoanConfirmResult>(const LoanConfirmAddPaymentMethod());
+    });
   }
 
   /// 一个分节：分节标题 + 若干张账户卡。

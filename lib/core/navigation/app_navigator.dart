@@ -71,9 +71,10 @@ class AppNavigator {
   /// 进入下一个认证项（活体 / 个人信息 / 工作 / 联系人 / 绑卡）或跳 H5 时会清掉
   /// 这些页面，避免认证页 / 借款确认页在返回栈里层层堆叠。新增认证页时记得补进来。
   ///
-  /// `bindCard` 与 `loanConfirm` 是本流程的最后两屏：绑卡页提交成功后会由
-  /// [ProductApplicationFlow] 重新进借款确认页，把它们放进集合里可以顺带清掉
-  /// 上一张绑卡页 / 借款确认页，不会出现「确认页叠确认页」。
+  /// 绑卡认证项做完后，[ProductApplicationFlow] 会用订单信息换确认用款 H5
+  /// 地址进 WebView，`loanConfirm`（账号列表）则由订单详情 H5 桥 / 进度卡进入。
+  /// 把它们都放进集合里，跳 H5 / 换绑时能顺带清掉上一张绑卡页 / 确认页，
+  /// 不会出现「确认页叠确认页」。
   static const Set<String> _certificationRoutes = {
     AppRoutes.idVerification,
     AppRoutes.idUpload,

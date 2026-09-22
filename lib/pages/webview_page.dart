@@ -15,6 +15,7 @@ import '../core/ui/toast_helper.dart';
 import '../core/webview/webview_action_coordinator.dart';
 import '../core/webview/webview_contract.dart';
 import '../providers/network_provider.dart';
+import '../providers/repository_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
 import '../widgets/state_views.dart';
@@ -293,11 +294,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
         final client = await ref.read(httpClientProvider.future);
         return client.buildSignedQuery(path);
       },
-      // TODO(接口): 重试订单接口尚未接入，先打日志并返回空地址。
-      retryOrder: (orderNo) async {
-        debugPrint('[WebView] retryOrder(orderNo=$orderNo) 接口未接入');
-        return '';
-      },
+      retryOrder: _retryOrderConfirm,
       changeAccount: _changeOrderAccount,
       reloadOrOpenWebView: _reloadOrOpenWebView,
       showLoading: () async {
@@ -313,11 +310,27 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
 
   /// H5（订单详情页）请求「更换打款账户」。
   ///
-  /// 进原生账号列表选一笔，页面自己换绑后把订单详情页地址回过来，再**在当前
-  /// WebView 里换地址**（而不是压一层新的 WebView）；用户点「新增账户」则进
-  /// 绑卡页的改卡模式，拿它 pop 回来的地址同样在当前 WebView 里打开。
-  /// 口径对齐 peso_shield 的 `_navigateToAccountList` / `_navigateToBindCard`。
+  /// 进原生账号列表选一笔（页面自己拉账户、自己换绑，再把订单详情页地址回过来）；
+  /// 用户点「新增账户」则进绑卡页的改卡模式，拿它 pop 回来的地址。
+  /// 两条分支都用一个**全新的 WebView 路由**接上结果地址，而不是在当前
+  /// controller 上 `loadUrl`——否则 H5 历史里还留着换绑前的订单详情，返回会回到
+  /// 过期页。口径对齐 fund_nexus 的 `_replaceAccountChangeFlow`
+  /// 与 peso_shield 的 `_replaceCurrentWebView`。
+  ///
+  /// 注意：协调器在 action 执行期间会挂跨页 Loading（`ToastHelper.showLoading`
+  /// 是 `allowClick: false`），而账号列表要等用户选完、绑卡页要等用户填完才会
+  /// pop；所以这里**不能**等交互结果，push 完立刻把 Future 交回协调器，
+  /// 否则 Loading 遮罩会把账号列表页整个挡住。口径对齐 fund_nexus 的
+  /// `unawaited(push(...))`。
   Future<void> _changeOrderAccount({
+    required String productId,
+    required String orderNo,
+  }) {
+    unawaited(_changeOrderAccountFlow(productId: productId, orderNo: orderNo));
+    return Future<void>.value();
+  }
+
+  Future<void> _changeOrderAccountFlow({
     required String productId,
     required String orderNo,
   }) async {
@@ -330,8 +343,9 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
     );
     if (!mounted || result == null) return;
 
+    final String url;
     if (result is LoanConfirmAddPaymentMethod) {
-      final url = await AppNavigator.push<String>(
+      final changed = await AppNavigator.push<String>(
         AppRoutes.bindCard,
         arguments: BindCardPageArguments(
           productId: productId,
@@ -339,12 +353,42 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
           isAccountChange: true,
         ),
       );
-      if (!mounted) return;
-      if (url != null && url.isNotEmpty) await _reloadOrOpenWebView(url);
-      return;
+      if (!mounted || changed == null || changed.trim().isEmpty) return;
+      url = changed;
+    } else {
+      url = (result as LoanConfirmAccountChanged).url;
     }
 
-    await _reloadOrOpenWebView((result as LoanConfirmAccountChanged).url);
+    await _replaceWithWebView(url);
+  }
+
+  /// 换绑成功后，用一个全新的 WebView 路由接上订单详情地址。
+  ///
+  /// 账号列表页与绑卡页在完成时都已自行 pop，这里只要把栈顶的旧 WebView
+  /// 替换成新页即可（历史重置，返回不会落回过期的换绑流程）。
+  Future<void> _replaceWithWebView(String rawUrl) async {
+    final uri = AppNavigator.webViewUri(rawUrl);
+    if (uri == null) {
+      debugPrint('[WebView] 换绑结果地址非法: $rawUrl');
+      return;
+    }
+    await AppNavigator.replace<void>(
+      AppRoutes.webView,
+      arguments: WebViewPageArguments(url: uri.toString()),
+    );
+  }
+
+  /// 原卡重试确认订单（H5 桥 `retryOrderDialog`）。
+  ///
+  /// 调 `POST /outsulk/resex` 拿订单详情页地址，交给 `reloadOrOpenWebView`
+  /// 在当前 WebView 里打开（口径对齐 dali 的 retryOrder）。
+  Future<String> _retryOrderConfirm(String orderNo) async {
+    final repository = await ref.read(certificationRepositoryProvider.future);
+    final response = await repository.retryOrderConfirm(orderNo: orderNo);
+    if (!response.isSuccess) {
+      throw WebViewActionException(response.message);
+    }
+    return response.data.trim();
   }
 
   Future<void> _navigateInternal(String raw) async {

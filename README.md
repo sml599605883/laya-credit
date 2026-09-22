@@ -624,23 +624,25 @@ lib/
       返回按打款方式分组（分组数组 `connectedly.kneeing[]`，组内账户 `stabiliment[]`），分节名、账号 / 姓名、
       渠道 logo、维护状态（`catchpenny`）与默认选中（`cloaked` / `isMain`）**全部由后端下发**，
       客户端不写死任何一条账户。页面按 `LoadingView` / `ErrorView` / 空态
-      （`No payment methods available`）/ 列表四态渲染，空态也保留 Add 入口。
+      （`No payment methods available`）/ 列表四态渲染；**一笔账户都没下发时不等用户点**，
+      这一帧画完就回「要新增账户」，由调用方接着压绑卡页（口径对齐 peso_shield 的
+      `getUserBankAccounts(...).isEmpty` → 直接进绑卡页）。
     - `Upload` 走 `POST /outsulk/bathtubs`（`resex` 订单号 + `moonshade` 绑卡 id +
       随机混淆字段），成功后把返回的 `kopis`（订单详情页地址）用
       `AppNavigator.pop<LoanConfirmResult>` 回给调用方；提交期间按钮置灰防重复提交。
       页面只负责「拉列表 + 提交换绑」，**跳转由调用方决定**，口径对齐 peso_shield 的
       `AccountListPage`（那边回 `AccountListResult`，这里回 `LoanConfirmResult`）。
-    - `Add other payment methods` 也一样只回 `LoanConfirmAddPaymentMethod()`，
+    - `Add other payment methods`（以及上面那个自动跳）只回 `LoanConfirmAddPaymentMethod()`，
       由调用方去开绑卡页的改卡模式（它会 pop 出订单详情页地址）。
-    - **两个入口节点都接上了**（对齐 peso_shield 的 `changeHomeOrderAccount` /
-      `WebViewPage._navigateToAccountList`）：
-      1. 原生申请流程：认证全完成 → `_openLoanConfirm` 进本页 → 拿到地址后
-         `AppNavigator.toWebView`（压新 WebView）；
-      2. H5 桥：订单详情页发 `changeAccount`（`WebViewActions.changeAccount`）→
-         `WebViewPage._changeOrderAccount` 进本页 → 拿到地址后在**当前 WebView 里**
-         换地址（`_reloadOrOpenWebView`），不会叠两层 WebView。
-      首页借款进度卡的「更换账户」入口仍缺（这边进度卡是纯展示、没有按钮回调，
-      peso_shield 那边走 `HomeOrderController.changeAccount`），等首页进度卡按钮接入时再补。
+    - **两个入口都接上了**（对齐 peso_shield 的 `WebViewPage._navigateToAccountList`）：
+      1. H5 桥：订单详情页发 `changeAccount`（`WebViewActions.changeAccount`）→
+         `WebViewPage._changeOrderAccount` 进本页 → 拿到地址后用一个**全新的 WebView 路由**
+         接上（`_replaceWithWebView` → `AppNavigator.replace`），旧 WebView 被替换掉，
+         返回不会落回过期的换绑流程（口径对齐 fund_nexus 的 `_replaceAccountChangeFlow`）。
+         桥 action 本身 `unawaited` 立即返回：账号列表要等用户操作，而协调器在 action 期间
+         挂的跨页 Loading 是 `allowClick: false`，等下去会把列表页挡住。
+      2. 进度卡 `Change`：`ProgressPage._changeAccount` 进本页 → 拿到地址后
+         `AppNavigator.openDeepLink` 打开订单详情 H5，换绑成功顺带刷新首页数据。
     - **账户排版按接口下发的 `cardType` 判定**（`_kindOf`）：账户列表分组带
       `heterological`（文档语义 `cardType`）。接口文档「提交绑卡（第五项）」
       定义了枚举 **1 电子钱包 / 2 银行 / 3 便利店（现金网点）**：`3` 按现金网点
@@ -669,16 +671,21 @@ lib/
          **只有 `0` 视为维护中**，字段缺失按可用，避免误报红字。
     - `Upload` 文案字号是 14pt（设计稿 `text_19`），与证件上传页的 16pt 不同，
       所以给 `UploadButton` 加了 `fontSize` / `lineHeight` 两个可选参数（默认值不变）。
-    - `ProductApplicationFlow._openLoanConfirm` 已从「换 H5 地址进 WebView」改成
-      `pushTopLevelCertification('/loan-confirm')`，认证项做完后直接进本页。
-      同时把 `/bind-card` 与 `/loan-confirm` 补进 `AppNavigator._certificationRoutes`：
-      绑卡页提交成功后重进借款确认页会清掉上一张绑卡页 / 确认页，不会「确认页叠确认页」；
-      `Upload` 换绑成功跳订单详情 H5 时也会清掉确认页，从订单详情返回直接回入口页。
+    - **入口**：`ProductApplicationFlow` 不把认证完成落点指向本页。认证项做完后调
+      `POST /outsulk/octodentate`（`getOrderPushUrl`，`ProductApplicationFlow
+      ._openConfirmLoanPage`）换确认用款 H5 地址进 WebView，口径对齐 peso_shield
+      的 `getOrderJumpUrl` → WebView；本页是「更换打款账户」页，只由订单详情 H5 桥
+      （`WebViewPage._changeOrderAccount`）与进度卡 `Change`
+      （`ProgressPage._changeAccount`）两个入口进入。
+    - `/bind-card` 与 `/loan-confirm` 都登记在 `AppNavigator._certificationRoutes`：
+      绑卡页提交成功换地址进 H5 / 换绑成功跳订单详情 H5 时都会清掉认证页，
+      从订单详情返回直接回入口页，不会「确认页叠确认页」。
       `Add other payment methods` 是普通 `push` 绑卡页：用户取消返回后本页
       `ref.invalidate` 重拉一次账户列表，拿到刚绑的新账户。
     - 相关测试见 `test/widget_test.dart` 的「借款确认页…」用例、
-      「认证全部完成后进借款确认页…」「绑卡页改卡模式…」「WebView 桥 changeAccount…」
-      用例、三条「用户账户列表…」用例与一条「更换银行卡接口…」用例。
+      「认证全部完成后换确认用款 H5 地址并打开 WebView」「绑卡页改卡模式…」
+      「WebView 桥 changeAccount…」用例、三条「用户账户列表…」用例与一条
+      「更换银行卡接口…」用例。
 
 21. **订单列表页已按蓝湖稿 `05-01 - 订单列表` 还原**（有订单 / 无订单两态，`/order-list`，
     `OrderListPage`）。
@@ -756,17 +763,21 @@ lib/
       `SafeArea(bottom: false)` 里（设计稿标题中心距屏幕顶 67pt = 安全区 + 标题块 46 的一半），
       标题不会被状态栏 / 刘海遮挡。
     - **按钮行为**（口径参照 fund_nexus 的 `ProgressPage`）：`Change` 进原生收款账户列表页
-      `LoanConfirmPage`（`/loan-confirm`），换绑成功后打开返回的订单详情地址；卡片整体点击与
-      `Try again` 都打开后端下发的 `jumpUrl`（订单详情），统一走 `AppNavigator.openDeepLink`。
-    - **已知偏差 / 遗留风险**：本项目 `PROCESS_LIST` 只下发订单号 / 产品 id / `jumpUrl`，
-      **没有独立的「重试放款」接口**，所以 `Try again` 先回落订单详情 H5
-      （fund_nexus 那边是 `retryProgressOrder`，接入后再换）；`Change` 的「新增账户」分支
-      直接进绑卡页改卡模式并打开返回地址，未接埋点。中间的 Tab 切图常量仍叫 `tabStats*`
+      `LoanConfirmPage`（`/loan-confirm`），换绑成功后打开返回的订单详情地址；卡片整体点击
+      打开后端下发的 `jumpUrl`（订单详情），统一走 `AppNavigator.openDeepLink`。
+    - `Try again` 走「原卡重试确认订单」`POST /outsulk/resex`（`CertificationRepository
+      .retryOrderConfirm`，只带订单号），拿返回的订单详情页地址再开 H5 —— 与 H5 桥的
+      `retryOrderDialog` 是同一个接口；接口失败只提示，不回落卡片上的 `jumpUrl`
+      （fund_nexus 那边是 `retryProgressOrder`）。Loading 在压 WebView 前就关掉，
+      否则 `allowClick: false` 的遮罩会挡住 H5 页。
+    - **已知偏差 / 遗留风险**：`Try again` / `Change` 都未接埋点；`Change` 的「新增账户」分支
+      直接进绑卡页改卡模式并打开返回地址。中间的 Tab 切图常量仍叫 `tabStats*`
       （PNG 文件名未改，避免无谓重命名）。
     - 相关测试见 `test/progress_page_test.dart`（顶部安全区 88pt 刘海下标题不越界、空态、
       进度卡逐张渲染、五种状态分档与按钮数量、状态文案回落、下拉刷新重新拉取、错误态重试；
       用假 `AppRepository` 挂到 `appRepositoryProvider`，页面跑真实 `homeDataProvider`）
-      与 `test/widget_test.dart` 的「切到进度 Tab 会刷新首页数据源」。
+      与 `test/widget_test.dart` 的「切到进度 Tab 会刷新首页数据源」
+      「进度卡 Try again 调原卡重试确认订单并打开返回的订单详情地址」。
 
 ## 常用命令
 

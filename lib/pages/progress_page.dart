@@ -9,6 +9,7 @@ import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/home_data.dart';
 import '../providers/home_provider.dart';
+import '../providers/repository_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/state_views.dart';
@@ -122,10 +123,7 @@ class ProgressPage extends ConsumerWidget {
     );
   }
 
-  /// 状态条按钮分发：`Try again` 回到订单详情，`Change` 进原生换绑页。
-  ///
-  /// 本项目进度卡接口只下发订单号与产品 id，没有独立的「重试放款」接口，
-  /// 因此 `Try again` 先由 H5 订单详情承接（口径对照 fund_nexus 的 `retryProgressOrder`）。
+  /// 状态条按钮分发：`Try again` 走原卡重试确认订单，`Change` 进原生换绑页。
   Future<void> _handleAction(
     WidgetRef ref,
     HomeOrderCard order,
@@ -133,9 +131,56 @@ class ProgressPage extends ConsumerWidget {
   ) async {
     switch (action.type) {
       case _ProgressActionType.tryAgain:
-        await _openOrderDetail(order.jumpUrl);
+        await _retryOrder(ref, order);
       case _ProgressActionType.change:
         await _changeAccount(ref, order);
+    }
+  }
+
+  /// `Try again`：调「原卡重试确认订单」拿订单详情页地址再打开。
+  ///
+  /// 与 H5 桥的 `retryOrderDialog` 是同一个接口（`POST /outsulk/resex`，
+  /// 返回订单详情页地址 `kopis`）；接口失败只提示，不回落卡片上的 `jumpUrl`，
+  /// 口径对齐 fund_nexus 的 `retryProgressOrder`。
+  Future<void> _retryOrder(WidgetRef ref, HomeOrderCard order) async {
+    final orderNo = order.orderNo.trim();
+    if (orderNo.isEmpty) return;
+
+    final target = await _fetchRetryTarget(ref, orderNo);
+    if (target == null) return;
+    await _openOrderDetail(target);
+  }
+
+  /// 拉重试后的订单详情页地址；失败时提示并返回 null。
+  ///
+  /// Loading 在返回前就关掉：[_openOrderDetail] 会压 WebView 页并等它 pop，
+  /// 带着 Loading 进去会把用户挡在外面（`ToastHelper.showLoading` 是
+  /// `allowClick: false`）。
+  Future<String?> _fetchRetryTarget(WidgetRef ref, String orderNo) async {
+    final loading = ToastHelper.showLoading();
+    try {
+      final repository = await ref.read(certificationRepositoryProvider.future);
+      final response = await repository.retryOrderConfirm(orderNo: orderNo);
+      if (!response.isSuccess) {
+        ToastHelper.showError(
+          response.message.isNotEmpty ? response.message : _retryFailedMessage,
+        );
+        return null;
+      }
+      final target = response.data.trim();
+      if (target.isEmpty) {
+        ToastHelper.showError(_retryFailedMessage);
+        return null;
+      }
+      return target;
+    } on ApiException catch (error) {
+      ToastHelper.showError(error.message);
+      return null;
+    } catch (_) {
+      ToastHelper.showError(_retryFailedMessage);
+      return null;
+    } finally {
+      loading();
     }
   }
 
@@ -617,12 +662,15 @@ class _ProgressPill extends StatelessWidget {
 
 /// 状态条上的动作类型。
 enum _ProgressActionType {
-  /// 重新放款（本项目没有独立接口，回到订单详情）。
+  /// 重新放款（原卡重试确认订单）。
   tryAgain,
 
   /// 更换收款账户（原生账户列表页）。
   change,
 }
+
+/// `Try again` 失败且后端没给文案时的兜底提示。
+const _retryFailedMessage = 'Unable to retry this order';
 
 /// 状态条上的一个动作。
 class _ProgressAction {

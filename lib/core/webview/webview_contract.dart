@@ -6,67 +6,50 @@ import 'dart:convert';
 /// 原生注册一个 JS handler，H5 通过 `window.<handler>.postMessage(...)` 发起
 /// action，原生 dispatch 后（可选）回调 `window.<handler>.handleMessage(...)`。
 ///
-/// ⚠️ 混淆串占位：本项目接口文档尚未下发 handler / action / 字段的混淆命名，
-/// 下面先用可读占位串，保证链路可跑、可测。拿到文档后**只改这些常量**即可，
-/// 各 action 对应的交互语义与 dali_cash 完全一致（括号内为 dali 的取值）。
+/// 取值来自 Web 端 `WebViewBridge`（`bridge.send(action, data[, callback])`），
+/// 见前端 `uploadRiskLoan` / `openUrl` / `getPublicParams` 等导出函数。
 abstract final class WebViewContract {
-  /// 原生注册、H5 调用的 JS handler 名（dali: `ph_dali_cash_ios`）。
+  /// 原生注册、H5 调用的 JS handler 名。
   static const handler = 'ph_laya_credit_ios';
 }
 
 /// H5 下发的 action 名。
-///
-/// TODO(混淆串): 待接口文档下发后替换；替换时不要改动常量名与顺序。
 abstract final class WebViewActions {
-  /// 风控数据上报（dali: `dali_cash_RbGtlAKg2Hsx7x5`）。
-  static const uploadRisk = 'laya_credit_uploadRisk';
+  /// 风控数据上报。
+  static const uploadRisk = 'laya_credit_rqHm8jp3XV4JDoI';
 
-  /// 跳转 Google Play（iOS 忽略，dali: `dali_cash_HjU4mCaWf9VcOI6`）。
-  static const openGooglePlay = 'laya_credit_openGooglePlay';
+  /// 跳转 Google Play（iOS 忽略）。
+  static const openGooglePlay = 'laya_credit_lgr5GnQLGtwyPTU';
 
-  /// 打开链接（dali: `dali_cash_dudAaHWAtJmjS2T`）。
-  static const openUrl = 'laya_credit_openUrl';
+  /// 打开链接。
+  static const openUrl = 'laya_credit_LSfHZrCEnU8pobX';
 
-  /// 关闭当前页（dali: `dali_cash_jWPoDsrg054lhUC`）。
-  static const close = 'laya_credit_close';
+  /// 关闭当前页。
+  static const close = 'laya_credit_DPs6pJccZSPgIRr';
 
-  /// 回到首页（dali: `dali_cash_Ax2ivGQo70e2KIR`）。
-  static const home = 'laya_credit_home';
+  /// 回到 App 首页。
+  static const home = 'laya_credit_3hmzdF0IOBcBQCB';
 
-  /// 请求 App Store 评分（dali: `dali_cash_L9ePULguB5v2O84`）。
-  static const grade = 'laya_credit_grade';
+  /// 请求 App Store 评分。
+  static const grade = 'laya_credit_YTIqoTjNxGdF8Fz';
 
-  /// 重新绑卡 / 重试订单（dali: `dali_cash_U5sqmkouwbyYVRT`）。
-  static const retryOrder = 'laya_credit_retryOrder';
+  /// 放款重试弹窗。
+  static const retryOrder = 'laya_credit_3ooUbdYzl5XA9WD';
 
-  /// 更换打款账户（dali: `dali_cash_dzaSV8NeJkdm0di`）。
-  static const changeAccount = 'laya_credit_changeAccount';
+  /// 更换放款账户。
+  static const changeAccount = 'laya_credit_5vBBE3uRdizNLo7';
 
-  /// 取签名后的公共参数（dali: `dali_cash_YDtfWHIcQnY8cfk`）。
-  static const publicParams = 'laya_credit_publicParams';
+  /// 取签名后的公共参数。
+  static const publicParams = 'laya_credit_IoIRBP06E3v1dGA';
 }
 
 /// H5 下发的业务字段名。
-///
-/// TODO(混淆串): 待接口文档下发后替换（括号内为 dali 的取值）。
 abstract final class WebViewFields {
-  /// 产品 id（dali: `thunderstruck`）。
-  static const productId = 'productId';
+  /// 产品 id。
+  static const productId = 'podostemon';
 
-  /// 订单号（dali: `saggards`）。
-  static const orderNo = 'orderNo';
-
-  /// Google Play 包名（dali: `appPkg`）。
-  static const appPkg = 'appPkg';
-
-  /// 跳转链接（dali: `url`）。
-  static const url = 'url';
-
-  /// 账户列表返回体（dali: `clingiest`）。
-  static const accountList = 'accountList';
-
-  /// 重试订单返回的跳转地址（dali: `misericorde`）。
-  static const retryUrl = 'retryUrl';
+  /// 订单号。
+  static const orderNo = 'pirate';
 }
 
 /// H5 发来的桥接请求。

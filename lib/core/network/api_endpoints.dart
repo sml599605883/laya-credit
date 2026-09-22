@@ -81,6 +81,11 @@ abstract final class ApiEndpoints {
   /// 返回订单详情页地址，由调用方决定用 WebView 还是原生页打开。
   static const changeBankCard = '/outsulk/bathtubs';
 
+  /// 原卡重试确认订单（订单详情 H5 的「原卡重试」按钮）。POST
+  ///
+  /// 入参只有订单号，返回订单详情页地址，由调用方在当前 WebView 里打开。
+  static const orderRetryConfirm = '/outsulk/resex';
+
   /// 订单列表。POST
   static const orderList = '/outsulk/gundy';
 }

@@ -375,6 +375,18 @@ class CertificationRepository {
           data is Map ? _textOf(data[ApiFields.changeBankCardRedirectUrl]) : '',
     );
   }
+
+  /// 原卡重试确认订单（订单详情 H5 的「原卡重试」，`POST /outsulk/resex`）。
+  ///
+  /// 入参只有订单号；返回订单详情页地址，由调用方在当前 WebView 里打开。
+  Future<ApiResponse<String>> retryOrderConfirm({required String orderNo}) {
+    return _client.post<String>(
+      ApiEndpoints.orderRetryConfirm,
+      params: {ApiFields.retryConfirmOrderNo: orderNo},
+      parse: (data) =>
+          data is Map ? _textOf(data[ApiFields.retryConfirmJumpUrl]) : '',
+    );
+  }
 }
 
 String _textOf(Object? value) => value?.toString().trim() ?? '';
