@@ -1,6 +1,7 @@
 import '../../data/models/product_apply_result.dart';
 import '../../data/models/product_detail.dart';
 import '../../data/repositories/product_repository.dart';
+import '../../pages/loan_confirm_page.dart';
 import '../navigation/app_deep_link.dart';
 import '../navigation/app_navigator.dart';
 import '../navigation/app_route_generator.dart';
@@ -271,7 +272,14 @@ class ProductApplicationFlow {
     ToastHelper.showMessage('Please complete $title');
   }
 
-  /// 认证全部完成后，用订单信息换借款确认页地址。
+  /// 认证全部完成后进入借款确认页（选收款账户 + 提交换绑）。
+  ///
+  /// 页面自己按 [productId] 拉账户列表（`POST /outsulk/heartfelt`），选中后
+  /// 自己调换绑接口（`POST /outsulk/bathtubs`），再把订单详情页地址交回本流程
+  /// 打开；用户选「新增账户」时由本流程开绑卡页的改卡模式。
+  /// 这样原生流程与 H5 桥（订单详情里更换打款账户）共用同一个页面，
+  /// 各自决定拿到地址后是压新 WebView 还是在当前 WebView 里换地址
+  /// （页面职责口径对齐 peso_shield 的 `AccountListPage`）。
   Future<void> _openLoanConfirm(ProductDetail detail, String productId) async {
     final info = detail.basicInfo;
     if (info.orderNo.isEmpty) {
@@ -279,32 +287,39 @@ class ProductApplicationFlow {
       return;
     }
 
-    try {
-      ToastHelper.showLoading();
-      final response = await repository.getOrderPushUrl(
-        orderNo: info.orderNo,
-        amount: info.amount,
-        loanTerm: info.loanTerm,
-        termType: info.termType,
-      );
-      ToastHelper.hideLoading();
+    final result =
+        await AppNavigator.pushTopLevelCertification<LoanConfirmResult>(
+          AppRoutes.loanConfirm,
+          arguments: LoanConfirmPageArguments(
+            productId: productId,
+            orderNo: info.orderNo,
+          ),
+        );
+    if (result == null) return;
 
-      if (!response.isSuccess) {
-        ToastHelper.showError(response.message);
-        return;
-      }
-      if (response.data.isEmpty) {
-        ToastHelper.showError('Jump URL is missing');
-        return;
-      }
-      await _openWebPage(response.data);
-    } on ApiException catch (error) {
-      ToastHelper.hideLoading();
-      ToastHelper.showError(error.message);
-    } catch (error) {
-      ToastHelper.hideLoading();
-      ToastHelper.showError('Request failed, please try again');
+    // 要新增账户：进绑卡页的改卡模式，成功后它会 pop 订单详情页地址。
+    if (result is LoanConfirmAddPaymentMethod) {
+      await _openBindCardForAccountChange(productId, info.orderNo);
+      return;
     }
+
+    await _openWebPage((result as LoanConfirmAccountChanged).url);
+  }
+
+  /// 改卡场景的绑卡页：绑定成功后它会把订单详情页地址 pop 回来。
+  Future<void> _openBindCardForAccountChange(
+    String productId,
+    String orderNo,
+  ) async {
+    final url = await AppNavigator.push<String>(
+      AppRoutes.bindCard,
+      arguments: BindCardPageArguments(
+        productId: productId,
+        orderNo: orderNo,
+        isAccountChange: true,
+      ),
+    );
+    if (url != null && url.isNotEmpty) await _openWebPage(url);
   }
 
   /// 按准入结果里的跳转地址分发。

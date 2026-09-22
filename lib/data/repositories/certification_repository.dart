@@ -7,6 +7,7 @@ import '../../core/network/api_response.dart';
 import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
 import '../models/emergency_contact_data.dart';
+import '../models/loan_confirm_data.dart';
 import '../models/face_token_result.dart';
 import '../models/id_verification_data.dart';
 import '../models/bind_card_data.dart';
@@ -334,4 +335,46 @@ class CertificationRepository {
           data is Map ? data.cast<String, dynamic>() : <String, dynamic>{},
     );
   }
+
+  /// 用户账户列表（借款确认页的可选收款账户，`POST /outsulk/heartfelt`）。
+  ///
+  /// 账户按打款方式分组（Bank / E-wallet / Cash Pickup）下发，分节名、
+  /// 每笔账户的账号 / 收款人姓名与是否默认选中都由后端给，客户端不写死。
+  Future<ApiResponse<LoanConfirmData>> getUserAccounts({
+    required String productId,
+  }) {
+    return _client.post<LoanConfirmData>(
+      ApiEndpoints.userAccounts,
+      params: {
+        ApiFields.productId: productId,
+        ApiFields.obfuscateLoanAccounts1: ObfuscationHelper.randomParam(),
+        ApiFields.obfuscateLoanAccounts2: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? LoanConfirmData.fromJson(data.cast<String, dynamic>())
+          : const LoanConfirmData(),
+    );
+  }
+
+  /// 更换银行卡（借款确认页提交选中的收款账户，`POST /outsulk/bathtubs`）。
+  ///
+  /// [bindId] 是账户列表下发的 `moonshade`；返回订单详情页地址，由调用方决定
+  /// 用 WebView 还是原生页打开。
+  Future<ApiResponse<String>> changeBankCard({
+    required String orderNo,
+    required String bindId,
+  }) {
+    return _client.post<String>(
+      ApiEndpoints.changeBankCard,
+      params: {
+        ApiFields.changeBankCardOrderNo: orderNo,
+        ApiFields.changeBankCardBindId: bindId,
+        ApiFields.obfuscateChangeBankCard: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) =>
+          data is Map ? _textOf(data[ApiFields.changeBankCardRedirectUrl]) : '',
+    );
+  }
 }
+
+String _textOf(Object? value) => value?.toString().trim() ?? '';

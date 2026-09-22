@@ -42,6 +42,9 @@ abstract final class AppRoutes {
   /// 绑卡页（认证第五项，打款账户）。
   static const bindCard = '/bind-card';
 
+  /// 借款确认页（认证全部完成后选收款账户）。
+  static const loanConfirm = '/loan-confirm';
+
   /// 通用 H5 页（协议、客服、订单详情、准入返回的 web 链接等）。
   static const webView = '/webview';
 
@@ -60,6 +63,7 @@ abstract final class AppRoutes {
     workInfo,
     emergencyContact,
     bindCard,
+    loanConfirm,
     webView,
   ];
 

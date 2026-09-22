@@ -29,7 +29,8 @@ App 内不直接放贷，只做产品展示与资料收集，最终由第三方�
 `/id-upload`（证件上传，见第 13 条）、`/id-confirm`（证件信息确认，见第 14 条）、
 `/face-verification`（人脸识别，见第 15 条）、
 `/personal-info`（个人信息，见第 16 条）、`/work-info`（工作信息，见第 17 条）、
-`/emergency-contact`（紧急联系人，见第 18 条）、`/bind-card`（绑卡，见第 19 条）。
+`/emergency-contact`（紧急联系人，见第 18 条）、`/bind-card`（绑卡，见第 19 条）、
+`/loan-confirm`（借款确认 / 收款账户列表，见第 20 条）。
 
 ### 2. 状态管理用什么
 
@@ -152,7 +153,8 @@ lib/
    个人信息认证项也已落地并接上表单 / 保存接口（见第 16 条），
    工作信息认证项也已落地（见第 17 条），
    紧急联系人认证项也已落地并接上获取 / 保存接口（见第 18 条），
-   绑卡认证项也已落地并接上获取 / 提交接口（见第 19 条）。
+   绑卡认证项也已落地并接上获取 / 提交接口（见第 19 条），
+   借款确认页（收款账户列表）也已落地并接上账户列表 / 更换银行卡接口（见第 20 条）。
 5. **首页已按蓝湖稿 02-01 / 02-02 还原**（额度头图 + 白色额度卡 + 授信进度卡 + 运营位 +
    推荐列表 + 悬浮底栏）。
    授信进度卡用设计导出的整卡底图 `assets/home/home_progress_card.png`（343x119pt：
@@ -567,14 +569,108 @@ lib/
     - 引导文案优先级：产品详情 `overwhelming.mobilization`（文档语义 `bind_card`，
       见第 15 条同款缓存机制）→ 表单接口 `befleas` → 设计稿四行兜底；
       底部红字取表单接口 `revision`（产品详情 `overwhelming.revision` 作兜底）。
+    - **改卡场景已接入**（`BindCardPageArguments.isAccountChange`，口径对齐 peso_shield
+      的 `isAccountChange`）：订单详情里更换打款账户时，绑卡页照常拉表单 / 提交，
+      但提交成功后**不发**下一步认证，而是取提交返回的 `moonshade` 绑卡 id
+      调更换银行卡接口（`POST /outsulk/bathtubs`），再把订单详情页地址
+      `AppNavigator.pop<String>` 回给调用方（`changeAccount` 内聚在页面里）。
     - **已知偏差**：进度文案 `100%` 先按设计稿写死（读法同第 16 / 17 / 18 条）；
       渠道 logo 走后端下发的远端 URL（`RemoteImage`，加载失败隐藏），本页不落本地切图；
       维护中的红字提示 `Under maintenance. Loans may be delayed` 接口只下发状态、
       没有文案字段，属客户端常量；气泡的关闭按钮用用户提供的切图
       `bind_card_suggestion_close.png`（原 `拍照备份@3x.png`，12x12），
-      单选框的对勾 `assets/` 没有切图、按设计稿尺寸用 `CustomPainter` 还原；
-      **改卡场景（成功返回的 `moonshade` 绑卡 id）尚未接入**。
-      相关测试见 `test/widget_test.dart` 的「绑卡页…」用例与两条仓库层用例。
+      单选框的对勾 `assets/` 没有切图、按设计稿尺寸用 `CustomPainter` 还原。
+      相关测试见 `test/widget_test.dart` 的「绑卡页…」用例（含一条改卡模式用例）
+      与两条仓库层用例。
+
+20. **借款确认页（收款账户列表）已按蓝湖稿 `04-01 - 确认借款-选择其它方式` 还原**
+    （`/loan-confirm`，`LoanConfirmPage`）。
+    - 页面底色用 `AppColors.surfaceMint`（设计稿 `page` rgba(236,250,220)），
+      顶部是二级页通用的 `BackNavBar`（标题 `Loan Confirmation`），
+      内容是可滚动的「分节标题 + 账户卡」列表 + `Add other payment methods` 整块按钮，
+      底部是**固定**操作条（白底 + 上方 `0 -5px 6px rgba(233,233,233,0.5)` 投影 +
+      343x48 柠檬绿 `Upload`，复用 `UploadButton` / `id_verify_upload_button.png`）。
+    - 账户卡（343 宽、12 圆角、内边距 17/12/16/12）：第一行是「24x24 渠道 logo（4 圆角）
+      + 渠道名（16pt Bold `#080B15`）+ 右侧 22x22 单选圈」，下面按账户类型分两种排版——
+      银行 / 电子钱包是一行 `Receipt Account`（值右对齐），现金网点是等分的
+      `First / Middle / Last Name` 三列（字段名 10pt `#999999`，值 14pt Bold `#080B15`）。
+      两张之间用虚线分隔（设计稿「路径」318x1，实 4 空 4；Flutter 没有虚线边框，
+      用 `CustomPainter` 按仓库既有做法画）。
+    - 账户的两种状态：**选中**的卡卡身是柠檬绿 `rgba(195,231,95)`、虚线换成白线、
+      字段名换成 35% 透明度的墨色（设计稿 CSS 写的是 `rgba(8,11,21,1)`，
+      但在绿底上实测取色 `#829B45`，反推是 35% 透明度，以实测为准）；
+      **未选中**的卡是白底 + 灰虚线。维护中的账户在渠道名下方补一行红色提示
+      （设计稿 `text_6` 11pt `#FE295C`，最多两行），**仍可选中**，与绑卡页单选面板口径一致。
+    - 三个切图都已按用途改名并登记到 `AppAssets`（`assets/loan_confirm/`）：
+      `loan_confirm_add_method.png`（用户提供的 `编组 3@3x.png`，343x48，
+      加号与 `Add other payment methods` 文案烘焙在切图里，页面不叠文字）、
+      `loan_confirm_radio_unchecked.png` / `loan_confirm_radio_checked.png`
+      （用户提供的 `选择@3x.png` / `选择@3x(1).png`，22x22）。
+      返回按钮复用 `assets/common/back.png`，`Upload` 胶囊复用证件上传页的切图。
+    - 导航行到第一个分节标题的间距取 **18pt 而不是设计稿的 26pt**：
+      设计稿的 26 是从 24pt 导航行底边起算的，而 `BackNavBar` 把点击热区补到 40x40、
+      盒子比导航行多出 8pt，直接照抄 26 会让整页内容整体下沉 8pt。
+    - **接口已接入**（入参是产品 id + 订单号，`LoanConfirmPageArguments`）：
+      可选收款账户走 `POST /outsulk/heartfelt`（`tartarizing` 产品 id + 两个随机混淆字段），
+      按产品维度缓存在 `loanConfirmProvider`，失败时页面 `ref.invalidate` 重试；
+      返回按打款方式分组（分组数组 `connectedly.kneeing[]`，组内账户 `stabiliment[]`），分节名、账号 / 姓名、
+      渠道 logo、维护状态（`catchpenny`）与默认选中（`cloaked` / `isMain`）**全部由后端下发**，
+      客户端不写死任何一条账户。页面按 `LoadingView` / `ErrorView` / 空态
+      （`No payment methods available`）/ 列表四态渲染，空态也保留 Add 入口。
+    - `Upload` 走 `POST /outsulk/bathtubs`（`resex` 订单号 + `moonshade` 绑卡 id +
+      随机混淆字段），成功后把返回的 `kopis`（订单详情页地址）用
+      `AppNavigator.pop<LoanConfirmResult>` 回给调用方；提交期间按钮置灰防重复提交。
+      页面只负责「拉列表 + 提交换绑」，**跳转由调用方决定**，口径对齐 peso_shield 的
+      `AccountListPage`（那边回 `AccountListResult`，这里回 `LoanConfirmResult`）。
+    - `Add other payment methods` 也一样只回 `LoanConfirmAddPaymentMethod()`，
+      由调用方去开绑卡页的改卡模式（它会 pop 出订单详情页地址）。
+    - **两个入口节点都接上了**（对齐 peso_shield 的 `changeHomeOrderAccount` /
+      `WebViewPage._navigateToAccountList`）：
+      1. 原生申请流程：认证全完成 → `_openLoanConfirm` 进本页 → 拿到地址后
+         `AppNavigator.toWebView`（压新 WebView）；
+      2. H5 桥：订单详情页发 `changeAccount`（`WebViewActions.changeAccount`）→
+         `WebViewPage._changeOrderAccount` 进本页 → 拿到地址后在**当前 WebView 里**
+         换地址（`_reloadOrOpenWebView`），不会叠两层 WebView。
+      首页借款进度卡的「更换账户」入口仍缺（这边进度卡是纯展示、没有按钮回调，
+      peso_shield 那边走 `HomeOrderController.changeAccount`），等首页进度卡按钮接入时再补。
+    - **账户排版按接口下发的 `cardType` 判定**（`_kindOf`）：账户列表分组带
+      `heterological`（文档语义 `cardType`）。接口文档「提交绑卡（第五项）」
+      定义了枚举 **1 电子钱包 / 2 银行 / 3 便利店（现金网点）**：`3` 按现金网点
+      `First / Middle / Last Name` 三列排版，`1` / `2` 按「`Receipt Account` + 账号」
+      一行排版。字段缺失或值不在枚举内时才退回分节名（`cardTypeName`）判定
+      （名字里含 `cash`，或分节名为空但有收款人姓名）。
+    - 维护中的账户提示文案（设计稿 `text_6`）**本项目文档没有对应字段**：账户列表
+      （`heartfelt`）只下发 `catchpenny` 状态位（`1` 可用 / `0` 维护中，且文档明确
+      维护中仍可选择），文案照设计稿写死在页面常量里。
+    - **账户卡用到的字段全部来自本项目 `4.certify.html`**：「用户账户列表」
+      （`/outsulk/heartfelt`）分组 `retzian`(cardTypeName) / `heterological`(cardType) /
+      `mesocolons`(cardTypeIcon) / `stabiliment`(item)，账户 `moonshade`(bindId) /
+      `salish`(logo) / `catchpenny`(status) / `fallibleness`(bankName) /
+      `tightens`(account) / `telecomm`(option 三节姓名) / `cloaked`(isMain)；
+      「提交绑卡（第五项）」给出 `heterological` 的 `cardType` 枚举（1 电子钱包 /
+      2 银行 / 3 便利店）。账户的文案 / 状态字段只认本节列出的这几个，
+      不要引入其它项目的字段口径。
+    - **与参照项目 peso_shield 的行为差异**（字段口径一律以本项目文档为准）：
+      1. **空列表**：参照项目在它的入口调用方里对空列表直接跳绑卡页；本项目文档
+         没有「空列表」分支，且本项目确认用款接口（`unobtrusiveness`）在收款账户
+         信息缺失时返回 `10086` 弹窗，提示用户走 `Change Account`，所以本页保留
+         空态文案 + `Add other payment methods` 入口，不静默跳转；
+      2. **维护文案**：本项目账户列表只下发 `catchpenny` 状态位、**没有维护文案
+         字段**，文案按设计稿写死在页面常量里；
+      3. **状态缺省**：本项目文档的 `catchpenny` 只定义 `1 可用 / 0 维护中`，所以
+         **只有 `0` 视为维护中**，字段缺失按可用，避免误报红字。
+    - `Upload` 文案字号是 14pt（设计稿 `text_19`），与证件上传页的 16pt 不同，
+      所以给 `UploadButton` 加了 `fontSize` / `lineHeight` 两个可选参数（默认值不变）。
+    - `ProductApplicationFlow._openLoanConfirm` 已从「换 H5 地址进 WebView」改成
+      `pushTopLevelCertification('/loan-confirm')`，认证项做完后直接进本页。
+      同时把 `/bind-card` 与 `/loan-confirm` 补进 `AppNavigator._certificationRoutes`：
+      绑卡页提交成功后重进借款确认页会清掉上一张绑卡页 / 确认页，不会「确认页叠确认页」；
+      `Upload` 换绑成功跳订单详情 H5 时也会清掉确认页，从订单详情返回直接回入口页。
+      `Add other payment methods` 是普通 `push` 绑卡页：用户取消返回后本页
+      `ref.invalidate` 重拉一次账户列表，拿到刚绑的新账户。
+    - 相关测试见 `test/widget_test.dart` 的「借款确认页…」用例、
+      「认证全部完成后进借款确认页…」「绑卡页改卡模式…」「WebView 桥 changeAccount…」
+      用例、三条「用户账户列表…」用例与一条「更换银行卡接口…」用例。
 
 ## 常用命令
 

@@ -18,6 +18,7 @@ import '../providers/network_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
 import '../widgets/state_views.dart';
+import 'loan_confirm_page.dart';
 
 /// WebView 内联放行的 scheme：这些交给 WebView 自己处理，
 /// 其余（tel / mailto / 第三方 App 等）交给系统或内部路由。
@@ -297,13 +298,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
         debugPrint('[WebView] retryOrder(orderNo=$orderNo) 接口未接入');
         return '';
       },
-      // TODO(页面): 账号列表页尚未搭建，先打日志（与 dali 的 accountList 分支对齐）。
-      changeAccount: ({required productId, required orderNo}) async {
-        debugPrint(
-          '[WebView] changeAccount(productId=$productId, orderNo=$orderNo) '
-          '账号列表页待搭建',
-        );
-      },
+      changeAccount: _changeOrderAccount,
       reloadOrOpenWebView: _reloadOrOpenWebView,
       showLoading: () async {
         ToastHelper.showLoading();
@@ -314,6 +309,42 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
       showError: (message) async => ToastHelper.showError(message),
       logger: debugPrint,
     );
+  }
+
+  /// H5（订单详情页）请求「更换打款账户」。
+  ///
+  /// 进原生账号列表选一笔，页面自己换绑后把订单详情页地址回过来，再**在当前
+  /// WebView 里换地址**（而不是压一层新的 WebView）；用户点「新增账户」则进
+  /// 绑卡页的改卡模式，拿它 pop 回来的地址同样在当前 WebView 里打开。
+  /// 口径对齐 peso_shield 的 `_navigateToAccountList` / `_navigateToBindCard`。
+  Future<void> _changeOrderAccount({
+    required String productId,
+    required String orderNo,
+  }) async {
+    final result = await AppNavigator.push<LoanConfirmResult>(
+      AppRoutes.loanConfirm,
+      arguments: LoanConfirmPageArguments(
+        productId: productId,
+        orderNo: orderNo,
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    if (result is LoanConfirmAddPaymentMethod) {
+      final url = await AppNavigator.push<String>(
+        AppRoutes.bindCard,
+        arguments: BindCardPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+          isAccountChange: true,
+        ),
+      );
+      if (!mounted) return;
+      if (url != null && url.isNotEmpty) await _reloadOrOpenWebView(url);
+      return;
+    }
+
+    await _reloadOrOpenWebView((result as LoanConfirmAccountChanged).url);
   }
 
   Future<void> _navigateInternal(String raw) async {

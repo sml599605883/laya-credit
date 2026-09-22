@@ -13,6 +13,8 @@ class UploadButton extends StatelessWidget {
     required this.onTap,
     super.key,
     this.enabled = true,
+    this.fontSize = 16.0,
+    this.lineHeight = 22.0,
   });
 
   /// 按钮高度（设计稿 `text-wrapper_4`：13 + 22 + 13）。
@@ -23,6 +25,10 @@ class UploadButton extends StatelessWidget {
 
   /// 请求进行中置灰，既挡住重复点击，也避免用户以为没点上。
   final bool enabled;
+
+  /// 文案字号与行高。默认取证件上传页稿的 16 / 22；借款确认页稿是 14 / 17。
+  final double fontSize;
+  final double lineHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -38,10 +44,10 @@ class UploadButton extends StatelessWidget {
               'Upload',
               style: TextStyle(
                 color: AppColors.idVerifyUploadButtonText,
-                fontSize: layout.px(16),
+                fontSize: layout.px(fontSize),
                 fontWeight: FontWeight.w500,
-                // 设计稿：`font-size: 16px; line-height: 22px`。
-                height: 22 / 16,
+                // 设计稿：证件上传页 `font-size: 16px; line-height: 22px`。
+                height: lineHeight / fontSize,
               ),
             ),
           ),

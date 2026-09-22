@@ -63,10 +63,14 @@ class AppNavigator {
 
   static bool canPop() => _navigator?.canPop() ?? false;
 
-  /// 认证流程相关的路由集合。
+  /// 借款申请 / 认证流程相关的路由集合。
   ///
-  /// 进入下一个认证项（活体 / 个人信息 / 工作 / 联系人 / 绑卡）时会清掉这些页面，
-  /// 避免认证页在返回栈里层层堆叠。新增认证页时记得补进来。
+  /// 进入下一个认证项（活体 / 个人信息 / 工作 / 联系人 / 绑卡）或跳 H5 时会清掉
+  /// 这些页面，避免认证页 / 借款确认页在返回栈里层层堆叠。新增认证页时记得补进来。
+  ///
+  /// `bindCard` 与 `loanConfirm` 是本流程的最后两屏：绑卡页提交成功后会由
+  /// [ProductApplicationFlow] 重新进借款确认页，把它们放进集合里可以顺带清掉
+  /// 上一张绑卡页 / 借款确认页，不会出现「确认页叠确认页」。
   static const Set<String> _certificationRoutes = {
     AppRoutes.idVerification,
     AppRoutes.idUpload,
@@ -75,6 +79,8 @@ class AppNavigator {
     AppRoutes.personalInfo,
     AppRoutes.workInfo,
     AppRoutes.emergencyContact,
+    AppRoutes.bindCard,
+    AppRoutes.loanConfirm,
   };
 
   /// 压栈到顶层认证页，同时清掉返回栈里已有的认证页。

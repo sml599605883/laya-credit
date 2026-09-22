@@ -480,4 +480,64 @@ abstract final class ApiFields {
   static const obfuscateHome1 = 'inchoacy';
   static const obfuscateHome2 = 'trifanious';
   static const obfuscateBannerClick = 'callista';
+
+  // ---------- 借款确认页：用户账户列表 / 更换银行卡（接口文档 `4.certify.html`） ----------
+
+  /// 账户列表的分组数组（文档语义 `list`，与首页卡片的 `kneeing` 同名不同层）。
+  static const loanAccountGroups = 'kneeing';
+
+  /// 账户分组的展示名（文档语义 `cardTypeName`，如 `Bank` / `E-wallet` /
+  /// `Cash Pickup`）。分节标题由后端下发，客户端不写死。
+  static const loanAccountGroupTitle = 'retzian';
+
+  /// 账户分组的卡片类型（文档语义 `cardType`，与提交绑卡同一个混淆名）。
+  /// 接口文档「提交绑卡（第五项）」定义枚举：1 电子钱包 / 2 银行 / 3 便利店
+  /// （现金网点）。卡下半部分的三列姓名排版按它判定。
+  static const loanAccountGroupType = 'heterological';
+
+  /// 账户分组下的账户数组（文档语义 `item`）。
+  static const loanAccountItems = 'stabiliment';
+
+  /// 账户的绑卡 id（文档语义 `bindId`），提交换卡时原样回传。
+  static const loanAccountBindId = 'moonshade';
+
+  /// 账户的渠道 logo（文档语义 `logo`）。
+  static const loanAccountLogo = 'salish';
+
+  /// 账户状态（文档语义 `status`）：1 可用 / 0 维护中。
+  /// 维护中的账户**仍可选中**，页面只补一行红字提示。
+  static const loanAccountStatus = 'catchpenny';
+
+  /// 账户的银行 / 渠道名（文档语义 `bankName`），卡片上的主文案。
+  static const loanAccountName = 'fallibleness';
+
+  /// 账户的收款账号（文档语义 `account`）。
+  static const loanAccountNumber = 'tightens';
+
+  /// 账户的三节姓名（文档语义 `option`）：现金网点才有，
+  /// `tolerably` / `seasonless` / `telemeteorograph` 依次是
+  /// first / middle / last name。
+  static const loanAccountHolder = 'telecomm';
+  static const loanAccountFirstName = 'tolerably';
+  static const loanAccountMiddleName = 'seasonless';
+  static const loanAccountLastName = 'telemeteorograph';
+
+  /// 账户是否默认选中（文档语义 `isMain`）。
+  static const loanAccountIsMain = 'cloaked';
+
+  /// 更换银行卡提交的订单号（文档语义 `order_no`，与活体 token 共用 `resex`）。
+  static const changeBankCardOrderNo = 'resex';
+
+  /// 更换银行卡提交的绑卡 id（文档语义 `bindId`，取账户列表的同一个字段）。
+  static const changeBankCardBindId = 'moonshade';
+
+  /// 更换银行卡的混淆字段（文档语义 `RADIANCE`，每次请求随机值）。
+  static const obfuscateChangeBankCard = 'convulsibility';
+
+  /// 更换银行卡返回的跳转地址（文档语义 `redirectUrl`，订单详情页）。
+  static const changeBankCardRedirectUrl = 'kopis';
+
+  /// 账户列表的两个混淆字段（文档语义 `LIMPIDITY` / `ZANY`，每次请求随机值）。
+  static const obfuscateLoanAccounts1 = 'thurberia';
+  static const obfuscateLoanAccounts2 = 'chondroid';
 }

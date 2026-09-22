@@ -15,6 +15,8 @@ import 'package:laya_credit/core/network/api_response.dart';
 import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
+import 'package:laya_credit/core/webview/webview_action_coordinator.dart';
+import 'package:laya_credit/core/webview/webview_contract.dart';
 import 'package:laya_credit/data/models/face_token_result.dart';
 import 'package:laya_credit/data/models/bind_card_data.dart';
 import 'package:laya_credit/data/models/emergency_contact_data.dart';
@@ -22,6 +24,7 @@ import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
 import 'package:laya_credit/data/models/identity_recognition.dart';
 import 'package:laya_credit/data/models/login_result.dart';
+import 'package:laya_credit/data/models/loan_confirm_data.dart';
 import 'package:laya_credit/data/models/personal_info_data.dart';
 import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
@@ -32,6 +35,7 @@ import 'package:laya_credit/data/models/product_apply_result.dart';
 import 'package:laya_credit/data/models/product_detail.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/theme/app_colors.dart';
+import 'package:laya_credit/theme/app_spacing.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
@@ -43,7 +47,9 @@ import 'package:laya_credit/pages/id_confirm_page.dart';
 import 'package:laya_credit/pages/id_upload_page.dart';
 import 'package:laya_credit/pages/id_verification_page.dart';
 import 'package:laya_credit/pages/login_page.dart';
+import 'package:laya_credit/pages/loan_confirm_page.dart';
 import 'package:laya_credit/pages/personal_info_page.dart';
+import 'package:laya_credit/pages/webview_page.dart';
 import 'package:laya_credit/pages/work_information_page.dart';
 import 'package:laya_credit/providers/home_provider.dart';
 import 'package:laya_credit/providers/liveness_provider.dart';
@@ -869,6 +875,91 @@ class _StubCertificationRepository extends CertificationRepository {
       data: const {'moonshade': 123},
     );
   }
+
+  /// 记录每次拉取用户账户列表的产品 id。
+  final List<String> userAccountsCalls = [];
+
+  /// 账户列表返回，默认走 [loanAccountsData]；置为异常测错误态。
+  LoanConfirmData? userAccounts;
+  Object? userAccountsFailure;
+  Duration? userAccountsDelay;
+
+  /// 接口文档「用户账户列表」示例口径：Bank（默认选中且维护中）/ E-wallet /
+  /// Cash Pickup 三组，覆盖两种排版与 `isMain` 预选。
+  static const loanAccountsData = LoanConfirmData(
+    selectedId: '555',
+    groups: [
+      LoanAccountGroup(
+        title: 'Bank',
+        accounts: [
+          LoanAccount(
+            id: '555',
+            name: 'BDO',
+            available: false,
+            isMain: true,
+            receiptAccount: '5490163575561234',
+            logoUrl: 'https://x/bdo.png',
+          ),
+        ],
+      ),
+      LoanAccountGroup(
+        title: 'E-wallet',
+        accounts: [
+          LoanAccount(
+            id: '556',
+            name: 'GCash',
+            receiptAccount: '5490163575561234',
+          ),
+        ],
+      ),
+      LoanAccountGroup(
+        title: 'Cash Pickup',
+        accounts: [
+          LoanAccount(
+            id: '557',
+            name: 'M Lhuillier',
+            kind: LoanAccountKind.cashPickup,
+            firstName: 'Anna',
+            middleName: 'Oliver',
+            lastName: 'Mark',
+          ),
+        ],
+      ),
+    ],
+  );
+
+  @override
+  Future<ApiResponse<LoanConfirmData>> getUserAccounts({
+    required String productId,
+  }) async {
+    userAccountsCalls.add(productId);
+    if (userAccountsDelay case final wait?) await Future<void>.delayed(wait);
+    if (userAccountsFailure case final error?) throw error;
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: userAccounts ?? loanAccountsData,
+    );
+  }
+
+  /// 每次提交换绑的入参。
+  final List<({String orderNo, String bindId})> changeBankCardCalls = [];
+
+  /// 置为异常时换绑接口直接抛出。
+  Object? changeBankCardFailure;
+
+  /// 换绑成功返回的订单详情页地址。
+  String changeBankCardUrl = 'https://h5.example.com/order/1';
+
+  @override
+  Future<ApiResponse<String>> changeBankCard({
+    required String orderNo,
+    required String bindId,
+  }) async {
+    changeBankCardCalls.add((orderNo: orderNo, bindId: bindId));
+    if (changeBankCardFailure case final error?) throw error;
+    return ApiResponse(code: 0, message: 'success', data: changeBankCardUrl);
+  }
 }
 
 /// 证件照服务桩：不弹系统 UI，直接返回固定路径。
@@ -1026,6 +1117,23 @@ class _RecordingClient extends HttpClient {
   }) async {
     uploads.add((path, fileField, fields));
     return ApiResponse<T>(code: 0, message: 'success', data: parse(null));
+  }
+}
+
+/// 会带固定业务数据回调 [parse] 的记录客户端，用来验证解析分支。
+class _PayloadRecordingClient extends _RecordingClient {
+  _PayloadRecordingClient(this.payload);
+
+  final Object? payload;
+
+  @override
+  Future<ApiResponse<T>> post<T>(
+    String path, {
+    required Map<String, Object?> params,
+    required T Function(Object? data) parse,
+  }) async {
+    calls.add((path, params));
+    return ApiResponse<T>(code: 0, message: 'success', data: parse(payload));
   }
 }
 
@@ -1276,10 +1384,15 @@ void _openBindCardPage(
   WidgetTester tester, {
   String productId = '7',
   String orderNo = 'ORDER-1',
+  bool isAccountChange = false,
 }) {
   AppNavigator.push(
     AppRoutes.bindCard,
-    arguments: BindCardPageArguments(productId: productId, orderNo: orderNo),
+    arguments: BindCardPageArguments(
+      productId: productId,
+      orderNo: orderNo,
+      isAccountChange: isAccountChange,
+    ),
   );
 }
 
@@ -5561,5 +5674,473 @@ void main() {
     expect(params[ApiFields.uploadLivenessLicense], 'LICENSE-1');
     expect(params[ApiFields.uploadFileField], 'ZmFrZQ==');
     expect(params[ApiFields.obfuscateSubmitBindCard], isNotEmpty);
+  });
+
+  testWidgets('借款确认页拉账户列表并按蓝湖稿 04-01 渲染分节与底部 Upload', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 账户列表按产品 id 拉一次，页面不写死任何一条账户。
+    expect(certificationRepository.userAccountsCalls, ['7']);
+
+    // 导航标题与三个分节标题（设计稿 text_3 / text_4 / text_9 / text_12）。
+    expect(find.byType(LoanConfirmPage), findsOneWidget);
+    expect(find.text('Loan Confirmation'), findsOneWidget);
+    expect(find.text('Bank'), findsOneWidget);
+    expect(find.text('E-wallet'), findsOneWidget);
+    expect(find.text('Cash Pickup'), findsOneWidget);
+
+    // 银行 / 电子钱包是一行「Receipt Account + 账号」，现金网点是三列姓名。
+    expect(find.text('BDO'), findsOneWidget);
+    expect(find.text('GCash'), findsOneWidget);
+    expect(find.text('M Lhuillier'), findsOneWidget);
+    expect(find.text('Receipt Account'), findsNWidgets(2));
+    expect(find.text('5490163575561234'), findsNWidgets(2));
+    expect(find.text('First Name'), findsOneWidget);
+    expect(find.text('Middle Name'), findsOneWidget);
+    expect(find.text('Last Name'), findsOneWidget);
+    expect(find.text('Anna'), findsOneWidget);
+    expect(find.text('Oliver'), findsOneWidget);
+    expect(find.text('Mark'), findsOneWidget);
+
+    // 维护中的账户（`catchpenny == 0`）仍可选中，红色提示照设计稿展示。
+    expect(
+      find.text(
+        'The bank is under maintenance. Loans may be delayed. '
+        'Please wait or choose another option',
+      ),
+      findsOneWidget,
+    );
+
+    // 默认选中后端标了 `isMain` 的 Bank 那笔，其余两张是未选中态。
+    expect(_assetImage(AppAssets.loanConfirmRadioChecked), findsOneWidget);
+    expect(_assetImage(AppAssets.loanConfirmRadioUnchecked), findsNWidgets(2));
+
+    // Add 整块按钮 / Upload 胶囊 / 返回键都是设计稿切图。
+    expect(_assetImage(AppAssets.loanConfirmAddMethod), findsOneWidget);
+    expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsOneWidget);
+
+    // 账户卡左右各留 16pt、宽 343（设计稿 section_3 / section_5 / section_6）。
+    for (final id in ['555', '556', '557']) {
+      final rect = tester.getRect(find.byKey(Key('loan-confirm-card-$id')));
+      expect(rect.left, closeTo(AppSpacing.pageHorizontal * _designScale, 0.5));
+      expect(rect.width, closeTo(343 * _designScale, 0.5));
+    }
+
+    // 分节顺序与下发顺序一致，不能由页面自己按名字重排。
+    final bankTop = tester
+        .getRect(find.byKey(const Key('loan-confirm-card-555')))
+        .top;
+    final ewalletTop = tester
+        .getRect(find.byKey(const Key('loan-confirm-card-556')))
+        .top;
+    final cashTop = tester
+        .getRect(find.byKey(const Key('loan-confirm-card-557')))
+        .top;
+    expect(bankTop, lessThan(ewalletTop));
+    expect(ewalletTop, lessThan(cashTop));
+  });
+
+  testWidgets('借款确认页点另一张账户卡就切换选中态', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_assetImage(AppAssets.loanConfirmRadioChecked), findsOneWidget);
+    expect(_assetImage(AppAssets.loanConfirmRadioUnchecked), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const Key('loan-confirm-card-556')));
+    await tester.pumpAndSettle();
+
+    // 单选：勾选圈跟着走，同一时刻只有一张卡是选中态。
+    final checked = find.descendant(
+      of: find.byKey(const Key('loan-confirm-card-556')),
+      matching: _assetImage(AppAssets.loanConfirmRadioChecked),
+    );
+    expect(checked, findsOneWidget);
+    expect(_assetImage(AppAssets.loanConfirmRadioChecked), findsOneWidget);
+    expect(_assetImage(AppAssets.loanConfirmRadioUnchecked), findsNWidgets(2));
+  });
+
+  testWidgets('借款确认页 Upload 换绑成功后把订单详情地址回给调用方', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    final popped = AppNavigator.push<LoanConfirmResult>(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // 提交的是默认选中的 Bank 账户（`bindId`），订单号从页面入参带下来。
+    expect(certificationRepository.changeBankCardCalls, [
+      (orderNo: 'ORD-1', bindId: '555'),
+    ]);
+    // 页面自己换绑，但跳转留给调用方：pop 出订单详情页地址。
+    final result = await popped;
+    expect(result, isA<LoanConfirmAccountChanged>());
+    expect(
+      (result! as LoanConfirmAccountChanged).url,
+      'https://h5.example.com/order/1',
+    );
+    expect(find.byType(LoanConfirmPage), findsNothing);
+  });
+
+  testWidgets('借款确认页账户列表失败时展示错误态并可重试', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..userAccountsFailure = const ApiException(
+        type: ApiFailureType.business,
+        message: 'Unable to load accounts',
+        code: 1,
+      );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ErrorView), findsOneWidget);
+    expect(find.text('Unable to load accounts'), findsOneWidget);
+    // 列表没回来时 Upload 置灰，点不动。
+    expect(certificationRepository.changeBankCardCalls, isEmpty);
+
+    certificationRepository.userAccountsFailure = null;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+
+    // Riverpod 对失败的 Provider 会再排一次自动重试，加上手动 Retry，
+    // 这里只断言「确实又拉了一次并且列表出来了」。
+    expect(
+      certificationRepository.userAccountsCalls.length,
+      greaterThanOrEqualTo(2),
+    );
+    expect(find.text('BDO'), findsOneWidget);
+  });
+
+  testWidgets('借款确认页没有可选账户时走空态而不是空列表', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..userAccounts = const LoanConfirmData();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No payment methods available'), findsOneWidget);
+    // 空态也要留 Add other payment methods 给用户去绑卡。
+    expect(_assetImage(AppAssets.loanConfirmAddMethod), findsOneWidget);
+  });
+
+  testWidgets('借款确认页 Add other payment methods 把「去绑卡」回给调用方', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    final popped = AppNavigator.push<LoanConfirmResult>(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('loan-confirm-add-method')),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    // 页面不自己跳绑卡页，只把「要新增账户」回给调用方（两个入口共用同一页）。
+    expect(await popped, isA<LoanConfirmAddPaymentMethod>());
+    expect(find.byType(LoanConfirmPage), findsNothing);
+  });
+
+  testWidgets('认证全部完成后进借款确认页，Upload 换绑后打开订单详情 WebView', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
+        // 认证全部完成：没有下一步认证项 → 直接进借款确认页。
+        nextStep: ProductNextStep(),
+      ),
+    );
+    final certificationRepository = _StubCertificationRepository()
+      ..changeBankCardUrl = 'https://h5.example.com/order/9';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      certificationRepository: certificationRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    // 产品 id 从首页卡片带下来，账户列表按它拉。
+    expect(find.byType(LoanConfirmPage), findsOneWidget);
+    expect(certificationRepository.userAccountsCalls, ['1']);
+
+    await tester.tap(find.text('Upload'), warnIfMissed: false);
+    // WebView 首帧自带 loading 指示器，pumpAndSettle 不会收敛，按帧推进即可。
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(certificationRepository.changeBankCardCalls, [
+      (orderNo: 'ORDER-1', bindId: '555'),
+    ]);
+    // 换绑成功后由流程打开订单详情页，确认页从返回栈里清掉。
+    expect(find.byType(WebViewPage), findsOneWidget);
+    expect(find.byType(LoanConfirmPage), findsNothing);
+  });
+
+  testWidgets('绑卡页改卡模式提交成功后换绑并 pop 订单详情地址', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..changeBankCardUrl = 'https://h5.example.com/order/7';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+
+    final popped = AppNavigator.push<String>(
+      AppRoutes.bindCard,
+      arguments: const BindCardPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+        isAccountChange: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _fillBindCardForm(tester);
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    // 改卡模式不发下一步认证，而是拿提交返回的绑卡 id 直接换绑。
+    expect(certificationRepository.submitBindCardCalls, hasLength(1));
+    expect(certificationRepository.changeBankCardCalls, [
+      (orderNo: 'ORD-1', bindId: '123'),
+    ]);
+    expect(await popped, 'https://h5.example.com/order/7');
+    expect(find.byType(BindCardPage), findsNothing);
+  });
+
+  test('WebView 桥 changeAccount 缺参数失败，带参数时回调原生换绑链路', () async {
+    final calls = <(String, String)>[];
+    final coordinator = WebViewActionCoordinator(
+      changeAccount: ({required productId, required orderNo}) async {
+        calls.add((productId, orderNo));
+      },
+    );
+
+    final missing = await coordinator.dispatch(
+      const WebViewRequest(
+        action: WebViewActions.changeAccount,
+        callbackId: '1',
+        data: {},
+        rawData: '',
+      ),
+    );
+    expect(missing.code, isNot(0));
+    expect(calls, isEmpty);
+
+    final ok = await coordinator.dispatch(
+      const WebViewRequest(
+        action: WebViewActions.changeAccount,
+        callbackId: '2',
+        data: {WebViewFields.productId: '7', WebViewFields.orderNo: 'ORD-1'},
+        rawData: '',
+      ),
+    );
+    expect(ok.code, 0);
+    expect(calls, [('7', 'ORD-1')]);
+  });
+
+  test('用户账户列表解析分组 / 排版 / 维护状态与默认选中', () {
+    final data = LoanConfirmData.fromJson(const {
+      ApiFields.loanAccountGroups: [
+        {
+          ApiFields.loanAccountGroupTitle: 'Bank',
+          // 文档 `cardType`：2 银行。
+          ApiFields.loanAccountGroupType: 2,
+          ApiFields.loanAccountItems: [
+            {
+              ApiFields.loanAccountBindId: 555,
+              ApiFields.loanAccountName: 'BDO',
+              ApiFields.loanAccountStatus: 0,
+              ApiFields.loanAccountIsMain: 1,
+              ApiFields.loanAccountNumber: '5490163575561234',
+              ApiFields.loanAccountLogo: 'https://x/bdo.png',
+            },
+            {
+              ApiFields.loanAccountBindId: 556,
+              ApiFields.loanAccountName: 'BPI',
+              ApiFields.loanAccountStatus: 1,
+            },
+          ],
+        },
+        {
+          // 现金网点分节：`cardType == 3` 就按三列姓名排版，
+          // 分节名不带 `cash` 也能识别；姓名挂在 `telecomm` 里。
+          ApiFields.loanAccountGroupTitle: 'Convenience Store',
+          ApiFields.loanAccountGroupType: 3,
+          ApiFields.loanAccountItems: [
+            {
+              ApiFields.loanAccountBindId: 557,
+              ApiFields.loanAccountName: 'M Lhuillier',
+              ApiFields.loanAccountHolder: {
+                ApiFields.loanAccountFirstName: 'Anna',
+                ApiFields.loanAccountMiddleName: 'Oliver',
+                ApiFields.loanAccountLastName: 'Mark',
+              },
+            },
+          ],
+        },
+        {
+          // 老接口没下发 `cardType` 时退回分节名判定。
+          ApiFields.loanAccountGroupTitle: 'Cash Pickup',
+          ApiFields.loanAccountItems: [
+            {
+              ApiFields.loanAccountBindId: 558,
+              ApiFields.loanAccountName: 'Cebuana',
+              ApiFields.loanAccountHolder: {
+                ApiFields.loanAccountFirstName: 'Ana',
+                ApiFields.loanAccountMiddleName: 'Marie',
+                ApiFields.loanAccountLastName: 'Cruz',
+              },
+            },
+          ],
+        },
+        // 没有任何账户的分组不渲染。
+        {
+          ApiFields.loanAccountGroupTitle: 'Empty',
+          ApiFields.loanAccountGroupType: 1,
+          ApiFields.loanAccountItems: [],
+        },
+      ],
+    });
+
+    expect(data.groups, hasLength(3));
+    final bank = data.groups.first.accounts;
+    expect(bank, hasLength(2));
+    expect(bank.first.kind, LoanAccountKind.receiptAccount);
+    expect(bank.first.receiptAccount, '5490163575561234');
+    // `catchpenny == 0` 是维护中，但仍能选中，页面只补提示。
+    expect(bank.first.available, isFalse);
+    expect(bank.first.underMaintenance, isTrue);
+    expect(bank[1].available, isTrue);
+    expect(bank[1].underMaintenance, isFalse);
+    // 默认选中后端标了 `isMain` 的那笔。
+    expect(data.selectedId, '555');
+    expect(data.isEmpty, isFalse);
+
+    // `cardType == 3` 驱动排版，不依赖分节名里的 `cash`。
+    final cashByType = data.groups[1].accounts.single;
+    expect(cashByType.kind, LoanAccountKind.cashPickup);
+    expect(cashByType.firstName, 'Anna');
+    expect(cashByType.middleName, 'Oliver');
+    expect(cashByType.lastName, 'Mark');
+
+    // `cardType` 缺失时退回分节名。
+    final cashByTitle = data.groups[2].accounts.single;
+    expect(cashByTitle.kind, LoanAccountKind.cashPickup);
+    expect(cashByTitle.firstName, 'Ana');
+  });
+
+  test('用户账户列表没有下发分组时按空处理', () {
+    expect(LoanConfirmData.fromJson(const {}).isEmpty, isTrue);
+    expect(
+      LoanConfirmData.fromJson(const {ApiFields.loanAccountGroups: []}).isEmpty,
+      isTrue,
+    );
+  });
+
+  test('用户账户列表接口带产品 id 与业务混淆字段', () async {
+    final client = _RecordingClient();
+    await CertificationRepository(client).getUserAccounts(productId: '7');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.userAccounts);
+    expect(params[ApiFields.productId], '7');
+    expect(params[ApiFields.obfuscateLoanAccounts1], isNotEmpty);
+    expect(params[ApiFields.obfuscateLoanAccounts2], isNotEmpty);
+  });
+
+  test('更换银行卡接口带订单号 / 绑卡 id 与混淆字段并解析跳转地址', () async {
+    final client = _PayloadRecordingClient({
+      ApiFields.changeBankCardRedirectUrl: 'https://h5.example.com/order/1',
+    });
+    final response = await CertificationRepository(client)
+        .changeBankCard(orderNo: 'ORD-1', bindId: '555');
+
+    final (path, params) = client.calls.single;
+    expect(path, ApiEndpoints.changeBankCard);
+    expect(params[ApiFields.changeBankCardOrderNo], 'ORD-1');
+    expect(params[ApiFields.changeBankCardBindId], '555');
+    expect(params[ApiFields.obfuscateChangeBankCard], isNotEmpty);
+    expect(response.data, 'https://h5.example.com/order/1');
   });
 }

@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/media/identity_photo_permission.dart';
+import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
+import '../core/network/api_fields.dart';
 import '../core/network/api_response.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/bind_card_data.dart';
@@ -119,13 +121,25 @@ const _codeNeedsLiveness = 20000;
 /// 提交后若后端返回 `20000`，先拉起活体（token 走 `type = 1`），
 /// 再把活体结果连同原字段重提交一次。
 class BindCardPage extends ConsumerStatefulWidget {
-  const BindCardPage({required this.productId, super.key, this.orderNo = ''});
+  const BindCardPage({
+    required this.productId,
+    super.key,
+    this.orderNo = '',
+    this.isAccountChange = false,
+  });
 
   /// 产品 id，分组 / 字段与提交都按它取值。
   final String productId;
 
   /// 订单号（`resex`），活体 token 接口要用，由产品申请流程从产品详情带下来。
   final String orderNo;
+
+  /// 改卡场景（订单详情里更换打款账户）。
+  ///
+  /// 打开时跟认证流程一样拉表单，但提交成功后**不发**下一步认证：用返回的
+  /// 绑卡 id 调更换银行卡接口，再把订单详情页地址 pop 给调用方
+  /// （口径对齐 peso_shield 的 `isAccountChange`）。
+  final bool isAccountChange;
 
   @override
   ConsumerState<BindCardPage> createState() => _BindCardPageState();
@@ -801,6 +815,26 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
         return;
       }
 
+      // 改卡场景：刚绑上的账户直接拿去换绑，成功把订单详情页地址回给调用方。
+      if (widget.isAccountChange) {
+        final bindId =
+            response.data[ApiFields.bindCardSubmitBindId]?.toString().trim() ??
+            '';
+        final orderNo = widget.orderNo.trim();
+        if (orderNo.isEmpty || bindId.isEmpty) {
+          ToastHelper.showError('Missing account change information');
+          return;
+        }
+        final url = await _changeAccount(orderNo, bindId);
+        if (!mounted) return;
+        if (url.isEmpty) {
+          ToastHelper.showError('Missing account change result');
+          return;
+        }
+        AppNavigator.pop<String>(url);
+        return;
+      }
+
       final flow = await ref.read(productApplicationFlowProvider.future);
       if (mounted) {
         await flow.continueProductDetailFlow(widget.productId);
@@ -812,6 +846,36 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
     } finally {
       loading();
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// 改卡场景：拿刚绑上的账户调更换银行卡接口，返回订单详情页地址。
+  ///
+  /// 失败弹提示并返回空串（调用方看到空串就不再跳转）。
+  Future<String> _changeAccount(String orderNo, String bindId) async {
+    try {
+      final repository = await ref.read(certificationRepositoryProvider.future);
+      final response = await repository.changeBankCard(
+        orderNo: orderNo,
+        bindId: bindId,
+      );
+      if (!response.isSuccess) {
+        if (mounted) {
+          ToastHelper.showError(
+            response.message.isNotEmpty
+                ? response.message
+                : 'Unable to change payment method',
+          );
+        }
+        return '';
+      }
+      return response.data;
+    } on ApiException catch (error) {
+      if (mounted) ToastHelper.showError(error.message);
+      return '';
+    } catch (_) {
+      if (mounted) ToastHelper.showError('Unable to change payment method');
+      return '';
     }
   }
 

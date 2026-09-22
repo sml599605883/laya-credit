@@ -165,4 +165,19 @@ abstract final class AppAssets {
   /// 与个人信息页共用 [FieldChevron] 画笔还原，不走切图。
   static const emergencyContactPicker =
       'assets/emergency_contact/emergency_contact_picker.png';
+
+  // 借款确认页（蓝湖稿 `04-01 - 确认借款-选择其它方式`）
+  /// `Add other payment methods` 整块按钮（设计稿 `矩形` @(16,645) 343x48，
+  /// 1pt `rgba(19,19,19)` 描边 + 24 圆角，加号与文案都烘焙在切图里；
+  /// 用户提供的 `编组 3@3x.png`，1029x144 = 343x48 @3x）。
+  static const loanConfirmAddMethod =
+      'assets/loan_confirm/loan_confirm_add_method.png';
+
+  /// 收款账户卡右侧的单选圈（设计稿 `形状` 22x22）：
+  /// 未选中是 1pt `rgba(153,153,153)` 灰圈，选中是墨色实心圆 + 白色对勾。
+  /// 用户提供的 `选择@3x.png` / `选择@3x(1).png`，72x72 = 24x24 @3x。
+  static const loanConfirmRadioUnchecked =
+      'assets/loan_confirm/loan_confirm_radio_unchecked.png';
+  static const loanConfirmRadioChecked =
+      'assets/loan_confirm/loan_confirm_radio_checked.png';
 }

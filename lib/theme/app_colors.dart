@@ -294,6 +294,34 @@ abstract final class AppColors {
   /// `Done` 文案色（设计稿 `text_18` rgba(90,90,90,1)）。
   static const bindCardSheetDoneText = Color(0xFF5A5A5A);
 
+  // ---------- 借款确认页的收款账户列表（蓝湖稿 `04-01 - 确认借款-选择其它方式`） ----------
+
+  /// 当前选中账户卡的底色（设计稿 `section_3` rgba(195,231,95,1)）。
+  /// 未选中的卡是白底，直接用 [surface]。
+  static const loanConfirmCardSelected = Color(0xFFC3E75F);
+
+  /// 账户维护中的红色提示文案（设计稿 `text_6` rgba(254,41,92,1)）。
+  static const loanConfirmWarning = Color(0xFFFE295C);
+
+  /// 白底账户卡里的字段名文字色（设计稿 `text_10` / `text_13` rgba(153,153,153,1)）。
+  static const loanConfirmFieldLabel = Color(0xFF999999);
+
+  /// 选中账户卡里的字段名文字色（设计稿 `text_7` rgba(8,11,21,1)，在柠檬绿卡身上
+  /// 实际渲染为 35% 透明度，实测取色 `#829B45` 反推得出）。
+  static const loanConfirmFieldLabelSelected = Color(0x59080B15);
+
+  /// 账户卡内字段与「收款账号」之间的虚线分隔色（设计稿「路径」rgba(221,221,221,1)）。
+  static const loanConfirmDivider = Color(0xFFDDDDDD);
+
+  /// 选中账户卡内的虚线分隔色（设计稿「路径」@(28,236) rgba(255,255,255,1)）。
+  static const loanConfirmDividerSelected = Color(0xFFFFFFFF);
+
+  /// 渠道 logo 的占位底色（设计稿「蒙版」fill rgba(216,216,216,1)）。
+  static const loanConfirmLogoPlaceholder = Color(0xFFD8D8D8);
+
+  /// 渠道 logo 的 1pt 描边（设计稿「蒙版」border rgba(151,151,151,1)）。
+  static const loanConfirmLogoBorder = Color(0xFF979797);
+
   static const white = Color(0xFFFFFFFF);
   static const black = Color(0xFF000000);
 }

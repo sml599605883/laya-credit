@@ -70,4 +70,14 @@ abstract final class ApiEndpoints {
 
   /// 提交绑卡（认证第五项）。POST
   static const submitBindCard = '/outsulk/superidealness';
+
+  /// 用户账户列表（借款确认页的可选收款账户）。POST
+  ///
+  /// 返回按打款方式分组的账户（Bank / E-wallet / Cash Pickup）。
+  static const userAccounts = '/outsulk/heartfelt';
+
+  /// 更换银行卡（借款确认页提交选中的收款账户）。POST
+  ///
+  /// 返回订单详情页地址，由调用方决定用 WebView 还是原生页打开。
+  static const changeBankCard = '/outsulk/bathtubs';
 }

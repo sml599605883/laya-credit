@@ -9,6 +9,7 @@ import '../../pages/id_confirm_page.dart';
 import '../../pages/id_upload_page.dart';
 import '../../pages/id_verification_page.dart';
 import '../../pages/login_page.dart';
+import '../../pages/loan_confirm_page.dart';
 import '../../pages/mine_page.dart';
 import '../../pages/personal_info_page.dart';
 import '../../pages/stats_page.dart';
@@ -107,7 +108,26 @@ class EmergencyContactPageArguments {
 /// 打款方式分组与字段描述都由页面自己按 [productId] 拉取；
 /// [orderNo] 是活体 token 接口的 `resex`，由产品申请流程从产品详情带下来。
 class BindCardPageArguments {
-  const BindCardPageArguments({required this.productId, this.orderNo = ''});
+  const BindCardPageArguments({
+    required this.productId,
+    this.orderNo = '',
+    this.isAccountChange = false,
+  });
+
+  final String productId;
+  final String orderNo;
+
+  /// 改卡场景：提交成功后不发下一步认证，而是换绑并 pop 订单详情页地址。
+  final bool isAccountChange;
+}
+
+/// 借款确认页入参（蓝湖稿 `04-01 - 确认借款-选择其它方式`）。
+///
+/// 可选收款账户列表（`POST /outsulk/heartfelt`）按 [productId] 拉取；
+/// [orderNo] 是提交换绑（`POST /outsulk/bathtubs`）要回传的订单号，
+/// 由产品申请流程从产品详情带下来。
+class LoanConfirmPageArguments {
+  const LoanConfirmPageArguments({required this.productId, this.orderNo = ''});
 
   final String productId;
   final String orderNo;
@@ -208,11 +228,22 @@ class AppRouteGenerator {
 
       case AppRoutes.bindCard:
         final bindArgs = settings.arguments as BindCardPageArguments?;
-        return _route<void>(
+        return _route<String>(
           settings,
           (_) => BindCardPage(
             productId: bindArgs?.productId ?? '',
             orderNo: bindArgs?.orderNo ?? '',
+            isAccountChange: bindArgs?.isAccountChange ?? false,
+          ),
+        );
+
+      case AppRoutes.loanConfirm:
+        final loanArgs = settings.arguments as LoanConfirmPageArguments?;
+        return _route<LoanConfirmResult>(
+          settings,
+          (_) => LoanConfirmPage(
+            productId: loanArgs?.productId ?? '',
+            orderNo: loanArgs?.orderNo ?? '',
           ),
         );
 
