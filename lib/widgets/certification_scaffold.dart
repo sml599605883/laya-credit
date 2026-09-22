@@ -15,6 +15,12 @@ import 'back_nav_bar.dart';
 /// 用法：页面把自己的内容（第一屏顶边用 `SizedBox` 顶开）作为 [child]，
 /// 组件会把它接在头图与引导段下方、同一个滚动容器里。
 class CertificationScaffold extends StatelessWidget {
+  /// 引导段落顶部与导航行之间的固定间距（设计稿 pt）。
+  static const double _promptTopGap = 6.0;
+
+  /// 引导段落底边到头图下沿的固定间距（设计稿 pt）。
+  static const double _promptBottomInset = 34.0;
+
   const CertificationScaffold({
     required this.navTitle,
     required this.child,
@@ -77,36 +83,49 @@ class CertificationScaffold extends StatelessWidget {
               : ScrollViewKeyboardDismissBehavior.manual,
           child: Stack(
             children: [
-              // 头图通栏：宽度铺满，高度按 375pt 设计稿等比换算。
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Image.asset(
-                  headerAsset,
-                  height: layout.px(headerHeight),
-                  fit: BoxFit.cover,
+              // 头图区域：固定高度（375pt 设计稿等比换算），引导段落用 top / bottom
+              // 约束在这个区域内，超出可用高度时整段等比缩小而非被下方内容遮挡。
+              SizedBox(
+                height: layout.px(headerHeight),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Image.asset(headerAsset, fit: BoxFit.cover),
+                    ),
+                    if (prompt != null)
+                      Positioned(
+                        // 顶边固定在导航行下方 [_promptTopGap]；导航行自己让开了
+                        // 安全区，这里把安全区补回来。
+                        top:
+                            safeTop +
+                            layout.px(
+                              BackNavBar.height + _promptTopGap,
+                            ),
+                        left: layout.px(AppSpacing.pageHorizontal),
+                        bottom: layout.px(_promptBottomInset),
+                        child: SizedBox(
+                          width: layout.px(promptWidth),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.bottomLeft,
+                            child: SizedBox(
+                              width: layout.px(promptWidth),
+                              child: Text(
+                                prompt,
+                                style: TextStyle(
+                                  color: AppColors.idVerifyHeaderText,
+                                  fontSize: layout.px(promptFontSize),
+                                  fontWeight: FontWeight.w700,
+                                  height: promptLineHeight / promptFontSize,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              // 引导段落浮在头图上：设计稿顶边是「设计稿状态栏 + 导航行 + 间距」，
-              // 导航行自己让开了安全区，所以这里也把安全区补回来。
-              if (prompt != null)
-                Positioned(
-                  top: safeTop + layout.px(BackNavBar.height + promptGap),
-                  left: layout.px(AppSpacing.pageHorizontal),
-                  child: SizedBox(
-                    width: layout.px(promptWidth),
-                    child: Text(
-                      prompt,
-                      style: TextStyle(
-                        color: AppColors.idVerifyHeaderText,
-                        fontSize: layout.px(promptFontSize),
-                        fontWeight: FontWeight.w700,
-                        height: promptLineHeight / promptFontSize,
-                      ),
-                    ),
-                  ),
-                ),
               child,
             ],
           ),
