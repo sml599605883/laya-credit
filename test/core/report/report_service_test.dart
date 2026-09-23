@@ -13,7 +13,7 @@ void main() {
   setUp(ReportService.reset);
   tearDown(ReportService.reset);
 
-  test('Apple 推送 token 为空时照常上报（对齐 dali，不做空值跳过）', () async {
+  test('Apple 推送 token 为空时照常上报', () async {
     final repository = _RecordingRepository();
     final service = _service(repository, pushToken: '');
 
@@ -22,18 +22,39 @@ void main() {
     expect(repository.appleTokens, ['']);
   });
 
-  test('完全不去重：每次调用都上报一次', () async {
+  test('突发窗口内同一 token 只上报一次，窗口过后重新上报', () async {
+    var now = DateTime.now().millisecondsSinceEpoch;
     final repository = _RecordingRepository();
-    final service = _service(repository, pushToken: 'token-1');
+    final service = _service(
+      repository,
+      pushToken: 'token-1',
+      nowMillis: () => now,
+    );
 
     await service.reportAppleToken();
     await service.reportAppleToken();
     await service.reportAppleToken();
+    expect(repository.appleTokens, ['token-1']);
 
-    expect(repository.appleTokens, ['token-1', 'token-1', 'token-1']);
+    now += ReportService.appleTokenBurstWindow.inMilliseconds + 1;
+    await service.reportAppleToken();
+    expect(repository.appleTokens, ['token-1', 'token-1']);
   });
 
-  test('原生 push_token 事件触发一次上报', () async {
+  test('并发调用只会真正发出一条请求', () async {
+    final repository = _RecordingRepository()..releaseFirstCall = Completer();
+    final service = _service(repository, pushToken: 'token-1');
+
+    final first = service.reportAppleToken();
+    final second = service.reportAppleToken();
+    repository.releaseFirstCall!.complete();
+    await Future.wait([first, second]);
+
+    expect(repository.appleTokens, ['token-1']);
+  });
+
+  test('push_token 事件与启动补报重叠时只上报一次', () async {
+    var now = DateTime.now().millisecondsSinceEpoch;
     final repository = _RecordingRepository();
     final events = StreamController<PushEvent>.broadcast();
     addTearDown(events.close);
@@ -41,10 +62,14 @@ void main() {
       repository,
       pushToken: 'token-2',
       events: events.stream,
+      nowMillis: () => now,
     );
 
     await service.start();
     events.add(const {'type': 'push_token', 'token': 'token-2'});
+    await pumpEventQueue();
+    // 启动权限流程结束时的补报（ATT 已决定时仅差几百毫秒）。
+    await service.startupPermissionsResolved();
     await pumpEventQueue();
 
     expect(repository.appleTokens, ['token-2']);
@@ -56,6 +81,7 @@ ReportService _service(
   ReportRepository repository, {
   required String pushToken,
   Stream<PushEvent>? events,
+  int Function()? nowMillis,
 }) {
   return ReportService(
     repository,
@@ -66,6 +92,7 @@ ReportService _service(
     encryptIv: '0123456789abcdef',
     accessToken: () => 'token',
     pushEvents: events,
+    nowMillis: nowMillis,
   );
 }
 
@@ -83,10 +110,18 @@ class _RecordingRepository extends ReportRepository {
 
   final List<String> appleTokens = [];
 
+  /// 非空时第一条上报会等它完成，用来构造并发场景。
+  Completer<void>? releaseFirstCall;
+
   @override
   Future<ApiResponse<void>> reportApplePushToken({
     required String token,
   }) async {
+    final release = releaseFirstCall;
+    if (release != null) {
+      releaseFirstCall = null;
+      await release.future;
+    }
     appleTokens.add(token);
     return const ApiResponse<void>(code: 200, message: '', data: null);
   }

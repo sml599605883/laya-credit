@@ -85,6 +85,17 @@ class ReportService {
   final PushBridge _pushBridge;
   final Stream<PushEvent>? _events;
 
+  /// 同一个推送 token 在这个时间窗内重复触发只上报一次（突发去抖）。
+  ///
+  /// 上报有三条路径：启动权限流程结束（[startupPermissionsResolved]）、原生
+  /// `push_token` 事件、登录成功。前两条几乎同时触发——原生在注册 APNs 后立刻
+  /// 推 `push_token` 事件，而启动权限流程紧接着（ATT 已决定时仅差 400ms）也会
+  /// 补报一次，于是同一 token 在极短时间内连发两次。
+  ///
+  /// 这里只做**秒级突发去抖**，不做长期去重：只要隔开这个窗口（正常登录都在
+  /// 窗口之外），同一 token 仍然会照常重新上报。
+  static const appleTokenBurstWindow = Duration(seconds: 3);
+
   bool _started = false;
   bool _starting = false;
   bool _marketReporting = false;
@@ -92,6 +103,8 @@ class ReportService {
   bool _adjustInitializing = false;
   Future<ReportLocationSnapshot?>? _pendingLocation;
   StreamSubscription<PushEvent>? _pushSubscription;
+  final Set<String> _reportingAppleTokens = <String>{};
+  final Map<String, int> _lastAppleTokenReportedAt = <String, int>{};
 
   /// App 启动时调用一次：清理会话态、开始监听推送 token、执行首轮上报。
   ///
@@ -293,15 +306,26 @@ class ReportService {
 
   /// 上报 Apple 推送 token。
   ///
-  /// 按业务要求**完全不去重**：每次调用都真实上报一次（启动权限流程结束、
-  /// 原生 `push_token` 事件、登录成功三条路径各报一次）；
+  /// 不做长期去重：每次启动、每次登录都会重新上报。只做
+  /// [appleTokenBurstWindow] 的突发去抖，避免同一 token 在同一瞬间被两条上报
+  /// 路径连发两次；并发调用也只会真正发出一条请求。
   /// token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次）。
   Future<void> reportAppleToken() async {
+    String? token;
     try {
-      final token = (await _pushBridge.getPushToken()).trim();
+      token = (await _pushBridge.getPushToken()).trim();
+      final reportedAt = _lastAppleTokenReportedAt[token];
+      if (reportedAt != null &&
+          _nowMillis() - reportedAt < appleTokenBurstWindow.inMilliseconds) {
+        return;
+      }
+      if (!_reportingAppleTokens.add(token)) return;
       await repository.reportApplePushToken(token: token);
+      _lastAppleTokenReportedAt[token] = _nowMillis();
     } catch (error) {
       _log(error);
+    } finally {
+      if (token != null) _reportingAppleTokens.remove(token);
     }
   }
 
