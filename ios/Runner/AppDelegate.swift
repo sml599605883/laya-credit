@@ -30,6 +30,13 @@ import UserNotifications
       PushNotificationRegistrar.shared.register(with: pushRegistrar.messenger())
     }
 
+    // 上报采集通道：定位 / 设备快照 / 跟踪授权（推送 token 走上面的推送通道）。
+    if let reportRegistrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "LayaCreditReport"
+    ) {
+      ReportRegistrar.shared.register(with: reportRegistrar.messenger())
+    }
+
     // 抓包代理通道：读 iOS 系统代理设置下发给 Dart 侧（dart:io 不会自动读系统代理）。
     guard
       let registrar = engineBridge.pluginRegistry.registrar(

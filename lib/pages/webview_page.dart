@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/client/client_bridge.dart';
 import '../core/navigation/app_deep_link.dart';
 import '../core/navigation/navigation.dart';
+import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../core/webview/webview_action_coordinator.dart';
 import '../core/webview/webview_contract.dart';
@@ -270,16 +271,18 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
 
   WebViewActionCoordinator _buildCoordinator() {
     return WebViewActionCoordinator(
-      // TODO(埋点): 项目尚未接上报服务，先打日志；接入后换成真实风控上报。
+      // H5 的 `uploadRisk`（确认用款 / 结束申贷）动作：场景 10，开始时间由 H5 下发。
       reportRisk:
           ({
             required productId,
             required orderNo,
             required startedAtSeconds,
           }) async {
-            debugPrint(
-              '[WebView] reportRisk(productId=$productId, orderNo=$orderNo, '
-              'startedAt=$startedAtSeconds) 上报服务未接入',
+            await ReportService.current?.reportRisk(
+              productId: productId,
+              scene: '10',
+              orderNo: orderNo,
+              startedAtSeconds: startedAtSeconds,
             );
           },
       openWebView: (url) async {

@@ -95,4 +95,39 @@ abstract final class ApiEndpoints {
 
   /// 订单列表。POST
   static const orderList = '/outsulk/gundy';
+
+  // ---------- 数据上报（接口文档 `6.data-report.html` / `4.certify.html#同盾report`）----------
+  //
+  // 说明：文档里同一组「数据上报」还包含 `上报通讯录`（`/outsulk/kailua`），
+  // 本项目不上报通讯录，因此**不接入**该接口，这里也不登记对应路径。
+
+  /// 上报位置信息。POST
+  ///
+  /// 登录且拿到定位授权后上报；字段见 [ApiFields] 的「设备上报 - 位置」段。
+  static const reportLocation = '/outsulk/solomon';
+
+  /// google_market 上报（返回 adjust_token）。POST
+  static const reportGoogleMarket = '/outsulk/antibilious';
+
+  /// 上报风控埋点（新）。POST
+  ///
+  /// 场景类型见文档 `6.data-report.html`：1 注册 / 2 认证选择 / 3 证件信息 /
+  /// 4 人脸照片 / 5 个人信息 / 6 工作信息 / 7 紧急联系人 / 8 银行卡信息 /
+  /// 9 开始申贷 / 10 结束申贷。
+  static const reportRisk = '/outsulk/mesometral';
+
+  /// 设备信息上报（报文需 AES 加密后放在 `connectedly`）。POST
+  static const reportDeviceInfo = '/outsulk/vesperal';
+
+  /// 上报 Apple 推送 token。POST
+  static const reportApplePushToken = '/outsulk/tightens';
+
+  /// 同盾（TrustDecision）活体结果上报。POST
+  static const reportTrustDecision = '/outsulk/wastefulnesses';
+
+  /// 根据设备标识符查询 iOS 设备信息。POST
+  ///
+  /// 入参是设备型号标识（如 `iPhone11,8`），返回设备名称与物理尺寸，
+  /// 供设备信息上报报文里的 `chlor` / `squattest` 使用。
+  static const deviceInfoLookup = '/outsulk/omphacy';
 }

@@ -147,7 +147,8 @@ lib/
    与 `kneeing` 里的 `BANNER` 模块不是同一个东西，需要设计确认它在首页的位置。
 3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
-4. **其余接口未接入**：上报、H5 相关接口尚未落地（订单列表接口已接入，见第 21 条）。
+4. **其余接口未接入**：H5 相关接口尚未全部落地；**数据上报已接入**（见第 24 条）
+   （订单列表接口已接入，见第 21 条）。
    「点击申请」链路已接通到准入接口，下游页面也已补齐：准入 / 详情返回的 H5 地址
    走通用 WebView，原生 `recredit`（`IntervesicularSauder`）走重新授信 loading 页
    （见第 23 条）。`product_application_flow.dart` 里只剩设置页 `MilkwoodSporogenous`
@@ -817,6 +818,46 @@ lib/
       深链路由带 productId（`tartarizing` / `productId` 两种参数名）、
       已在等待页时重复下发不叠页、路由观察者记录栈顶），
       以及 `test/order_list_test.dart` 的「卡片原生深链目标分发到等待授信页」。
+
+24. **数据上报模块已接入**（参考 Dali Cash 的 `core/report`，按本项目接口文档落地）。
+    入口与职责：
+    - `lib/core/report/`：`report_data.dart`（定位 / 设备快照 + 设备报文加密）、
+      `report_store.dart`（跨启动状态）、`report_bridge.dart`（原生采集桥）、
+      `report_service.dart`（三个上报时机 + 两个场景接口）、
+      `report_lifecycle_host.dart`（挂在 App 根部启动 / 前台恢复）。
+    - `lib/data/repositories/report_repository.dart`：6 个上报接口 + 1 个设备信息查询接口。
+    - `lib/core/network/api_crypto.dart`：报文字段 AES-CBC 加解密（新增 `encrypt` 依赖）。
+    - `lib/providers/report_provider.dart`：仓库与服务（`ReportService.current` 全局单例）。
+    - 原生：`ios/Runner/ReportRegistrar.swift`（channel `laya_credit/report`：定位 /
+      设备快照 / ATT 跟踪授权）与 `ios/Runner/ReportDeviceSnapshotCollector.swift`。
+    接口（均按 `6.data-report.html` / `4.certify.html#同盾report`）：
+    - `POST /outsulk/solomon` 位置；`POST /outsulk/antibilious` google_market；
+      `POST /outsulk/mesometral` 风控埋点；`POST /outsulk/vesperal` 设备信息（AES 加密）；
+      `POST /outsulk/tightens` Apple 推送 token；`POST /outsulk/wastefulnesses` 同盾活体结果；
+      `POST /outsulk/omphacy` 按型号标识查设备名称 / 物理尺寸。
+    - **不上报通讯录**：文档里的 `POST /outsulk/kailua` 不接入（`ApiEndpoints` 里刻意不登记）。
+    字段名一律按接口文档的「混淆前 → 混淆后」映射表（`doc-obf-data`）对齐，
+    `report_data.dart` 每个分组都标了混淆前语义名（如 `board → amativeness`、
+    `device_name → compensatingly`、`gps_longitude → print`）。
+    时机（对齐 Dali）：启动（`ReportService.start()`，未登录时自动跳过定位 / 设备）、
+    登录成功（记录登录时间 + 补一轮上报）、前台恢复；ATT 未决定时先弹授权再上报 IDFA。
+    google_market 拿到 `adjust_token` 后用 **Adjust SDK**（`adjust_sdk` 依赖）
+    初始化归因，跨启动用 `ReportStore.isAdjustInitialized` 去重（对齐 Dali）。
+    风控埋点场景已接：1 登录（`login_page`）、2 认证选择（`id_verification_page`）、
+    3 证件信息（`id_confirm_page`）、4 人脸（`face_verification_page`）、
+    5 个人信息 / 6 工作信息（`personal_info_page` 按 `_kind` 区分）、
+    7 紧急联系人、8 银行卡、9 开始申贷（`product_application_flow` 里调
+    `getOrderPushUrl` / `POST /outsulk/octodentate` 时上报）、10 结束申贷
+    （WebView `uploadRisk` 动作）。
+    同盾活体结果在 `face_verification_page` 与人脸分支的 `bind_card_page` 上报。
+    测试：`test/core/report/report_data_test.dart`（设备报文加解密 + 字段映射、
+    定位快照解析、文本兜底）与 `test/core/report/report_store_test.dart`。
+    **遗留风险 / 待确认**：
+    - 本项目没有 Dali 的 `PermissionCoordinator` / `startupPermissionsResolved`
+      生命周期，ATT 与定位授权改由 `ReportService` 在上报时按需拉起（首次启动会弹一次），
+      少了 Dali「权限弹窗完成后再补一轮启动上报」的时序，待确认是否要补权限协调器；
+    - Apple 推送 token 为空时直接跳过（Dali 未做此校验，按审计结论属改进，故意保留差异）；
+    - 定位 / 设备 / ATT 采集与各场景埋点尚未在真机上端到端联调。
 
 ## 常用命令
 

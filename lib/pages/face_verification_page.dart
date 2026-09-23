@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/media/identity_photo_permission.dart';
 import '../core/navigation/navigation.dart';
+import '../core/report/report.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../providers/liveness_provider.dart';
@@ -73,6 +75,9 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
   /// 活体进行中：挡住按钮，避免同一笔订单重复拉起 SDK。
   bool _isVerifying = false;
 
+  /// 风控埋点场景 4（人脸）的开始时间：点击主按钮时记录。
+  int _sceneStartSeconds = 0;
+
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
@@ -128,6 +133,7 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
   /// 取活体授权码 -> 拉起 SDK -> 回传抓拍图 -> 继续下一步认证。
   Future<void> _startVerification() async {
     if (_isVerifying) return;
+    _sceneStartSeconds = ReportService.nowSeconds();
 
     // 先做相机权限预检（对齐 peso_shield）：被拒时弹引导去系统设置，
     // 不浪费一次 token 请求，也不让用户卡在一个没有反馈的按钮上。
@@ -181,6 +187,17 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
       final outcome = await ref.read(livenessGatewayProvider).run(token.token);
       if (!mounted) return;
 
+      // 同盾活体结果：只要有响应就上报（成功 / 失败都传原始结果）。
+      unawaited(
+        ReportService.current?.reportTrustDecisionResult(
+              livenessId: outcome.livenessId,
+              requestId: outcome.sequenceId,
+              code: outcome.code,
+              message: outcome.message,
+            ) ??
+            Future<void>.value(),
+      );
+
       if (!outcome.passed) {
         ToastHelper.showError(
           outcome.message.isNotEmpty
@@ -217,6 +234,17 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
       } finally {
         uploading();
       }
+
+      // 风控埋点场景 4：结束时间是人脸上传成功这一刻。
+      unawaited(
+        ReportService.current?.reportRisk(
+              productId: widget.productId,
+              scene: '4',
+              orderNo: widget.orderNo,
+              startedAtSeconds: _sceneStartSeconds,
+            ) ??
+            Future<void>.value(),
+      );
 
       final flow = await ref.read(productApplicationFlowProvider.future);
       if (mounted) await flow.continueProductDetailFlow(widget.productId);

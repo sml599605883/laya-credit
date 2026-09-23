@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'core/navigation/navigation.dart';
 import 'core/push/ios_notification_route_coordinator.dart';
 import 'core/push/push_bridge.dart';
+import 'core/report/report_lifecycle_host.dart';
 import 'providers/session_provider.dart';
 import 'theme/theme.dart';
 
@@ -26,7 +27,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const LayaCreditApp(),
+      child: const ReportLifecycleHost(child: LayaCreditApp()),
     ),
   );
 

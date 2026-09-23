@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_exception.dart';
+import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/emergency_contact_data.dart';
 import '../data/models/personal_info_data.dart';
@@ -149,6 +152,15 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
 
   /// 提交中：挡住 `Upload` 按钮，避免同一份资料被提交两次。
   bool _isSubmitting = false;
+
+  /// 风控埋点场景 7（紧急联系人）的开始时间：进入本页时记录。
+  late final int _sceneStartSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _sceneStartSeconds = ReportService.nowSeconds();
+  }
 
   /// 已经把哪一份接口数据铺到表单上，避免 build 里重复初始化。
   EmergencyContactData? _syncedData;
@@ -548,7 +560,6 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
   /// 提交表单：成功后再拉产品详情，走下一步认证。
   Future<void> _submit() async {
     if (_isSubmitting) return;
-    // TODO(埋点): 点击 Upload 提交紧急联系人需要在 Firebase Analytics 上报事件。
 
     setState(() => _isSubmitting = true);
     try {
@@ -574,6 +585,16 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
         );
         return;
       }
+
+      // 风控埋点场景 7：结束时间是紧急联系人提交成功这一刻。
+      unawaited(
+        ReportService.current?.reportRisk(
+              productId: widget.productId,
+              scene: '7',
+              startedAtSeconds: _sceneStartSeconds,
+            ) ??
+            Future<void>.value(),
+      );
 
       final flow = await ref.read(productApplicationFlowProvider.future);
       if (mounted) {

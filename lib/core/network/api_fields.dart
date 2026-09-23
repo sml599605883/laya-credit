@@ -632,4 +632,62 @@ abstract final class ApiFields {
 
   /// 按钮点击跳转地址（还款详情页）。
   static const orderListActionTarget = 'trans';
+
+  // ---------- 数据上报 ----------
+  //
+  // 来源：接口文档 `6.data-report.html`（位置 / google_market / 风控埋点 /
+  // 设备信息 / Apple token）与 `4.certify.html#同盾report`。
+  // 混淆字段（`obfuscate*`）没有业务含义，每次请求随机生成。
+  //
+  // 设备信息上报的报文由 `report_data.dart` 直接按文档的嵌套结构拼装，
+  // 键名集中在 `report_data.dart` 里，不放这里（避免与业务字段混淆）。
+
+  // 位置上报（`POST /outsulk/solomon`）
+  static const reportProvince = 'dsri';
+  static const reportCountryCode = 'introduction';
+  static const reportCountry = 'halona';
+  static const reportStreet = 'warfaring';
+  static const reportLatitude = 'biarchy';
+  static const reportLongitude = 'spinules';
+  static const reportCity = 'loud';
+  static const obfuscateReportLocation1 = 'summoned';
+  static const obfuscateReportLocation2 = 'witchgrass';
+
+  // google_market 上报（`POST /outsulk/antibilious`）
+  static const googleMarketIdfv = 'midshipmanship';
+  static const googleMarketIdfa = 'diamagnetism';
+  static const obfuscateGoogleMarket = 'jaymie';
+
+  /// 响应里的 adjust_token（`connectedly.headedness`）。
+  static const googleMarketAdjustToken = 'headedness';
+
+  // 风控埋点（`POST /outsulk/mesometral`）
+  static const riskProductId = 'podostemon';
+  static const riskSceneType = 'woolly';
+  static const riskOrderNo = 'pirate';
+  static const riskDeviceId = 'noninterfering';
+  static const riskIdfa = 'locked';
+  static const riskLongitude = 'spinules';
+  static const riskLatitude = 'biarchy';
+  static const riskStartTime = 'foghorns';
+  static const riskEndTime = 'measuredly';
+  static const obfuscateRisk = 'albuminose';
+
+  // 设备信息上报（`POST /outsulk/vesperal`）：加密后的报文放这个字段。
+  static const deviceReportPayload = 'connectedly';
+
+  // Apple 推送 token 上报（`POST /outsulk/tightens`）
+  static const applePushToken = 'sharping';
+
+  // 同盾活体结果上报（`POST /outsulk/wastefulnesses`）
+  static const trustLivenessId = 'thunderstorm';
+  static const trustRequestId = 'vii';
+  static const trustResultCode = 'gravel';
+  static const trustResult = 'countercharged';
+
+  // 设备信息查询（`POST /outsulk/omphacy`）
+  static const deviceLookupIdentifier = 'harbingers';
+  static const obfuscateDeviceLookup = 'callista';
+  static const deviceLookupName = 'beautifully';
+  static const deviceLookupPhysicalSize = 'squattest';
 }

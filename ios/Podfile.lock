@@ -1,4 +1,12 @@
 PODS:
+  - Adjust (5.8.0):
+    - Adjust/Adjust (= 5.8.0)
+  - Adjust/Adjust (5.8.0):
+    - AdjustSignature (= 5.0.0)
+  - adjust_sdk (5.8.0):
+    - Adjust (= 5.8.0)
+    - Flutter
+  - AdjustSignature (5.0.0)
   - device_info_plus (0.0.1):
     - Flutter
   - Flutter (1.0.0)
@@ -55,6 +63,7 @@ PODS:
     - Flutter
 
 DEPENDENCIES:
+  - adjust_sdk (from `.symlinks/plugins/adjust_sdk/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - Flutter (from `Flutter`)
   - flutter_image_compress_common (from `.symlinks/plugins/flutter_image_compress_common/ios`)
@@ -70,6 +79,8 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - Adjust
+    - AdjustSignature
     - libwebp
     - OrderedSet
     - SDWebImage
@@ -78,6 +89,8 @@ SPEC REPOS:
     - TrustDecisionPro
 
 EXTERNAL SOURCES:
+  adjust_sdk:
+    :path: ".symlinks/plugins/adjust_sdk/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
   Flutter:
@@ -100,6 +113,9 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
 
 SPEC CHECKSUMS:
+  Adjust: 688831c353a5ecb137d7e9b20dcfebebb3469780
+  adjust_sdk: 54fd6934b074277ecfa1f9988d61e7ac5417eb02
+  AdjustSignature: 2185aff42830b87214d84bee45da09c65129c12c
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   flutter_image_compress_common: 11d5dcfb36f4ded92320bfa896261813a073240e

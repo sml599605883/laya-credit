@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_exception.dart';
+import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/personal_info_data.dart';
 import '../providers/personal_info_provider.dart';
@@ -199,6 +202,15 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
 
   /// 提交中：挡住 `Upload` 按钮，避免同一份资料被提交两次。
   bool _isSubmitting = false;
+
+  /// 风控埋点场景的开始时间：个人信息是场景 5、工作信息是场景 6，进入本页时记录。
+  late final int _sceneStartSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _sceneStartSeconds = ReportService.nowSeconds();
+  }
 
   /// 已经把哪一份接口数据铺到表单上，避免 build 里重复初始化。
   PersonalInfoData? _syncedData;
@@ -679,6 +691,20 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         );
         return;
       }
+
+      // 风控埋点场景 5（个人信息）/ 6（工作信息）：结束时间是提交成功这一刻。
+      final scene = switch (widget._kind) {
+        _CertificationFormKind.personal => '5',
+        _CertificationFormKind.work => '6',
+      };
+      unawaited(
+        ReportService.current?.reportRisk(
+              productId: widget.productId,
+              scene: scene,
+              startedAtSeconds: _sceneStartSeconds,
+            ) ??
+            Future<void>.value(),
+      );
 
       final flow = await ref.read(productApplicationFlowProvider.future);
       if (mounted) {

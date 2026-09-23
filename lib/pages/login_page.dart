@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
+import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../providers/home_provider.dart';
 import '../providers/login_provider.dart';
@@ -138,9 +139,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// 只为「Get it」按钮转圈：请求态本身由 [loginControllerProvider] 承载。
   bool _requestingCode = false;
 
+  /// 风控埋点场景 1（注册 / 登录）的开始时间：进入登录页时记录。
+  late final int _scene1StartTimeSeconds;
+
   @override
   void initState() {
     super.initState();
+    _scene1StartTimeSeconds = ReportService.nowSeconds();
     _loadRememberedPhone();
   }
 
@@ -265,7 +270,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           );
       if (!mounted || result == null) return false;
 
-      // TODO(埋点): 登录成功需要在跳转前上报（Firebase Analytics + 风控场景）。
+      // 风控埋点场景 1：开始时间取进入登录页的时刻，结束时间是登录成功。
+      // 上报是旁路能力，串行调用但不阻塞后续跳转（内部已各自 try/catch）。
+      final reporter = ReportService.current;
+      if (reporter != null) {
+        unawaited(reporter.loginSucceeded());
+        unawaited(
+          reporter.reportRisk(
+            productId: '',
+            scene: '1',
+            startedAtSeconds: _scene1StartTimeSeconds,
+          ),
+        );
+      }
+
       // 登录后首页数据（额度/订单）会变，先刷一遍。
       unawaited(ref.read(homeDataProvider.notifier).refresh());
       final onLoginSuccess = widget.onLoginSuccess;

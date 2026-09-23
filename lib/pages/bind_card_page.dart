@@ -9,6 +9,7 @@ import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/network/api_fields.dart';
 import '../core/network/api_response.dart';
+import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/bind_card_data.dart';
 import '../providers/bind_card_provider.dart';
@@ -148,6 +149,15 @@ class BindCardPage extends ConsumerStatefulWidget {
 class _BindCardPageState extends ConsumerState<BindCardPage> {
   /// 提交 / 活体进行中：挡住 `Upload` 按钮，避免同一笔绑卡提交两次。
   bool _isSubmitting = false;
+
+  /// 风控埋点场景 8（银行卡信息）的开始时间：进入本页时记录。
+  late final int _sceneStartSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _sceneStartSeconds = ReportService.nowSeconds();
+  }
 
   /// 当前选中的打款方式分组（后端的 `cardType`）。
   String _selectedType = '';
@@ -815,6 +825,17 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
         return;
       }
 
+      // 风控埋点场景 8：结束时间是银行卡信息提交成功这一刻。
+      unawaited(
+        ReportService.current?.reportRisk(
+              productId: widget.productId,
+              scene: '8',
+              orderNo: widget.orderNo,
+              startedAtSeconds: _sceneStartSeconds,
+            ) ??
+            Future<void>.value(),
+      );
+
       // 改卡场景：刚绑上的账户直接拿去换绑，成功把订单详情页地址回给调用方。
       if (widget.isAccountChange) {
         final bindId =
@@ -924,6 +945,17 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
 
       final outcome = await ref.read(livenessGatewayProvider).run(token.token);
       if (!mounted) return null;
+
+      // 同盾活体结果：只要有响应就上报（成功 / 失败都传原始结果）。
+      unawaited(
+        ReportService.current?.reportTrustDecisionResult(
+              livenessId: outcome.livenessId,
+              requestId: outcome.sequenceId,
+              code: outcome.code,
+              message: outcome.message,
+            ) ??
+            Future<void>.value(),
+      );
 
       if (!outcome.passed || !outcome.hasUploadPayload) {
         ToastHelper.showError(

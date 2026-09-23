@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import '../../data/models/product_apply_result.dart';
 import '../../data/models/product_detail.dart';
 import '../../data/repositories/product_repository.dart';
 import '../navigation/app_deep_link.dart';
+import '../report/report.dart';
 import '../navigation/app_navigator.dart';
 import '../navigation/app_route_generator.dart';
 import '../navigation/app_routes.dart';
@@ -191,7 +194,7 @@ class ProductApplicationFlow {
       _openCertificationStep(step, productId, detail.basicInfo.orderNo);
       return;
     }
-    await _openConfirmLoanPage(detail);
+    await _openConfirmLoanPage(detail, productId);
   }
 
   /// 下一步认证项。
@@ -277,7 +280,10 @@ class ProductApplicationFlow {
   /// `getOrderJumpUrl` 拿地址进 WebView，**不是**进原生账号列表页。
   /// 原生 `LoanConfirmPage`（账号列表）是「更换打款账户」页，只由订单详情
   /// H5 桥（`WebViewPage._changeOrderAccount`）与进度卡 `Change` 进入。
-  Future<void> _openConfirmLoanPage(ProductDetail detail) async {
+  Future<void> _openConfirmLoanPage(
+    ProductDetail detail,
+    String productId,
+  ) async {
     final info = detail.basicInfo;
     if (info.orderNo.isEmpty) {
       ToastHelper.showError('Order information is missing');
@@ -286,6 +292,9 @@ class ProductApplicationFlow {
 
     try {
       ToastHelper.showLoading();
+      // 风控埋点场景 9（开始申贷）：开始时间是 <跟进订单号获取跳转地址> 的
+      // 请求时间，结束时间是接口响应成功。与 Dali 一致，接口一返回就上报。
+      final startedAtSeconds = ReportService.nowSeconds();
       final response = await repository.getOrderPushUrl(
         orderNo: info.orderNo,
         amount: info.amount,
@@ -293,6 +302,16 @@ class ProductApplicationFlow {
         termType: info.termType,
       );
       ToastHelper.hideLoading();
+
+      unawaited(
+        ReportService.current?.reportRisk(
+              productId: productId.isNotEmpty ? productId : info.productId,
+              scene: '9',
+              orderNo: info.orderNo,
+              startedAtSeconds: startedAtSeconds,
+            ) ??
+            Future<void>.value(),
+      );
 
       if (!response.isSuccess) {
         ToastHelper.showError(response.message);

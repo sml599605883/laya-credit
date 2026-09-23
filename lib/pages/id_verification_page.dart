@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
+import '../core/report/report.dart';
 import '../data/models/id_verification_data.dart';
 import '../providers/id_verification_provider.dart';
 import '../theme/theme.dart';
@@ -46,25 +48,51 @@ const _stateHeight = 160.0;
 /// 证件类型不是客户端写死的：进页面用 [productId] 拉 `GET /outsulk/gaonate`
 /// （认证第一项），后端按产品下发两组卡片（响应里的 `magisterial`）；
 /// 没下发（低版本 / 未灰度用户）时走空态。选中证件后的上传页尚未搭建，点击先给占位提示。
-class IdVerificationPage extends ConsumerWidget {
+class IdVerificationPage extends ConsumerStatefulWidget {
   const IdVerificationPage({super.key, required this.productId});
 
   /// 产品 id：证件类型按产品下发，对应接口的 `tartarizing`。
   final String productId;
 
+  @override
+  ConsumerState<IdVerificationPage> createState() => _IdVerificationPageState();
+}
+
+class _IdVerificationPageState extends ConsumerState<IdVerificationPage> {
+  /// 风控埋点场景 2（认证选择）的开始时间：进入本页时记录。
+  late final int _sceneStartSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _sceneStartSeconds = ReportService.nowSeconds();
+  }
+
   /// 选中证件类型后进上传页。
   ///
   /// 卡类型原样带下去（就是这里的文案，也是保存接口 `heterological` 的取值）。
-  /// TODO(埋点): 选择证件类型需要在 Firebase Analytics 上报事件。
   void _onIdTypeSelected(String idType) {
+    // 风控埋点场景 2：结束时间就是「选择完成」这一刻。
+    unawaited(
+      ReportService.current?.reportRisk(
+            productId: widget.productId,
+            scene: '2',
+            startedAtSeconds: _sceneStartSeconds,
+          ) ??
+          Future<void>.value(),
+    );
     AppNavigator.push(
       AppRoutes.idUpload,
-      arguments: IdUploadPageArguments(productId: productId, cardType: idType),
+      arguments: IdUploadPageArguments(
+        productId: widget.productId,
+        cardType: idType,
+      ),
     );
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final productId = widget.productId;
     final layout = AppLayout.of(context);
     final idVerification = ref.watch(idVerificationProvider(productId));
 

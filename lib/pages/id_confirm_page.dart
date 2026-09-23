@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_exception.dart';
+import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/identity_recognition.dart';
 import '../providers/product_flow_provider.dart';
@@ -113,6 +116,9 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
   /// 保存中：挡住 `Upload` 按钮，避免同一份资料被提交两次。
   bool _isSubmitting = false;
 
+  /// 风控埋点场景 3（证件信息）的开始时间：进入本页时记录。
+  late final int _sceneStartSeconds;
+
   /// 识别结果落到三个可编辑字段上，用户改完直接提交改后的值。
   late final TextEditingController _nameController;
   late final TextEditingController _idNumberController;
@@ -121,6 +127,7 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
   @override
   void initState() {
     super.initState();
+    _sceneStartSeconds = ReportService.nowSeconds();
     final recognition = widget.recognition;
     _nameController = TextEditingController(text: recognition.name);
     _idNumberController = TextEditingController(text: recognition.idNumber);
@@ -190,7 +197,6 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
   /// 保存识别出的身份信息，成功后继续产品详情的下一步认证。
   Future<void> _save() async {
     if (_isSubmitting) return;
-    // TODO(埋点): 点击 Upload 保存识别结果需要在 Firebase Analytics 上报事件。
 
     final name = _nameController.text.trim();
     final idNumber = _idNumberController.text.trim();
@@ -218,6 +224,16 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
         );
         return;
       }
+
+      // 风控埋点场景 3：结束时间是证件信息保存成功这一刻。
+      unawaited(
+        ReportService.current?.reportRisk(
+              productId: widget.productId,
+              scene: '3',
+              startedAtSeconds: _sceneStartSeconds,
+            ) ??
+            Future<void>.value(),
+      );
 
       final flow = await ref.read(productApplicationFlowProvider.future);
       if (mounted) {
