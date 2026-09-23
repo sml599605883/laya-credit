@@ -22,10 +22,17 @@ import 'app_deep_link.dart';
 import 'app_routes.dart';
 
 /// 证件选择页入参。认证项按产品下发，必须带上产品 id。
+///
+/// [orderNo] 是风控埋点（`pirate`）要回传的订单号，由产品申请流程从产品详情
+/// （`basicInfo.orderNo`）带下来，并经上传 / 确认页一路透传。
 class IdVerificationPageArguments {
-  const IdVerificationPageArguments({required this.productId});
+  const IdVerificationPageArguments({
+    required this.productId,
+    this.orderNo = '',
+  });
 
   final String productId;
+  final String orderNo;
 }
 
 /// 证件上传页入参。
@@ -36,10 +43,12 @@ class IdUploadPageArguments {
   const IdUploadPageArguments({
     required this.productId,
     required this.cardType,
+    this.orderNo = '',
   });
 
   final String productId;
   final String cardType;
+  final String orderNo;
 }
 
 /// 证件信息确认页入参（蓝湖稿 `03-01 - 身份认证-上传成功`）。
@@ -51,11 +60,13 @@ class IdConfirmPageArguments {
     required this.productId,
     required this.cardType,
     required this.recognition,
+    this.orderNo = '',
   });
 
   final String productId;
   final String cardType;
   final IdentityRecognition recognition;
+  final String orderNo;
 }
 
 /// 人脸识别页入参。
@@ -83,27 +94,39 @@ class LoginPageArguments {
 ///
 /// 字段、选项与当前值都由页面自己按 [productId] 拉取，这里只带产品 id。
 class PersonalInfoPageArguments {
-  const PersonalInfoPageArguments({required this.productId});
+  const PersonalInfoPageArguments({
+    required this.productId,
+    this.orderNo = '',
+  });
 
   final String productId;
+  final String orderNo;
 }
 
 /// 工作信息认证页入参（蓝湖稿 `03-03 - 工作信息`）。
 ///
 /// 字段、选项与当前值都由页面自己按 [productId] 拉取，这里只带产品 id。
 class WorkInfoPageArguments {
-  const WorkInfoPageArguments({required this.productId});
+  const WorkInfoPageArguments({
+    required this.productId,
+    this.orderNo = '',
+  });
 
   final String productId;
+  final String orderNo;
 }
 
 /// 紧急联系人认证页入参（蓝湖稿 `03-04 - 联系人信息`）。
 ///
 /// 联系人条数与关系选项都由页面自己按 [productId] 拉取，这里只带产品 id。
 class EmergencyContactPageArguments {
-  const EmergencyContactPageArguments({required this.productId});
+  const EmergencyContactPageArguments({
+    required this.productId,
+    this.orderNo = '',
+  });
 
   final String productId;
+  final String orderNo;
 }
 
 /// 绑卡页入参（蓝湖稿 `03-05 - 绑定账户`，认证第五项）。
@@ -191,7 +214,10 @@ class AppRouteGenerator {
         final args = settings.arguments as IdVerificationPageArguments?;
         return _route<void>(
           settings,
-          (_) => IdVerificationPage(productId: args?.productId ?? ''),
+          (_) => IdVerificationPage(
+            productId: args?.productId ?? '',
+            orderNo: args?.orderNo ?? '',
+          ),
         );
 
       case AppRoutes.idUpload:
@@ -201,6 +227,7 @@ class AppRouteGenerator {
           (_) => IdUploadPage(
             productId: uploadArgs?.productId ?? '',
             cardType: uploadArgs?.cardType ?? '',
+            orderNo: uploadArgs?.orderNo ?? '',
           ),
         );
 
@@ -211,6 +238,7 @@ class AppRouteGenerator {
           (_) => IdConfirmPage(
             productId: confirmArgs?.productId ?? '',
             cardType: confirmArgs?.cardType ?? '',
+            orderNo: confirmArgs?.orderNo ?? '',
             recognition:
                 confirmArgs?.recognition ?? const IdentityRecognition(),
           ),
@@ -230,14 +258,20 @@ class AppRouteGenerator {
         final personalArgs = settings.arguments as PersonalInfoPageArguments?;
         return _route<void>(
           settings,
-          (_) => PersonalInfoPage(productId: personalArgs?.productId ?? ''),
+          (_) => PersonalInfoPage(
+            productId: personalArgs?.productId ?? '',
+            orderNo: personalArgs?.orderNo ?? '',
+          ),
         );
 
       case AppRoutes.workInfo:
         final workArgs = settings.arguments as WorkInfoPageArguments?;
         return _route<void>(
           settings,
-          (_) => WorkInformationPage(productId: workArgs?.productId ?? ''),
+          (_) => WorkInformationPage(
+            productId: workArgs?.productId ?? '',
+            orderNo: workArgs?.orderNo ?? '',
+          ),
         );
 
       case AppRoutes.emergencyContact:
@@ -245,7 +279,10 @@ class AppRouteGenerator {
             settings.arguments as EmergencyContactPageArguments?;
         return _route<void>(
           settings,
-          (_) => EmergencyContactPage(productId: contactArgs?.productId ?? ''),
+          (_) => EmergencyContactPage(
+            productId: contactArgs?.productId ?? '',
+            orderNo: contactArgs?.orderNo ?? '',
+          ),
         );
 
       case AppRoutes.bindCard:

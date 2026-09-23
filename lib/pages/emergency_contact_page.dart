@@ -136,10 +136,17 @@ const _stateHeight = 200.0;
 /// `Upload` 把每个联系人的 `canmaker` 原样回传（`POST /outsulk/stabiliment`），
 /// 成功后继续产品详情的下一步认证。
 class EmergencyContactPage extends ConsumerStatefulWidget {
-  const EmergencyContactPage({super.key, required this.productId});
+  const EmergencyContactPage({
+    super.key,
+    required this.productId,
+    this.orderNo = '',
+  });
 
   /// 产品 id。
   final String productId;
+
+  /// 订单号：风控埋点（`pirate`）回传，由产品申请流程从产品详情带下来。
+  final String orderNo;
 
   @override
   ConsumerState<EmergencyContactPage> createState() =>
@@ -591,6 +598,7 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
         ReportService.current?.reportRisk(
               productId: widget.productId,
               scene: '7',
+              orderNo: widget.orderNo,
               startedAtSeconds: _sceneStartSeconds,
             ) ??
             Future<void>.value(),

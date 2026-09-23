@@ -134,15 +134,26 @@ const _stateHeight = 200.0;
 /// [showPersonalInfoOptionSheet] / [showPersonalInfoAddressSheet]。
 class PersonalInfoPage extends ConsumerStatefulWidget {
   /// 个人信息形态（认证第二项）。
-  const PersonalInfoPage({super.key, required this.productId})
+  const PersonalInfoPage({
+    super.key,
+    required this.productId,
+    this.orderNo = '',
+  })
     : _kind = _CertificationFormKind.personal;
 
   /// 工作信息形态（认证第三项）：与个人信息同一套 UI，只换数据源 / 保存接口。
-  const PersonalInfoPage.work({super.key, required this.productId})
+  const PersonalInfoPage.work({
+    super.key,
+    required this.productId,
+    this.orderNo = '',
+  })
     : _kind = _CertificationFormKind.work;
 
   /// 产品 id。
   final String productId;
+
+  /// 订单号：风控埋点（`pirate`）回传，由产品申请流程从产品详情带下来。
+  final String orderNo;
 
   /// 当前页面形态，决定文案与数据源。
   final _CertificationFormKind _kind;
@@ -701,6 +712,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         ReportService.current?.reportRisk(
               productId: widget.productId,
               scene: scene,
+              orderNo: widget.orderNo,
               startedAtSeconds: _sceneStartSeconds,
             ) ??
             Future<void>.value(),

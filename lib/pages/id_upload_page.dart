@@ -63,6 +63,7 @@ class IdUploadPage extends ConsumerStatefulWidget {
     super.key,
     required this.productId,
     required this.cardType,
+    this.orderNo = '',
   });
 
   /// 产品 id。
@@ -70,6 +71,9 @@ class IdUploadPage extends ConsumerStatefulWidget {
 
   /// 选中的证件类型文案。
   final String cardType;
+
+  /// 订单号：风控埋点（`pirate`）回传，由证件选择页透传下来。
+  final String orderNo;
 
   @override
   ConsumerState<IdUploadPage> createState() => _IdUploadPageState();
@@ -227,6 +231,7 @@ class _IdUploadPageState extends ConsumerState<IdUploadPage> {
         arguments: IdConfirmPageArguments(
           productId: widget.productId,
           cardType: widget.cardType,
+          orderNo: widget.orderNo,
           recognition: IdentityRecognition.fromUploadResponse(response.data),
         ),
       );

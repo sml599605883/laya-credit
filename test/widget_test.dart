@@ -33,11 +33,13 @@ import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/data/repositories/auth_repository.dart';
 import 'package:laya_credit/data/repositories/certification_repository.dart';
 import 'package:laya_credit/data/repositories/product_repository.dart';
+import 'package:laya_credit/data/repositories/report_repository.dart';
 import 'package:laya_credit/data/models/product_apply_result.dart';
 import 'package:laya_credit/data/models/product_detail.dart';
 import 'package:laya_credit/theme/app_assets.dart';
 import 'package:laya_credit/theme/app_colors.dart';
 import 'package:laya_credit/theme/app_spacing.dart';
+import 'package:laya_credit/core/report/report.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
@@ -1364,6 +1366,7 @@ void _openIdConfirmPage(
   String productId = '7',
   String cardType = 'PRC',
   IdentityRecognition recognition = _recognition,
+  String orderNo = '',
 }) {
   AppNavigator.push(
     AppRoutes.idConfirm,
@@ -1371,6 +1374,7 @@ void _openIdConfirmPage(
       productId: productId,
       cardType: cardType,
       recognition: recognition,
+      orderNo: orderNo,
     ),
   );
 }
@@ -1391,10 +1395,17 @@ void _openFaceVerificationPage(
 }
 
 /// 直接打开个人信息认证页（走和产品申请流程一样的路由与入参）。
-void _openPersonalInfoPage(WidgetTester tester, {String productId = '7'}) {
+void _openPersonalInfoPage(
+  WidgetTester tester, {
+  String productId = '7',
+  String orderNo = '',
+}) {
   AppNavigator.push(
     AppRoutes.personalInfo,
-    arguments: PersonalInfoPageArguments(productId: productId),
+    arguments: PersonalInfoPageArguments(
+      productId: productId,
+      orderNo: orderNo,
+    ),
   );
 }
 
@@ -1407,10 +1418,17 @@ void _openWorkInfoPage(WidgetTester tester, {String productId = '7'}) {
 }
 
 /// 直接打开紧急联系人认证页（走和产品申请流程一样的路由与入参）。
-void _openEmergencyContactPage(WidgetTester tester, {String productId = '7'}) {
+void _openEmergencyContactPage(
+  WidgetTester tester, {
+  String productId = '7',
+  String orderNo = '',
+}) {
   AppNavigator.push(
     AppRoutes.emergencyContact,
-    arguments: EmergencyContactPageArguments(productId: productId),
+    arguments: EmergencyContactPageArguments(
+      productId: productId,
+      orderNo: orderNo,
+    ),
   );
 }
 
@@ -1577,6 +1595,23 @@ Future<void> _pumpApp(
 
 /// 假装弹出的键盘高度（pt）。
 const _keyboard = 330.0;
+
+/// 把 [ReportService.current] 换成走 [client] 的记录版，用来断言页面埋点请求。
+///
+/// 测试里的 App 根没挂 `ReportLifecycleHost`，`ReportService.current` 默认为空，
+/// 页面的 `ReportService.current?.reportRisk(...)` 不会真的发请求，所以手动注入。
+void _useRecordingReportService(_RecordingClient client) {
+  ReportService.reset();
+  ReportService.current = ReportService(
+    ReportRepository(client),
+    ReportBridge(),
+    store: ReportStore.memory(),
+    encryptKey: '0123456789abcdef',
+    encryptIv: '0123456789abcdef',
+    accessToken: () => 'token',
+  );
+  addTearDown(ReportService.reset);
+}
 
 void main() {
   testWidgets('首页渲染标题与底部导航', (tester) async {
@@ -6287,5 +6322,78 @@ void main() {
     expect(path, ApiEndpoints.orderRetryConfirm);
     expect(params[ApiFields.retryConfirmOrderNo], 'ORD-9');
     expect(response.data, 'https://h5.example.com/order/9');
+  });
+
+  // 风控埋点（`POST /outsulk/mesometral`）的 `pirate` 必须回传产品详情下发的订单号，
+  // 和 App 启动流程一样，用真实的 [ReportService] 走一遍「页面 → 服务 → 仓库」。
+  testWidgets('证件选择页埋点回传产品详情的订单号（pirate）', (tester) async {
+    final reportClient = _RecordingClient();
+    _useRecordingReportService(reportClient);
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(
+        productId: '7',
+        orderNo: 'ORDER-9',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('PRC'));
+    await tester.pumpAndSettle();
+
+    final riskCall = reportClient.calls.firstWhere(
+      (call) => call.$1 == ApiEndpoints.reportRisk,
+    );
+    expect(riskCall.$2[ApiFields.riskOrderNo], 'ORDER-9');
+    expect(riskCall.$2[ApiFields.riskProductId], '7');
+    expect(riskCall.$2[ApiFields.riskSceneType], '2');
+  });
+
+  testWidgets('证件信息确认页埋点回传产品详情的订单号（pirate）', (tester) async {
+    final reportClient = _RecordingClient();
+    _useRecordingReportService(reportClient);
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+    );
+    _openIdConfirmPage(tester, orderNo: 'ORDER-9');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    final riskCall = reportClient.calls.firstWhere(
+      (call) => call.$1 == ApiEndpoints.reportRisk,
+    );
+    expect(riskCall.$2[ApiFields.riskOrderNo], 'ORDER-9');
+    expect(riskCall.$2[ApiFields.riskSceneType], '3');
+  });
+
+  testWidgets('紧急联系人页埋点回传产品详情的订单号（pirate）', (tester) async {
+    final reportClient = _RecordingClient();
+    _useRecordingReportService(reportClient);
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository(),
+      productRepository: _StubProductRepository(),
+    );
+    _openEmergencyContactPage(tester, orderNo: 'ORDER-9');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    final riskCall = reportClient.calls.firstWhere(
+      (call) => call.$1 == ApiEndpoints.reportRisk,
+    );
+    expect(riskCall.$2[ApiFields.riskOrderNo], 'ORDER-9');
+    expect(riskCall.$2[ApiFields.riskSceneType], '7');
   });
 }

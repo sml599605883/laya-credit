@@ -97,6 +97,7 @@ class IdConfirmPage extends ConsumerStatefulWidget {
     required this.productId,
     required this.cardType,
     required this.recognition,
+    this.orderNo = '',
   });
 
   /// 产品 id。
@@ -104,6 +105,9 @@ class IdConfirmPage extends ConsumerStatefulWidget {
 
   /// 选中的证件类型文案（保存接口的 `heterological`）。
   final String cardType;
+
+  /// 订单号：风控埋点（`pirate`）回传。
+  final String orderNo;
 
   /// 后端识别出的身份信息。
   final IdentityRecognition recognition;
@@ -230,6 +234,7 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
         ReportService.current?.reportRisk(
               productId: widget.productId,
               scene: '3',
+              orderNo: widget.orderNo,
               startedAtSeconds: _sceneStartSeconds,
             ) ??
             Future<void>.value(),

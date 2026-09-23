@@ -49,10 +49,17 @@ const _stateHeight = 160.0;
 /// （认证第一项），后端按产品下发两组卡片（响应里的 `magisterial`）；
 /// 没下发（低版本 / 未灰度用户）时走空态。选中证件后的上传页尚未搭建，点击先给占位提示。
 class IdVerificationPage extends ConsumerStatefulWidget {
-  const IdVerificationPage({super.key, required this.productId});
+  const IdVerificationPage({
+    super.key,
+    required this.productId,
+    this.orderNo = '',
+  });
 
   /// 产品 id：证件类型按产品下发，对应接口的 `tartarizing`。
   final String productId;
+
+  /// 订单号：风控埋点（`pirate`）回传，由产品申请流程从产品详情带下来。
+  final String orderNo;
 
   @override
   ConsumerState<IdVerificationPage> createState() => _IdVerificationPageState();
@@ -77,6 +84,7 @@ class _IdVerificationPageState extends ConsumerState<IdVerificationPage> {
       ReportService.current?.reportRisk(
             productId: widget.productId,
             scene: '2',
+            orderNo: widget.orderNo,
             startedAtSeconds: _sceneStartSeconds,
           ) ??
           Future<void>.value(),
@@ -86,6 +94,7 @@ class _IdVerificationPageState extends ConsumerState<IdVerificationPage> {
       arguments: IdUploadPageArguments(
         productId: widget.productId,
         cardType: idType,
+        orderNo: widget.orderNo,
       ),
     );
   }

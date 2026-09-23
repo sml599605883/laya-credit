@@ -6,6 +6,10 @@ import 'personal_info_page.dart';
 /// 底部 Upload），只换数据源与文案：`GET /outsulk/timeling` +
 /// `POST /outsulk/kneeing`、进度 `50%`、导航标题 `Job information`。
 class WorkInformationPage extends PersonalInfoPage {
-  const WorkInformationPage({super.key, required super.productId})
+  const WorkInformationPage({
+    super.key,
+    required super.productId,
+    super.orderNo,
+  })
     : super.work();
 }

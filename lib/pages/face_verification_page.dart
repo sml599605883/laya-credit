@@ -298,7 +298,10 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
 
     AppNavigator.push(
       AppRoutes.idVerification,
-      arguments: IdVerificationPageArguments(productId: widget.productId),
+      arguments: IdVerificationPageArguments(
+        productId: widget.productId,
+        orderNo: widget.orderNo,
+      ),
     );
   }
 

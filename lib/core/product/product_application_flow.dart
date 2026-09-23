@@ -302,7 +302,10 @@ class ProductApplicationFlow {
     if (step.taskType == _taskTypeIdentity) {
       AppNavigator.push(
         AppRoutes.idVerification,
-        arguments: IdVerificationPageArguments(productId: productId),
+        arguments: IdVerificationPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+        ),
       );
       return;
     }
@@ -324,7 +327,10 @@ class ProductApplicationFlow {
     if (step.taskType == _taskTypePersonal) {
       AppNavigator.pushTopLevelCertification(
         AppRoutes.personalInfo,
-        arguments: PersonalInfoPageArguments(productId: productId),
+        arguments: PersonalInfoPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+        ),
       );
       return;
     }
@@ -333,7 +339,10 @@ class ProductApplicationFlow {
     if (step.taskType == _taskTypeWork) {
       AppNavigator.pushTopLevelCertification(
         AppRoutes.workInfo,
-        arguments: WorkInfoPageArguments(productId: productId),
+        arguments: WorkInfoPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+        ),
       );
       return;
     }
@@ -342,7 +351,10 @@ class ProductApplicationFlow {
     if (step.taskType == _taskTypeEmergencyContact) {
       AppNavigator.pushTopLevelCertification(
         AppRoutes.emergencyContact,
-        arguments: EmergencyContactPageArguments(productId: productId),
+        arguments: EmergencyContactPageArguments(
+          productId: productId,
+          orderNo: orderNo,
+        ),
       );
       return;
     }
