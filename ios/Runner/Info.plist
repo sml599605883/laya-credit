@@ -27,9 +27,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Laya Credit uses the camera to photograph your ID and to complete the liveness check during identity verification.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Laya Credit accesses your photo library so you can choose an existing photo of your ID for identity verification.</string>
+	<string>Allow camera so we can shoot your ID and a facial snapshot, then confirm both images show the same person.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Allow location access to support the credit review process and provide relevant location information for assessment.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Allow location access to support the credit review process and provide relevant location information for assessment.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Allow tracking so we can recommend products that match your interests, not random ones.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
