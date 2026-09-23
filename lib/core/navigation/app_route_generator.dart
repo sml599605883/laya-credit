@@ -14,6 +14,7 @@ import '../../pages/mine_page.dart';
 import '../../pages/order_list_page.dart';
 import '../../pages/personal_info_page.dart';
 import '../../pages/progress_page.dart';
+import '../../pages/recredit_page.dart';
 import '../../pages/webview_page.dart';
 import '../../pages/work_information_page.dart';
 import '../../root_tab_page.dart';
@@ -155,6 +156,16 @@ class OrderListPageArguments {
   final OrderFilterStatus status;
 }
 
+/// 等待授信 loading 页入参（蓝湖稿 `04-02 - 等待授信`）。
+///
+/// [productId] 来自准入跳转地址（`ph://laya-credit/ios/IntervesicularSauder
+/// ?productId=xxx`）；授信完成后要用它再走一次准入。
+class RecreditPageArguments {
+  const RecreditPageArguments({required this.productId});
+
+  final String productId;
+}
+
 /// 路由生成器：`MaterialApp.onGenerateRoute` 的唯一入口。
 ///
 /// 每个 case 负责把 `settings.arguments` 转成强类型的页面入参，
@@ -265,6 +276,13 @@ class AppRouteGenerator {
           (_) => OrderListPage(
             initialStatus: orderArgs?.status ?? OrderFilterStatus.all,
           ),
+        );
+
+      case AppRoutes.recredit:
+        final recreditArgs = settings.arguments as RecreditPageArguments?;
+        return _route<void>(
+          settings,
+          (_) => RecreditPage(productId: recreditArgs?.productId ?? ''),
         );
 
       case AppRoutes.webView:

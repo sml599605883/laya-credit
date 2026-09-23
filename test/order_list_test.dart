@@ -9,10 +9,13 @@ import 'package:laya_credit/core/navigation/app_navigator.dart';
 import 'package:laya_credit/core/navigation/app_route_generator.dart';
 import 'package:laya_credit/core/navigation/app_routes.dart';
 import 'package:laya_credit/core/network/api_response.dart';
+import 'package:laya_credit/core/product/recredit_polling_coordinator.dart';
 import 'package:laya_credit/data/models/order_list_data.dart';
 import 'package:laya_credit/data/repositories/order_repository.dart';
 import 'package:laya_credit/pages/order_list_page.dart';
+import 'package:laya_credit/pages/recredit_page.dart';
 import 'package:laya_credit/providers/order_list_provider.dart';
+import 'package:laya_credit/providers/recredit_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 
 OrderListItem _item({
@@ -21,6 +24,7 @@ OrderListItem _item({
   int statusCode = OrderStatusCode.pendingRepay,
   String statusText = 'Outstanding',
   String actionText = 'Repay Now',
+  String cardTarget = '/order/detail?orderId=4',
 }) {
   return OrderListItem(
     orderId: orderId,
@@ -37,7 +41,7 @@ OrderListItem _item({
     dateLabel: 'Due Date',
     dateValue: '29-11-2023',
     overdueDays: 0,
-    cardTarget: '/order/detail?orderId=4',
+    cardTarget: cardTarget,
     actionTarget: '/repayment-detail?orderNo=x&tab=1',
   );
 }
@@ -323,6 +327,52 @@ void main() {
       ]);
 
       expect(find.text('Repay Now'), findsNothing);
+    });
+
+    testWidgets('卡片原生深链目标分发到等待授信页', (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          orderRepositoryProvider.overrideWith(
+            (ref) async => _FakeOrderRepository([
+              [
+                _item(
+                  cardTarget:
+                      'ph://laya-credit/ios/IntervesicularSauder'
+                      '?tartarizing=P-3',
+                ),
+              ],
+            ]),
+          ),
+          recreditPollingCoordinatorProvider.overrideWithValue(
+            RecreditPollingCoordinator(
+              readStatus: () => Completer<bool>().future,
+              currentRoute: () => AppRoutes.recredit,
+              refreshHome: () async {},
+              runAdmission: (_) async {},
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            navigatorKey: AppNavigator.navigatorKey,
+            onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+            home: const OrderListPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump();
+
+      final page = tester.widget<RecreditPage>(find.byType(RecreditPage));
+      expect(page.productId, 'P-3');
     });
   });
 

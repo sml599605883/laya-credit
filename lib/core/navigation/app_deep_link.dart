@@ -108,6 +108,9 @@ class AppDeepLinkParser {
   /// 与订单列表接口的业务字段同名）。
   static const _orderStatusParam = 'butterpaste';
 
+  /// 深链里携带产品 id 的参数名（文档值映射 `product_id` → `tartarizing`）。
+  static const _productIdParam = 'tartarizing';
+
   AppDeepLink parse(String rawTarget) {
     final trimmed = rawTarget.trim();
     final uri = Uri.tryParse(trimmed);
@@ -136,8 +139,11 @@ class AppDeepLinkParser {
     }
 
     final alias = segments.last;
+    // 产品 id 的参数名：文档值映射把 `product_id` 混淆成 `tartarizing`，
+    // 历史链接也有直接叫 `productId` 的，两个都认，取到即用。
     final productId =
         uri.queryParameters['productId'] ??
+        uri.queryParameters[_productIdParam] ??
         uri.queryParameters[AppDeepLinkAlias.admission] ??
         '';
 

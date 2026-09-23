@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../config/api_environment.dart';
 import 'app_deep_link.dart';
 import 'app_route_generator.dart';
+import 'app_route_observer.dart';
 import 'app_routes.dart';
 
 /// 全局导航入口。
@@ -85,6 +86,9 @@ class AppNavigator {
     AppRoutes.emergencyContact,
     AppRoutes.bindCard,
     AppRoutes.loanConfirm,
+    // 等待授信页：授信完成会立刻重走准入，新认证页要把这张 loading 页清掉，
+    // 否则用户返回时会看到已经结束的等待页（对齐 dali_cash 的清理口径）。
+    AppRoutes.recredit,
   };
 
   /// 压栈到顶层认证页，同时清掉返回栈里已有的认证页。
@@ -138,7 +142,7 @@ class AppNavigator {
   /// 避免每个调用点各写一份 switch（漏接页面时各页表现不一致）。
   ///
   /// 这里只处理**页面已存在**的目标：H5 / 首页 / 登录 / 订单列表。
-  /// 产品详情、准入、重新授信、设置等目标的后续动作在各调用点不一样
+  /// 产品详情、准入、设置等目标的后续动作在各调用点不一样
   /// （例如准入流程要接着走认证步骤），所以交给 [onUnhandled]。
   static Future<void> openDeepLink(
     AppDeepLink link, {
@@ -153,9 +157,22 @@ class AppNavigator {
         await toLogin();
       case AppDeepLinkKind.order:
         await openOrderList<void>(status: link.orderStatus);
+      case AppDeepLinkKind.recredit:
+        // 已经在等待授信页时不再压栈：重复下发同一目标只会多叠一张 loading
+        // 页并把轮询重启一遍（对齐 dali_cash `toRecredit` 的忽略口径）。
+        if (appRouteObserver.currentRouteName == AppRoutes.recredit) {
+          return;
+        }
+        // 等待授信页会一直停在栈顶，这里不能 await：准入流程的防连点标记
+        // 要等本次导航返回才释放，await 会把授信完成后的二次准入一起吞掉。
+        unawaited(
+          push<void>(
+            AppRoutes.recredit,
+            arguments: RecreditPageArguments(productId: link.productId),
+          ),
+        );
       case AppDeepLinkKind.productDetail:
       case AppDeepLinkKind.admission:
-      case AppDeepLinkKind.recredit:
       case AppDeepLinkKind.settings:
       case AppDeepLinkKind.unsupported:
         await onUnhandled(link);

@@ -32,6 +32,13 @@ abstract final class ApiEndpoints {
   /// 跟进订单号获取跳转地址（认证完成后进借款确认页）。POST
   static const productPush = '/outsulk/octodentate';
 
+  /// 重新授信（等待授信 loading 页轮询）。GET
+  ///
+  /// 准入接口返回「重新授信」时跳转到 `IntervesicularSauder` 原生页，
+  /// 页面按固定间隔轮询本接口；`connectedly.countercharged` 为 `1` 表示授信完成，
+  /// `2` 表示暂无结果（继续轮询）。文档语义路径 `/v3/product/re-credit`。
+  static const recredit = '/outsulk/phantom';
+
   /// 获取用户身份信息（认证第一项）：证件类型列表。GET
   static const identityInfo = '/outsulk/gaonate';
 

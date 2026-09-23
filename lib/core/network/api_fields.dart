@@ -100,6 +100,19 @@ abstract final class ApiFields {
   static const applyAccessKey = 'closehearted';
   static const applySecretKey = 'scabrousness';
 
+  // ---------- 重新授信（`GET /outsulk/phantom`）----------
+  //
+  // 页面进入后按间隔轮询，直到返回「授信成功」。
+
+  /// 请求里的混淆字段（无业务含义，每次请求随机值）。
+  static const recreditObfuscation = 'asterospondylic';
+
+  /// 授信结果码：`1` 授信成功 / `2` 暂无授信结果（继续轮询）。
+  ///
+  /// 与准入结果的 [applyResultCode] 是**同名不同义**的两个字段
+  /// （准入里 `200` 才是成功），不要互相顶替。
+  static const recreditResultCode = 'countercharged';
+
   // ---------- 产品详情（`/outsulk/inconstruable`）----------
   /// 产品信息对象。
   static const productDetail = 'priapi';

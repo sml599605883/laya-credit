@@ -170,7 +170,11 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     }
   }
 
-  /// 打开后端下发的跳转地址：绝对地址直接进 WebView，相对地址拼 H5 站点根地址。
+  /// 打开后端下发的跳转地址。
+  ///
+  /// 绝对地址直接进 WebView，相对地址拼 H5 站点根地址；剩下的原生深链
+  /// （`ph://laya-credit/ios/<别名>`）交给统一分发器，订单卡片可能直接下发
+  /// 重新授信等待页这类原生目标。
   Future<void> _openTarget(String target) async {
     final value = target.trim();
     if (value.isEmpty) return;
@@ -182,6 +186,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     }
     if (value.startsWith('/')) {
       await AppNavigator.toWebPath<void>(path: value);
+      return;
+    }
+
+    final link = const AppDeepLinkParser().parse(value);
+    if (link.kind != AppDeepLinkKind.unsupported) {
+      await AppNavigator.openDeepLink(
+        link,
+        onUnhandled: (unhandled) =>
+            ToastHelper.showMessage('Order target: ${unhandled.raw}'),
+      );
       return;
     }
     ToastHelper.showMessage('Order target: $value');

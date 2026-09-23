@@ -148,9 +148,10 @@ lib/
 3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
 4. **其余接口未接入**：上报、H5 相关接口尚未落地（订单列表接口已接入，见第 21 条）。
-   「点击申请」链路已接通到准入接口，但下游页面仍缺：准入 / 详情返回的
-   H5 地址需要 WebView、原生 `recredit` 需要重新授信 loading 页。相关分支见
-   `lib/core/product/product_application_flow.dart` 的 TODO(页面)。
+   「点击申请」链路已接通到准入接口，下游页面也已补齐：准入 / 详情返回的 H5 地址
+   走通用 WebView，原生 `recredit`（`IntervesicularSauder`）走重新授信 loading 页
+   （见第 23 条）。`product_application_flow.dart` 里只剩设置页 `MilkwoodSporogenous`
+   与准入页 `Isaria` 两个占位分支。
    认证项第一项（身份信息 `GET /outsulk/gaonate`）已接入证件选择页（见第 12 条），
    第二项（证件上传页）已按设计稿落地并接上上传接口（见第 13 条），
    第三项（证件信息确认页）也已落地并接上保存接口（见第 14 条），
@@ -778,6 +779,44 @@ lib/
       用假 `AppRepository` 挂到 `appRepositoryProvider`，页面跑真实 `homeDataProvider`）
       与 `test/widget_test.dart` 的「切到进度 Tab 会刷新首页数据源」
       「进度卡 Try again 调原卡重试确认订单并打开返回的订单详情地址」。
+
+23. **重新授信 loading 页已按蓝湖稿 `04-02 - 等待授信` 还原**
+    （路由 `/recredit`，深链别名 `IntervesicularSauder`，`AppDeepLinkKind.recredit`）。
+    - **入口**：准入接口 `POST /outsulk/weaken` 返回 `countercharged == 302` +
+      `superidealness = ph://laya-credit/ios/IntervesicularSauder?tartarizing=xxx` +
+      `liquidators == 0`（原生）时，`AppNavigator.openDeepLink` 直接压栈等待授信页；
+      产品 id 从地址的 `tartarizing`（文档值映射 `product_id`）或 `productId` 参数带下去，
+      授信完成后要用它再走一次准入。栈顶已经是 `/recredit` 时重复下发同一目标直接忽略，
+      不会多叠一张 loading 页；订单列表卡片的原生深链目标也经同一个分发器落到这里。
+    - **接口**：页面进入即调 `GET /outsulk/phantom`（`ApiEndpoints.recredit`，文档语义
+      `/v3/product/re-credit`），只带随机混淆字段 `asterospondylic`；响应
+      `connectedly.countercharged` 为 `1` 表示授信成功、`2` 表示暂无结果。
+      **注意 `countercharged` 与准入结果码同名不同义**（准入里 `200` 才是成功），
+      所以单独登记了 `ApiFields.recreditResultCode`，不要与 `applyResultCode` 互相顶替。
+    - **轮询节奏**（对齐 dali_cash）：`RecreditPollingCoordinator` 进入即请求一次，
+      未出结果 / 请求异常都等 10 秒再试；单次请求串行，不会并发打接口。
+      页面同时跑一个 1~3 秒一步、封顶 99% 的本地进度动画 —— 真正的 100% 只由接口决定。
+    - **完成后的去向**由当前路由决定：还停在 `/recredit` 就用 `productId` 重跑
+      `ProductApplicationFlow.applyProduct`（新认证页会把等待页从栈里清掉，
+      `AppRoutes.recredit` 已加入 `AppNavigator._certificationRoutes`）；
+      用户已退回底部 Tab 容器（`/`）则只刷新首页数据。用递增的 `_generation`
+      做守卫，`stop()` 或二次 `start()` 之后晚到的响应不会再触发导航。
+      `AppRouteObserver` 新增 `currentRouteName` 供这里判断栈顶路由。
+    - **布局**（尺寸全部取自设计稿 CSS）：浅绿底 `AppColors.surfaceMint`；
+      内容区上边距 290pt / 下边距 313pt；插画 120x102（用户提供的 `位图@3x.png`
+      → `assets/recredit/recredit_illustration.png`）；两行文案宽 279、Helvetica 14 / 行高 18，
+      高亮「30 seconds」用 `AppColors.recreditAccentText`；进度槽 287x12
+      （`矩形@3x.png` → `assets/recredit/recredit_progress_track.png`），
+      填充条内缩 2pt、高 8pt、圆角 4pt，颜色与百分比文字同为 `#131313`。
+    - **偏差说明**：设计稿插画宽 138pt，而提供的切图是 360x306 @3x（等比 120x102），
+      这里按切图实际比例渲染，高度 102pt 与设计稿一致。
+    - **已知遗留**：重新授信页与「授信完成」两个节点都还没接 Firebase 埋点；
+      接口返回的 `norseled`（如后端给文案）暂不展示，页面文案固定走设计稿。
+    - 相关测试见 `test/recredit_test.dart`（结果码解析、轮询成功 / 回首页刷新 / 停在别页不打扰 /
+      异常重试 / `stop` 作废 / 空 productId 不启动、页面渲染与进度动画、
+      深链路由带 productId（`tartarizing` / `productId` 两种参数名）、
+      已在等待页时重复下发不叠页、路由观察者记录栈顶），
+      以及 `test/order_list_test.dart` 的「卡片原生深链目标分发到等待授信页」。
 
 ## 常用命令
 

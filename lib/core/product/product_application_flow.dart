@@ -337,15 +337,13 @@ class ProductApplicationFlow {
           case AppDeepLinkKind.settings:
             // TODO(页面): 设置页尚未搭建。
             ToastHelper.showMessage('Settings page is not available yet');
-          case AppDeepLinkKind.recredit:
-            // TODO(页面): 重新授信 loading 页尚未搭建。
-            ToastHelper.showMessage('Credit review page is not available yet');
           case AppDeepLinkKind.unsupported:
             ToastHelper.showError('Invalid link');
           case AppDeepLinkKind.webView:
           case AppDeepLinkKind.home:
           case AppDeepLinkKind.login:
           case AppDeepLinkKind.order:
+          case AppDeepLinkKind.recredit:
             // 已由 AppNavigator.openDeepLink 处理，不会回调到这里。
             break;
         }

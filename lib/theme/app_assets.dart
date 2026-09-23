@@ -184,4 +184,15 @@ abstract final class AppAssets {
       'assets/loan_confirm/loan_confirm_radio_unchecked.png';
   static const loanConfirmRadioChecked =
       'assets/loan_confirm/loan_confirm_radio_checked.png';
+
+  // 重新授信 loading 页（蓝湖稿 `04-02 - 等待授信`，深链别名
+  /// `IntervesicularSauder`，路由 `/recredit`）
+  /// 中部插画（设计稿 `box_1`，用户提供的 `位图@3x.png`，360x306 = 120x102 @3x）。
+  static const recreditIllustration =
+      'assets/recredit/recredit_illustration.png';
+
+  /// 进度槽底图（设计稿 `image_1` 287x12，用户提供的 `矩形@3x.png`，
+  /// 861x36 = 287x12 @3x）：白色胶囊，填充条由代码按进度叠加。
+  static const recreditProgressTrack =
+      'assets/recredit/recredit_progress_track.png';
 }

@@ -5,6 +5,7 @@ import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
 import '../models/product_apply_result.dart';
 import '../models/product_detail.dart';
+import '../models/recredit_result.dart';
 
 /// 产品申请相关接口：准入、产品详情、借款确认跳转。
 class ProductRepository {
@@ -63,6 +64,20 @@ class ProductRepository {
               basicInfo: ProductBasicInfo(),
               nextStep: ProductNextStep(),
             ),
+    );
+  }
+
+  /// 重新授信轮询（等待授信 loading 页，`GET /outsulk/phantom`）。
+  ///
+  /// 只带一个随机混淆字段；授信结果由调用方按 [RecreditResult.isGranted]
+  /// 判断是否继续轮询，页面不直接读混淆字段。
+  Future<ApiResponse<RecreditResult>> recredit() {
+    return _client.get<RecreditResult>(
+      ApiEndpoints.recredit,
+      params: {ApiFields.recreditObfuscation: ObfuscationHelper.randomParam()},
+      parse: (data) => data is Map
+          ? RecreditResult.fromJson(data.cast<String, dynamic>())
+          : const RecreditResult(resultCode: 0),
     );
   }
 

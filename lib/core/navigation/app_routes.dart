@@ -45,6 +45,9 @@ abstract final class AppRoutes {
   /// 借款确认页（认证全部完成后选收款账户）。
   static const loanConfirm = '/loan-confirm';
 
+  /// 等待授信 loading 页（准入返回 `IntervesicularSauder` 时进入）。
+  static const recredit = '/recredit';
+
   /// 订单列表页（个人中心订单入口）。
   static const orderList = '/order-list';
 
@@ -67,6 +70,7 @@ abstract final class AppRoutes {
     emergencyContact,
     bindCard,
     loanConfirm,
+    recredit,
     orderList,
     webView,
   ];

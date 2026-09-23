@@ -390,6 +390,21 @@ abstract final class AppColors {
   /// 进度卡小表字段名文字色（设计稿 `text_10` rgba(152,161,154,1)）。
   static const progressMetricLabel = Color(0xFF98A19A);
 
+  // ---------- 重新授信 loading 页（蓝湖稿 `04-02 - 等待授信`） ----------
+  //
+  // 页面底色直接用 [surfaceMint]（设计稿 `page` 与进度列表页同为
+  // rgba(236,250,220,1)），这里只补文字与进度条的颜色。
+
+  /// 提示文案主色（设计稿 `text_1` / `text_4` rgba(24,28,23,1)）。
+  static const recreditMessageText = Color(0xFF181C17);
+
+  /// 文案里的高亮片段（设计稿 `text_3`「30 seconds」rgba(254,41,92,1)）。
+  static const recreditAccentText = Color(0xFFFE295C);
+
+  /// 进度槽内已完成的填充条与右下角百分比文字
+  /// （设计稿实测取色：填充条与 `text_5` 均为 rgba(19,19,19,1)）。
+  static const recreditProgressFill = Color(0xFF131313);
+
   static const white = Color(0xFFFFFFFF);
   static const black = Color(0xFF000000);
 }
