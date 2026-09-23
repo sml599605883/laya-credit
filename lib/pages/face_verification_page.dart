@@ -5,11 +5,13 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/certification/certification_retention_guard.dart';
 import '../core/media/identity_photo_permission.dart';
 import '../core/navigation/navigation.dart';
 import '../core/report/report.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
+import '../providers/certification_retention_provider.dart';
 import '../providers/liveness_provider.dart';
 import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
@@ -78,6 +80,19 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
   /// 风控埋点场景 4（人脸）的开始时间：点击主按钮时记录。
   int _sceneStartSeconds = 0;
 
+  /// 返回走挽留弹窗（蓝湖稿 `03-01 - 身份认证-活体挽留弹框`）：调接口拿挽留素材，
+  /// 只有用户在弹窗里选 `Exit` 才真正退出；素材缺失时直接返回。
+  Future<void> _handleBack() async {
+    final guard = await ref.read(certificationRetentionGuardProvider.future);
+    if (!mounted) return;
+    await guard.handleBack(
+      context: context,
+      productId: widget.productId,
+      type: CertificationRetentionType.face,
+      onExit: AppNavigator.pop,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
@@ -90,6 +105,7 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
     final prompt = cachedPrompt.isEmpty ? _fallbackPrompt : cachedPrompt;
 
     return CertificationScaffold(
+      onBack: _handleBack,
       navTitle: _navTitle,
       prompt: prompt,
       promptGap: _promptGap,

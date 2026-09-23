@@ -478,6 +478,35 @@ abstract final class ApiFields {
   /// 绑卡认证页底部提示文案（文档语义 `bind_card_bottom`）。
   static const detailTipBindCardBottom = 'revision';
 
+  // ---------- 认证流程：返回挽留弹窗（`/outsulk/curitiba`）----------
+  //
+  // 接口文档「获取挽留弹窗」：POST 带上弹窗类型 / 产品 id / 混淆字段，
+  // `connectedly.lapsable` 返回一张整卡图片 + 两个按钮文案。
+  // 注意本接口的产品 id 混淆名是 `podostemon`，与认证各接口的
+  // [productId]（`tartarizing`）不是同一个，不要混用。
+
+  /// 弹窗类型（文档语义 `type`）：`0` 身份认证 / `1` 人脸 / `2` 个人信息 /
+  /// `3` 工作 / `4` 紧急联系人 / `5` 确认用款。
+  static const retentionType = 'lazy';
+
+  /// 产品 id（文档语义 `product_id`）。
+  static const retentionProductId = 'podostemon';
+
+  /// 该接口的混淆字段（无业务含义，每次请求随机值）。
+  static const obfuscateRetention = 'baglike';
+
+  /// 弹窗内容节点（文档语义 `data`）。
+  static const retentionData = 'lapsable';
+
+  /// 挽留弹窗整卡图片地址（文档语义 `image`）：插画 / 标题 / 正文 / 胶囊底都在这张图里。
+  static const retentionImage = 'superidealness';
+
+  /// 主按钮（胶囊）文案（文档语义 `continue_text`）。
+  static const retentionContinueText = 'limbos';
+
+  /// 次要行动文案（文档语义 `exit_text`），在整卡下方。
+  static const retentionExitText = 'leonor';
+
   // ---------- 各接口的混淆字段（无业务含义，每次请求随机值）----------
   static const obfuscateSendSms = 'tectites';
   static const obfuscateLogin1 = 'interoscillate';

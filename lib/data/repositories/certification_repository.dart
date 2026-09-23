@@ -11,6 +11,7 @@ import '../models/loan_confirm_data.dart';
 import '../models/face_token_result.dart';
 import '../models/id_verification_data.dart';
 import '../models/bind_card_data.dart';
+import '../models/certification_retention.dart';
 import '../models/personal_info_data.dart';
 
 /// 认证项相关接口（证件 / 活体 / 个人信息 / 工作 / 紧急联系人 / 绑卡）。
@@ -373,6 +374,27 @@ class CertificationRepository {
       },
       parse: (data) =>
           data is Map ? _textOf(data[ApiFields.changeBankCardRedirectUrl]) : '',
+    );
+  }
+
+  /// 获取挽留弹窗素材（认证流程各步返回时调用，`POST /outsulk/curitiba`）。
+  ///
+  /// [type] 取 `CertificationRetentionType`，后端按产品与认证项下发整卡图片
+  /// 与两个按钮文案；素材缺失时 [CertificationRetention.hasImage] 为 false。
+  Future<ApiResponse<CertificationRetention>> getRetentionPopup({
+    required String productId,
+    required String type,
+  }) {
+    return _client.post<CertificationRetention>(
+      ApiEndpoints.retentionPopup,
+      params: {
+        ApiFields.retentionType: type,
+        ApiFields.retentionProductId: productId,
+        ApiFields.obfuscateRetention: ObfuscationHelper.randomParam(),
+      },
+      parse: (data) => data is Map
+          ? CertificationRetention.fromJson(data.cast<String, dynamic>())
+          : const CertificationRetention(),
     );
   }
 

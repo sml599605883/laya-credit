@@ -8,6 +8,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/certification/certification_retention_guard.dart';
 import '../core/client/client_bridge.dart';
 import '../core/navigation/app_deep_link.dart';
 import '../core/navigation/navigation.dart';
@@ -15,6 +16,7 @@ import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../core/webview/webview_action_coordinator.dart';
 import '../core/webview/webview_contract.dart';
+import '../providers/certification_retention_provider.dart';
 import '../providers/network_provider.dart';
 import '../providers/repository_provider.dart';
 import '../theme/theme.dart';
@@ -481,10 +483,23 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
           currentUrl;
     }
 
-    // TODO(页面): 保留确认弹窗尚未搭建，命中时先打日志、继续正常返回。
+    // 待确认用款 H5 页（地址带 `productId`）返回时先走挽留弹窗（接口 `type=5`）：
+    // 只有用户在弹窗里选 `Exit` 才继续原来的返回动作，否则留在当前页。
     final confirmProductId = webViewConfirmProductId(currentUrl);
     if (confirmProductId.isNotEmpty) {
-      debugPrint('[WebView] 命中返回保留确认(productId=$confirmProductId)，暂不拦截');
+      final guard = await ref.read(certificationRetentionGuardProvider.future);
+      if (!mounted) return;
+      await guard.handleBack(
+        context: context,
+        productId: confirmProductId,
+        type: CertificationRetentionType.loanConfirm,
+        onExit: () {
+          unawaited(
+            _completeBack(controller: controller, canGoBack: canGoBack),
+          );
+        },
+      );
+      return;
     }
     await _completeBack(controller: controller, canGoBack: canGoBack);
   }

@@ -4,10 +4,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/certification/certification_retention_guard.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/report/report.dart';
 import '../data/models/id_verification_data.dart';
+import '../providers/certification_retention_provider.dart';
 import '../providers/id_verification_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/widgets.dart';
@@ -99,6 +101,19 @@ class _IdVerificationPageState extends ConsumerState<IdVerificationPage> {
     );
   }
 
+  /// 返回走挽留弹窗（蓝湖稿 `03-01 - 身份认证-挽留弹窗`）：调接口拿挽留素材，
+  /// 只有用户在弹窗里选 `Exit` 才真正退出；素材缺失时直接返回。
+  Future<void> _handleBack() async {
+    final guard = await ref.read(certificationRetentionGuardProvider.future);
+    if (!mounted) return;
+    await guard.handleBack(
+      context: context,
+      productId: widget.productId,
+      type: CertificationRetentionType.identity,
+      onExit: AppNavigator.pop,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final productId = widget.productId;
@@ -106,6 +121,7 @@ class _IdVerificationPageState extends ConsumerState<IdVerificationPage> {
     final idVerification = ref.watch(idVerificationProvider(productId));
 
     return CertificationScaffold(
+      onBack: _handleBack,
       navTitle: _navTitle,
       // 这张稿的头图自带「ID Verification」标题，页面不再叠引导段落。
       headerAsset: AppAssets.idVerifyHeader,

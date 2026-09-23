@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/certification/certification_retention_guard.dart';
+import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/personal_info_data.dart';
+import '../providers/certification_retention_provider.dart';
 import '../providers/personal_info_provider.dart';
 import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
@@ -211,6 +214,25 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     _CertificationFormKind.work => workInfoProvider(widget.productId),
   };
 
+  /// 挽留弹窗类型：个人信息是认证第二项、工作信息是认证第三项。
+  String get _retentionType => switch (widget._kind) {
+    _CertificationFormKind.personal => CertificationRetentionType.personal,
+    _CertificationFormKind.work => CertificationRetentionType.work,
+  };
+
+  /// 返回走挽留弹窗（蓝湖稿 `03-02 - 个人信息-挽留弹框` /
+  /// `03-03 - 工作信息-挽留弹框`）：只有用户在弹窗里选 `Exit` 才真正退出。
+  Future<void> _handleBack() async {
+    final guard = await ref.read(certificationRetentionGuardProvider.future);
+    if (!mounted) return;
+    await guard.handleBack(
+      context: context,
+      productId: widget.productId,
+      type: _retentionType,
+      onExit: AppNavigator.pop,
+    );
+  }
+
   /// 提交中：挡住 `Upload` 按钮，避免同一份资料被提交两次。
   bool _isSubmitting = false;
 
@@ -261,6 +283,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     info.whenData(_ensureForm);
 
     return CertificationScaffold(
+      onBack: _handleBack,
       navTitle: _navTitle,
       prompt: prompt,
       promptGap: _promptGap,

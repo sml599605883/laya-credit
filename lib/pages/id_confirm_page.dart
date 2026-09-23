@@ -146,6 +146,10 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
     super.dispose();
   }
 
+  /// 证件确认页不允许返回上一页：顶部返回按钮已隐藏，这里再把系统返回手势
+  /// 拦成空实现，让用户只能点 `Upload` 继续。
+  void _blockBack() {}
+
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
@@ -158,6 +162,10 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
     final prompt = cachedPrompt.isEmpty ? _fallbackPrompt : cachedPrompt;
 
     return CertificationScaffold(
+      // 证件确认页按需求不允许返回上一页：不展示返回按钮，系统返回手势也拦下，
+      // 用户只能改完资料点 `Upload` 继续下一步（对齐 dali 的 `canPop: false`）。
+      onBack: _blockBack,
+      showBackButton: false,
       navTitle: _navTitle,
       prompt: prompt,
       promptGap: _promptGap,

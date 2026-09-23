@@ -3,10 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/certification/certification_retention_guard.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/loan_confirm_data.dart';
+import '../providers/certification_retention_provider.dart';
 import '../providers/loan_confirm_provider.dart';
 import '../providers/repository_provider.dart';
 import '../theme/theme.dart';
@@ -72,6 +74,19 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
   /// 提交换绑进行中：挡住 `Upload`，避免同一笔订单提交两次。
   bool _isSubmitting = false;
 
+  /// 返回走挽留弹窗（蓝湖稿 `04-01 - 确认借款-挽留弹窗`，接口 `type=5`）：
+  /// 只有用户在弹窗里选 `Exit` 才真正退出；素材缺失时直接返回。
+  Future<void> _handleBack() async {
+    final guard = await ref.read(certificationRetentionGuardProvider.future);
+    if (!mounted) return;
+    await guard.handleBack(
+      context: context,
+      productId: widget.productId,
+      type: CertificationRetentionType.loanConfirm,
+      onExit: AppNavigator.pop,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
@@ -82,19 +97,26 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
       _scheduleAutoBindCard(data);
     });
 
-    return Scaffold(
-      backgroundColor: AppColors.surfaceMint,
-      body: Column(
-        children: [
-          BackNavBar(
-            layout: layout,
-            title: _navTitle,
-            onBack: AppNavigator.pop,
-          ),
-          Expanded(child: _buildBody(layout, info)),
-        ],
+    return PopScope(
+      // 借款确认页也有返回挽留：系统返回手势与顶部返回按钮走同一个入口。
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surfaceMint,
+        body: Column(
+          children: [
+            BackNavBar(
+              layout: layout,
+              title: _navTitle,
+              onBack: _handleBack,
+            ),
+            Expanded(child: _buildBody(layout, info)),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomBar(layout, info),
       ),
-      bottomNavigationBar: _buildBottomBar(layout, info),
     );
   }
 

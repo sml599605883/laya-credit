@@ -14,6 +14,7 @@ import 'package:laya_credit/core/network/api_protocol.dart';
 import 'package:laya_credit/core/network/api_response.dart';
 import 'package:laya_credit/core/network/common_params.dart';
 import 'package:laya_credit/core/permissions/permission_coordinator.dart';
+import 'package:laya_credit/core/certification/certification_retention_guard.dart';
 import 'package:laya_credit/core/product/product_application_flow.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
@@ -21,6 +22,7 @@ import 'package:laya_credit/core/webview/webview_action_coordinator.dart';
 import 'package:laya_credit/core/webview/webview_contract.dart';
 import 'package:laya_credit/data/models/face_token_result.dart';
 import 'package:laya_credit/data/models/bind_card_data.dart';
+import 'package:laya_credit/data/models/certification_retention.dart';
 import 'package:laya_credit/data/models/emergency_contact_data.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/models/id_verification_data.dart';
@@ -55,6 +57,7 @@ import 'package:laya_credit/pages/loan_confirm_page.dart';
 import 'package:laya_credit/pages/personal_info_page.dart';
 import 'package:laya_credit/pages/webview_page.dart';
 import 'package:laya_credit/pages/work_information_page.dart';
+import 'package:laya_credit/providers/certification_retention_provider.dart';
 import 'package:laya_credit/providers/home_provider.dart';
 import 'package:laya_credit/providers/liveness_provider.dart';
 import 'package:laya_credit/providers/media_provider.dart';
@@ -230,6 +233,32 @@ class _StubCertificationRepository extends CertificationRepository {
     if (delay case final wait?) await Future<void>.delayed(wait);
     if (failure case final error?) throw error;
     return ApiResponse(code: 0, message: 'success', data: data ?? _defaultData);
+  }
+
+  /// 挽留弹窗接口的返回：默认没有素材（直接放行返回），
+  /// 需要验证挽留弹窗的用例再传 [retentionImageUrl] 等素材。
+  String retentionImageUrl = '';
+  String retentionContinueText = '';
+  String retentionExitText = '';
+
+  /// 记录每次挽留弹窗请求：(产品 id, 类型)。
+  final List<(String, String)> retentionCalls = [];
+
+  @override
+  Future<ApiResponse<CertificationRetention>> getRetentionPopup({
+    required String productId,
+    required String type,
+  }) async {
+    retentionCalls.add((productId, type));
+    return ApiResponse(
+      code: 0,
+      message: 'success',
+      data: CertificationRetention(
+        imageUrl: retentionImageUrl,
+        continueText: retentionContinueText,
+        exitText: retentionExitText,
+      ),
+    );
   }
 
   /// 记录每次证件上传：(文件路径, 卡类型, 来源)。
@@ -1417,6 +1446,30 @@ void _openWorkInfoPage(WidgetTester tester, {String productId = '7'}) {
   );
 }
 
+/// 页面级用例用的挽留拦截器：全局 Loading 换成空实现。
+///
+/// BotToast 的 Loading 是全局单例，用例之间会互相影响（上一个用例的插入动画
+/// 会让下一个用例的 `pumpAndSettle` 等不到静止帧），所以这里点掉它。
+CertificationRetentionGuard _noopLoadingGuard(
+  CertificationRepository repository,
+) {
+  return CertificationRetentionGuard(
+    repository: repository,
+    showLoading: () {},
+    hideLoading: () {},
+  );
+}
+
+/// 点顶部导航行的返回图标（热区 40x40，点图标本身即可命中）。
+Future<void> _tapNavBarBack(WidgetTester tester) {
+  return tester.tap(
+    find.descendant(
+      of: find.byType(BackNavBar),
+      matching: _assetImage(AppAssets.back),
+    ),
+  );
+}
+
 /// 直接打开紧急联系人认证页（走和产品申请流程一样的路由与入参）。
 void _openEmergencyContactPage(
   WidgetTester tester, {
@@ -1533,6 +1586,7 @@ Future<void> _pumpApp(
   AuthRepository? authRepository,
   ProductRepository? productRepository,
   CertificationRepository? certificationRepository,
+  CertificationRetentionGuard? certificationRetentionGuard,
   IdentityPhotoService? identityPhotoService,
   LivenessGateway? livenessGateway,
   Future<void> Function(ProviderContainer container)? setUp,
@@ -1567,6 +1621,13 @@ Future<void> _pumpApp(
       if (certificationRepository != null)
         certificationRepositoryProvider.overrideWith(
           (ref) async => certificationRepository,
+        ),
+      // 挽留拦截器里的全局 Loading 是 BotToast 的全局单例，用例之间会互相
+      // 影响（上一个用例的插入动画会让下一个用例的 `pumpAndSettle` 等不到静止帧），
+      // 所以页面级用例直接注入一个空 Loading 的拦截器。
+      if (certificationRetentionGuard != null)
+        certificationRetentionGuardProvider.overrideWith(
+          (ref) async => certificationRetentionGuard,
         ),
       if (identityPhotoService != null)
         identityPhotoServiceProvider.overrideWithValue(identityPhotoService),
@@ -3337,14 +3398,138 @@ void main() {
     expect(find.byType(IdVerificationPage), findsOneWidget);
   });
 
+  testWidgets('证件选择页返回命中身份认证挽留弹窗，Continue 留在当前页', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..retentionImageUrl = 'https://cdn.example/retention.png'
+      ..retentionContinueText = 'Track Now'
+      ..retentionExitText = 'Exit';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      certificationRetentionGuard: _noopLoadingGuard(certificationRepository),
+    );
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
+    await tester.pumpAndSettle();
+
+    await _tapNavBarBack(tester);
+    await tester.pumpAndSettle();
+
+    // 证件选择页按接口 `type=0` 拉挽留素材，按钮文案用后端下发的，不在客户端写死。
+    expect(certificationRepository.retentionCalls, [('7', '0')]);
+    expect(
+      find.byKey(const Key('certification-retention-card')),
+      findsOneWidget,
+    );
+    expect(find.text('Track Now'), findsOneWidget);
+    expect(find.text('Exit'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('certification-retention-stay')));
+    await tester.pumpAndSettle();
+
+    // 「留下」只是关掉弹窗，页面不动。
+    expect(find.byType(IdVerificationPage), findsOneWidget);
+    expect(
+      find.byKey(const Key('certification-retention-card')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('证件选择页挽留弹窗点 Exit 才真正返回', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..retentionImageUrl = 'https://cdn.example/retention.png';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      certificationRetentionGuard: _noopLoadingGuard(certificationRepository),
+    );
+    AppNavigator.push(
+      AppRoutes.idVerification,
+      arguments: const IdVerificationPageArguments(productId: '7'),
+    );
+    await tester.pumpAndSettle();
+
+    await _tapNavBarBack(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('certification-retention-exit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IdVerificationPage), findsNothing);
+  });
+
+  testWidgets('个人信息页返回用挽留类型 2', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      certificationRetentionGuard: _noopLoadingGuard(certificationRepository),
+    );
+    _openPersonalInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await _tapNavBarBack(tester);
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.retentionCalls, [('7', '2')]);
+    // 没有素材时直接返回，不弹空壳弹窗。
+    expect(certificationRepository.personalInfoCalls, isNotEmpty);
+    expect(
+      find.byKey(const Key('certification-retention-card')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('工作信息页返回用挽留类型 3', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      certificationRetentionGuard: _noopLoadingGuard(certificationRepository),
+    );
+    _openWorkInfoPage(tester);
+    await tester.pumpAndSettle();
+
+    await _tapNavBarBack(tester);
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.retentionCalls, [('7', '3')]);
+  });
+
+  testWidgets('借款确认页返回用挽留类型 5', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      certificationRetentionGuard: _noopLoadingGuard(certificationRepository),
+    );
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(productId: '7', orderNo: 'ORD-1'),
+    );
+    await tester.pumpAndSettle();
+
+    await _tapNavBarBack(tester);
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.retentionCalls, [('7', '5')]);
+  });
+
   testWidgets('证件信息确认页按蓝湖稿 03-01 渲染证件照、三行识别结果与 Upload 按钮', (tester) async {
     await _pumpApp(tester, repository: _StubAppRepository());
     _openIdConfirmPage(tester);
     await tester.pumpAndSettle();
 
-    // 头图 / 返回按钮 / 证件照 / 按钮底图都是设计稿切图，不要在代码里重画。
+    // 头图 / 证件照 / 按钮底图都是设计稿切图，不要在代码里重画。
+    // 确认页按需求不允许返回上一页，所以没有返回按钮。
     expect(_assetImage(AppAssets.idVerifyHeaderBlank), findsOneWidget);
-    expect(_assetImage(AppAssets.back), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsNothing);
     expect(_assetImage(AppAssets.idVerifyUploadButton), findsOneWidget);
     expect(find.text('ID Verification'), findsOneWidget);
 
@@ -3405,6 +3590,21 @@ void main() {
           idCardRect.bottom,
       closeTo(308 * _designScale, 0.5),
     );
+  });
+
+  testWidgets('证件信息确认页不允许返回上一页（无返回按钮、系统返回也拦下）', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    _openIdConfirmPage(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IdConfirmPage), findsOneWidget);
+    expect(_assetImage(AppAssets.back), findsNothing);
+
+    // 系统返回手势（Android 物理返回 / iOS 侧滑）同样不能把页面弹掉。
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(IdConfirmPage), findsOneWidget);
   });
 
   testWidgets('证件信息确认页引导文案优先用产品详情下发的 overwhelming.bocking', (tester) async {

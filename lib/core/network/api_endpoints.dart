@@ -78,6 +78,13 @@ abstract final class ApiEndpoints {
   /// 提交绑卡（认证第五项）。POST
   static const submitBindCard = '/outsulk/superidealness';
 
+  /// 获取挽留弹窗（认证流程各步返回时的挽留素材）。POST
+  ///
+  /// 入参：弹窗类型 `lazy`（0 身份认证 / 1 人脸 / 2 个人信息 / 3 工作 /
+  /// 4 紧急联系人 / 5 确认用款）、产品 id、混淆字段；
+  /// 返回整卡图片与两个按钮文案（见 [ApiFields.retentionImage] 等）。
+  static const retentionPopup = '/outsulk/curitiba';
+
   /// 用户账户列表（借款确认页的可选收款账户）。POST
   ///
   /// 返回按打款方式分组的账户（Bank / E-wallet / Cash Pickup）。

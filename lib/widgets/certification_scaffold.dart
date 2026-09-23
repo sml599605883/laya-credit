@@ -34,6 +34,8 @@ class CertificationScaffold extends StatelessWidget {
     this.dismissKeyboardOnTap = false,
     this.dismissKeyboardOnDrag = false,
     this.bottomNavigationBar,
+    this.onBack,
+    this.showBackButton = true,
     super.key,
   });
 
@@ -68,6 +70,19 @@ class CertificationScaffold extends StatelessWidget {
 
   /// 页面底部固定操作条（如个人信息页的 `Upload` 条）。
   final Widget? bottomNavigationBar;
+
+  /// 返回入口：顶部返回按钮与**系统返回手势**都走它。
+  ///
+  /// 默认直接 `pop`（保持 iOS 侧滑返回）。认证流程各页传自己的拦截
+  /// （`CertificationRetentionGuard.handleBack`）来实现「返回挽留」，
+  /// 此时系统侧滑手势会被一并拦下，否则用户侧滑一下就绕过了挽留。
+  ///
+  /// 证件确认页按需求不允许返回上一页：不提供返回按钮（[showBackButton] =
+  /// false），并传一个空实现把系统返回手势也一起拦下。
+  final VoidCallback? onBack;
+
+  /// 是否展示左上角返回按钮（默认展示）。为 false 时只有居中标题。
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -135,12 +150,13 @@ class CertificationScaffold extends StatelessWidget {
         BackNavBar(
           layout: layout,
           title: navTitle,
-          onBack: () => AppNavigator.pop(),
+          onBack: onBack ?? AppNavigator.pop,
+          showBackButton: showBackButton,
         ),
       ],
     );
 
-    return Scaffold(
+    final scaffold = Scaffold(
       // 设计稿 `page` 底色 `rgba(245,245,245)`。
       backgroundColor: AppColors.idVerifyBackground,
       body: dismissKeyboardOnTap
@@ -152,6 +168,18 @@ class CertificationScaffold extends StatelessWidget {
             )
           : body,
       bottomNavigationBar: bottomNavigationBar,
+    );
+
+    // 只有配了 [onBack] 的页面才拦系统返回；拦截后真实返回由 [onBack] 决定
+    // （拆解到挽留弹窗时先关弹窗、再 `pop`，两步都走同一个 Navigator）。
+    final interceptBack = onBack;
+    if (interceptBack == null) return scaffold;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) interceptBack();
+      },
+      child: scaffold,
     );
   }
 }

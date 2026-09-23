@@ -5,11 +5,14 @@ import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart
 import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/certification/certification_retention_guard.dart';
+import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/emergency_contact_data.dart';
 import '../data/models/personal_info_data.dart';
+import '../providers/certification_retention_provider.dart';
 import '../providers/emergency_contact_provider.dart';
 import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
@@ -175,6 +178,19 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
   /// 页面正在编辑的联系人（姓名 / 手机号 / 关系都是本地可变状态）。
   List<_ContactEntry> _contacts = const [];
 
+  /// 返回走挽留弹窗（蓝湖稿 `03-04 - 联系人信息-挽留弹框`）：调接口拿挽留素材，
+  /// 只有用户在弹窗里选 `Exit` 才真正退出；素材缺失时直接返回。
+  Future<void> _handleBack() async {
+    final guard = await ref.read(certificationRetentionGuardProvider.future);
+    if (!mounted) return;
+    await guard.handleBack(
+      context: context,
+      productId: widget.productId,
+      type: CertificationRetentionType.emergencyContact,
+      onExit: AppNavigator.pop,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
@@ -193,6 +209,7 @@ class _EmergencyContactPageState extends ConsumerState<EmergencyContactPage> {
     data.whenData(_ensureContacts);
 
     return CertificationScaffold(
+      onBack: _handleBack,
       navTitle: _navTitle,
       prompt: prompt,
       promptGap: _promptGap,

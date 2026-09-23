@@ -12,12 +12,16 @@ class BackNavBar extends StatelessWidget {
     required this.layout,
     required this.title,
     required this.onBack,
+    this.showBackButton = true,
     super.key,
   });
 
   final AppLayout layout;
   final String title;
   final VoidCallback onBack;
+
+  /// 是否展示返回按钮。证件确认页按需求不提供返回入口，只保留居中标题。
+  final bool showBackButton;
 
   /// 图标 24x24（设计稿 `label_1`）。
   static const _iconSize = 24.0;
@@ -56,29 +60,30 @@ class BackNavBar extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              left: layout.px(_iconLeft - inset),
-              top: layout.px(_iconTop - inset),
-              child: SizedBox(
-                width: layout.px(_tapSize),
-                height: layout.px(_tapSize),
-                child: Semantics(
-                  button: true,
-                  label: 'Back',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onBack,
-                    child: Center(
-                      child: Image.asset(
-                        AppAssets.back,
-                        width: layout.px(_iconSize),
-                        height: layout.px(_iconSize),
+            if (showBackButton)
+              Positioned(
+                left: layout.px(_iconLeft - inset),
+                top: layout.px(_iconTop - inset),
+                child: SizedBox(
+                  width: layout.px(_tapSize),
+                  height: layout.px(_tapSize),
+                  child: Semantics(
+                    button: true,
+                    label: 'Back',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onBack,
+                      child: Center(
+                        child: Image.asset(
+                          AppAssets.back,
+                          width: layout.px(_iconSize),
+                          height: layout.px(_iconSize),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
