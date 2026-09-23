@@ -85,14 +85,13 @@ final class ReportRegistrar: NSObject, CLLocationManagerDelegate {
     manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
     locationManager = manager
     locationResult = result
+    // 只读当前定位，不在上报路径里弹权限：授权时机对齐 dali——由「点击申请」
+    // 时显式调用 `requestLocationPermission`，未授权 / 未决定都直接回状态。
     let status = manager.authorizationStatus
-    if status == .notDetermined {
-      // 文档要求：登录后先拉起定位授权弹窗，授权结果无论给不给都继续。
-      manager.requestWhenInUseAuthorization()
-    } else if status == .denied || status == .restricted {
-      finishLocation(locationPayload(location: nil, placemark: nil, status: locationStatus(status)))
-    } else {
+    if status == .authorizedAlways || status == .authorizedWhenInUse {
       manager.requestLocation()
+    } else {
+      finishLocation(locationPayload(location: nil, placemark: nil, status: locationStatus(status)))
     }
   }
 

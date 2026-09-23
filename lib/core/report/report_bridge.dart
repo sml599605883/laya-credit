@@ -32,10 +32,10 @@ class ReportBridge {
 
   bool get _supported => Platform.isIOS;
 
-  /// 读取当前定位。未授权 / 定位失败时返回 null。
+  /// 读取当前定位。未授权 / 未决定 / 定位失败时返回 null。
   ///
-  /// 原生侧会在「未决定」状态下主动拉起一次授权弹窗（接口文档要求登录后先授权
-  /// 再上报定位）。
+  /// 只读不弹权限：授权时机对齐 dali，由 [requestLocationPermission] 在
+  /// 「点击申请」时显式拉起。
   Future<ReportLocationSnapshot?> getReportLocation() async {
     final result = await _safeInvokeMap(getReportLocationMethod);
     if (result == null) return null;

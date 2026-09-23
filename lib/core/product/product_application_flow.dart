@@ -1,9 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import '../../data/models/product_apply_result.dart';
 import '../../data/models/product_detail.dart';
 import '../../data/repositories/product_repository.dart';
+import '../../theme/app_colors.dart';
 import '../navigation/app_deep_link.dart';
+import '../permissions/permission_coordinator.dart';
 import '../report/report.dart';
 import '../navigation/app_navigator.dart';
 import '../navigation/app_route_generator.dart';
@@ -57,6 +62,15 @@ class ProductApplicationFlow {
   /// 防止用户连点导致重复发起准入。
   bool _isProcessing = false;
 
+  /// 「立即申请」前的定位检查入口，默认真跑系统权限、测试可替换
+  /// （对齐 dali 的 `NavigationHelper.certificationLocationRequester`）。
+  @visibleForTesting
+  static Future<CertificationLocationDecision> Function() locationChecker =
+      _defaultLocationChecker;
+
+  static Future<CertificationLocationDecision> _defaultLocationChecker() =>
+      PermissionCoordinator.instance.requestCertificationLocation();
+
   /// 执行产品申请流程。
   ///
   /// [apiRemind] 来源标识（0 默认，1 首页 banner，2 首页弹窗 ...）。
@@ -72,9 +86,18 @@ class ProductApplicationFlow {
       return;
     }
 
+    // 对齐 dali：点击「立即申请」时先做定位检查（系统授权弹窗与「去设置」引导
+    // 只在这里出现），拿不到定位就中止本次申请，别去打扰后端。
+    if (!await _ensureLocationAccess()) return;
+
     _isProcessing = true;
     try {
       ToastHelper.showLoading();
+      // 定位与设备上报是旁路，不阻塞准入接口（与 dali 一致）。
+      unawaited(
+        ReportService.current?.reportLocationAndDevice() ??
+            Future<void>.value(),
+      );
       final response = await repository.applyProduct(
         productId: productId,
         apiRemind: apiRemind,
@@ -95,6 +118,73 @@ class ProductApplicationFlow {
       ToastHelper.showError('Request failed, please try again');
     } finally {
       _isProcessing = false;
+    }
+  }
+
+  /// 「立即申请」前的定位检查（对齐 dali 的 `_ensureLocationAccess`）。
+  ///
+  /// 返回 false 表示中止本次申请：本次拒绝授权、服务关闭或永久拒绝后选择
+  /// 去设置。用户取消「去设置」引导时按 dali 口径放行，保证不误伤申请。
+  Future<bool> _ensureLocationAccess() async {
+    final decision = await locationChecker();
+    if (decision == CertificationLocationDecision.granted) return true;
+    if (decision == CertificationLocationDecision.denied) return false;
+
+    final openSettings = await _showLocationSettingsPrompt(
+      serviceDisabled:
+          decision == CertificationLocationDecision.serviceDisabled,
+    );
+    if (openSettings) {
+      await openAppSettings();
+      return false;
+    }
+    return true;
+  }
+
+  /// 定位不可用时的系统设置引导框（标题 / 文案对齐 dali）。
+  Future<bool> _showLocationSettingsPrompt({
+    required bool serviceDisabled,
+  }) async {
+    final context = AppNavigator.navigatorKey.currentContext;
+    if (context == null) return false;
+    try {
+      final result = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: Text(
+            serviceDisabled
+                ? 'Turn On Location Services'
+                : 'Allow Location Access',
+          ),
+          content: Text(
+            serviceDisabled
+                ? 'To help us confirm your identity and safeguard your '
+                      'account against unauthorized access, please enable '
+                      'Location Services on your device to continue.'
+                : "We couldn't verify your location because permission is "
+                      'disabled. Please allow location access in your device '
+                      'settings to continue your application.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              textStyle: const TextStyle(
+                color: AppColors.actionSheetTextSecondary,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            CupertinoDialogAction(
+              textStyle: const TextStyle(color: AppColors.primary),
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Settings'),
+            ),
+          ],
+        ),
+      );
+      return result ?? false;
+    } catch (_) {
+      return false;
     }
   }
 

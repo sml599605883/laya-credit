@@ -45,11 +45,18 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
 
     # permission_handler 在编译期裁剪权限实现：只放行本项目真的会申请的权限。
-    # 目前认证流程只申请相机（相册走 iOS 14+ 的 PHPicker，不需要相册权限）。
+    # 相机（认证流程）、通知（启动权限流程）、定位（申请借款前的定位检查）。
+    # 相册走 iOS 14+ 的 PHPicker、ATT 走原生 ATTrackingManager，都不需要放行。
     target.build_configurations.each do |config|
       definitions = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
       definitions = [definitions] if definitions.is_a?(String)
-      definitions << 'PERMISSION_CAMERA=1' unless definitions.include?('PERMISSION_CAMERA=1')
+      %w[
+        PERMISSION_CAMERA=1
+        PERMISSION_NOTIFICATIONS=1
+        PERMISSION_LOCATION_WHENINUSE=1
+      ].each do |definition|
+        definitions << definition unless definitions.include?(definition)
+      end
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = definitions
     end
   end

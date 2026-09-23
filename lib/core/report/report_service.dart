@@ -88,6 +88,7 @@ class ReportService {
   bool _started = false;
   bool _starting = false;
   bool _marketReporting = false;
+  bool _startupGoogleReportTriggered = false;
   bool _adjustInitializing = false;
   final Set<String> _reportingAppleTokens = <String>{};
   final Set<String> _reportedAppleTokens = <String>{};
@@ -95,17 +96,20 @@ class ReportService {
   StreamSubscription<PushEvent>? _pushSubscription;
 
   /// App 启动时调用一次：清理会话态、开始监听推送 token、执行首轮上报。
+  ///
+  /// 与 Dali 一致：只有**非首次启动**才在这里直接上报 google_market；首次启动
+  /// 时 ATT 还没弹窗，本次跳过，等启动权限流程跑完由
+  /// [startupPermissionsResolved] 补报（Apple token 同理）。
   Future<void> start() async {
     if (_started || _starting) return;
     _starting = true;
     try {
       await store.clearSessionReportState();
-      await store.markAppOpened();
+      final isFirstLaunch = await store.markAppOpened();
       _listenToPushEvents();
       _started = true;
-      unawaited(reportGoogleMarket());
+      if (!isFirstLaunch) unawaited(_reportStartupGoogleMarket());
       unawaited(reportLocationAndDevice());
-      unawaited(reportAppleToken());
     } catch (error) {
       _log(error);
     } finally {
@@ -113,8 +117,16 @@ class ReportService {
     }
   }
 
-  /// App 回到前台。目前没有必须重做的事，保留钩子与 Dali 对齐。
+  /// App 回到前台。对齐 Dali：没有必须重做的上报，ATT 重试由权限协调器负责。
   Future<void> resumed() async {}
+
+  /// 启动权限流程（通知 + ATT）完成后调用：补一轮 google_market 与 Apple token 上报。
+  ///
+  /// 首次启动的 ATT 弹窗在 `start()` 之后才出现，这里才是真正的「可以上报归因」时机。
+  Future<void> startupPermissionsResolved() async {
+    await _reportStartupGoogleMarket();
+    await reportAppleToken();
+  }
 
   /// 登录成功后调用：记录登录时间，并补一轮定位 / 设备 / 归因 / 推送上报。
   Future<void> loginSucceeded() async {
@@ -184,27 +196,26 @@ class ReportService {
     }
   }
 
-  /// google_market 上报（会先处理 ATT 授权）。
+  /// google_market 上报。
   ///
-  /// 与 Dali 一致：先确认跟踪授权已有结果，再真正上报；没拿到 IDFV 或
-  /// adjust_token 时直接跳过，Adjust 只初始化一次（跨启动用
-  /// [ReportStore.isAdjustInitialized] 去重）。
+  /// 与 Dali 一致：**只读**ATT 状态，未决定就直接跳过——ATT 弹窗由
+  /// 启动权限流程（`PermissionCoordinator.requestStartupPermissions`）负责，
+  /// 上报路径不主动弹窗。没拿到 IDFV 或 adjust_token 时跳过，Adjust 只初始化
+  /// 一次（跨启动用 [ReportStore.isAdjustInitialized] 去重）。
   Future<void> reportGoogleMarket() async {
-    await _ensureTrackingResolved();
     final status = await bridge.getTrackingStatus();
     if (!_isResolvedTrackingStatus(status)) return;
     await _reportResolvedGoogleMarket();
   }
 
-  /// IDFA 依赖 ATT 授权；未决定时先弹一次授权弹窗，再继续上报。
-  Future<void> _ensureTrackingResolved() async {
-    try {
-      final status = await bridge.getTrackingStatus();
-      if (_isResolvedTrackingStatus(status)) return;
-      await bridge.requestTrackingAuthorization();
-    } catch (error) {
-      _log(error);
-    }
+  /// 启动时的一次性归因上报：每次启动最多触发一次，避免和
+  /// [startupPermissionsResolved] 重复请求。
+  Future<void> _reportStartupGoogleMarket() async {
+    if (_startupGoogleReportTriggered) return;
+    final status = await bridge.getTrackingStatus();
+    if (!_isResolvedTrackingStatus(status)) return;
+    _startupGoogleReportTriggered = true;
+    await _reportResolvedGoogleMarket();
   }
 
   Future<void> _reportResolvedGoogleMarket() async {

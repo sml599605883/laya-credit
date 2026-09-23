@@ -13,6 +13,8 @@ import 'package:laya_credit/core/network/api_fields.dart';
 import 'package:laya_credit/core/network/api_protocol.dart';
 import 'package:laya_credit/core/network/api_response.dart';
 import 'package:laya_credit/core/network/common_params.dart';
+import 'package:laya_credit/core/permissions/permission_coordinator.dart';
+import 'package:laya_credit/core/product/product_application_flow.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
 import 'package:laya_credit/core/webview/webview_action_coordinator.dart';
@@ -1558,6 +1560,15 @@ Future<void> _pumpApp(
 
   if (setUp != null) await setUp(container);
 
+  // 申请流程会先做定位检查：测试进程里没有 permission_handler 原生实现，
+  // 默认按「已授权」放行，避免准入被误拦（对应用例可自行覆盖）。
+  final previousLocationChecker = ProductApplicationFlow.locationChecker;
+  ProductApplicationFlow.locationChecker = () async =>
+      CertificationLocationDecision.granted;
+  addTearDown(
+    () => ProductApplicationFlow.locationChecker = previousLocationChecker,
+  );
+
   await tester.pumpWidget(
     UncontrolledProviderScope(container: container, child: app),
   );
@@ -2982,6 +2993,34 @@ void main() {
     expect(productRepository.applyCalls, hasLength(1));
     expect(productRepository.detailCalls, 0);
     expect(find.text('Risk rejected'), findsOneWidget);
+  });
+
+  testWidgets('定位检查未通过时不发起准入', (tester) async {
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          orders: [],
+          notices: [],
+          product: _productCard,
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) async {
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    ProductApplicationFlow.locationChecker = () async =>
+        CertificationLocationDecision.denied;
+    await tester.tap(find.text('180 Days'));
+    await tester.pumpAndSettle();
+
+    expect(productRepository.applyCalls, isEmpty);
   });
 
   testWidgets('准入成功后拉产品详情并按下一步认证项提示', (tester) async {

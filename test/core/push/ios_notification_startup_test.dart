@@ -14,14 +14,19 @@ void main() {
     expect(runApp, greaterThan(coordinatorStart));
   });
 
-  test('requests notification permission and registers for APNs', () {
-    final content = File('lib/main.dart').readAsStringSync();
+  test('startup asks for notification permission before registering APNs', () {
+    final main = File('lib/main.dart').readAsStringSync();
+    // 权限流程已经收进 ReportLifecycleHost / 权限协调器，main 不再自己弹。
+    expect(main, contains('ReportLifecycleHost('));
+    expect(main, isNot(contains('Permission.notification.request()')));
 
-    expect(content, contains('Permission.notification.request()'));
-    expect(
-      content,
-      contains('PushBridge.shared.registerForRemoteNotifications()'),
-    );
+    final content = File('lib/core/permissions/permission_coordinator.dart')
+        .readAsStringSync();
+    final notification = content.indexOf('requestNotificationPermission()');
+    final register = content.indexOf('_registerForRemoteNotifications()');
+
+    expect(notification, isNonNegative);
+    expect(register, greaterThan(notification));
   });
 
   test('native app delegate forwards notification payloads', () {
@@ -32,22 +37,27 @@ void main() {
     expect(content, contains('willPresent notification'));
     expect(content, contains('didReceive response'));
     expect(content, contains('acceptNotificationPayload'));
-    expect(content, contains('PushNotificationRegistrar.shared.updatePushToken'));
+    expect(
+      content,
+      contains('PushNotificationRegistrar.shared.updatePushToken'),
+    );
     expect(
       content,
       isNot(contains('application.registerForRemoteNotifications()')),
     );
   });
 
-  test('native push bridge queues routes and supports nested params payloads', () {
-    final content = File(
-      'ios/Runner/PushNotificationRegistrar.swift',
-    ).readAsStringSync();
+  test(
+    'native push bridge queues routes and supports nested params payloads',
+    () {
+      final content = File('ios/Runner/PushNotificationRegistrar.swift')
+          .readAsStringSync();
 
-    expect(content, contains('pendingNotificationRoutes'));
-    expect(content, contains('"push_route"'));
-    expect(content, contains('userInfo["url"]'));
-    expect(content, contains('userInfo["params"]'));
-    expect(content, contains('JSONSerialization.jsonObject'));
-  });
+      expect(content, contains('pendingNotificationRoutes'));
+      expect(content, contains('"push_route"'));
+      expect(content, contains('userInfo["url"]'));
+      expect(content, contains('userInfo["params"]'));
+      expect(content, contains('JSONSerialization.jsonObject'));
+    },
+  );
 }

@@ -828,6 +828,8 @@ lib/
     - `lib/data/repositories/report_repository.dart`：6 个上报接口 + 1 个设备信息查询接口。
     - `lib/core/network/api_crypto.dart`：报文字段 AES-CBC 加解密（新增 `encrypt` 依赖）。
     - `lib/providers/report_provider.dart`：仓库与服务（`ReportService.current` 全局单例）。
+    - `lib/core/permissions/permission_coordinator.dart`：启动 / 前台恢复 / 申请借款三个
+      时机的权限编排（对齐 Dali 的 `PermissionCoordinator`）。
     - 原生：`ios/Runner/ReportRegistrar.swift`（channel `laya_credit/report`：定位 /
       设备快照 / ATT 跟踪授权）与 `ios/Runner/ReportDeviceSnapshotCollector.swift`。
     接口（均按 `6.data-report.html` / `4.certify.html#同盾report`）：
@@ -839,8 +841,20 @@ lib/
     字段名一律按接口文档的「混淆前 → 混淆后」映射表（`doc-obf-data`）对齐，
     `report_data.dart` 每个分组都标了混淆前语义名（如 `board → amativeness`、
     `device_name → compensatingly`、`gps_longitude → print`）。
-    时机（对齐 Dali）：启动（`ReportService.start()`，未登录时自动跳过定位 / 设备）、
-    登录成功（记录登录时间 + 补一轮上报）、前台恢复；ATT 未决定时先弹授权再上报 IDFA。
+    时机（对齐 Dali）：启动（`ReportService.start()`，未登录时自动跳过定位 / 设备；
+    **非首次启动**才直接上报 google_market）、登录成功（记录登录时间 + 补一轮上报）、
+    启动权限流程结束（`ReportService.startupPermissionsResolved()` 补报 google_market
+    与 Apple token）、前台恢复。
+    **权限时机对齐 Dali**（`PermissionCoordinator`，挂载点在 `report_lifecycle_host.dart`）：
+    - 启动：延迟 400ms → 申请通知权限 → 注册 APNs 换 deviceToken → 再延迟 400ms → 申请 ATT；
+    - 回到前台：重试一次 ATT（首次的授权弹窗可能被用户留在后台没处理）；
+    - 点击「立即申请」：先做定位检查，已授权直接放行；永久拒绝 / 定位服务关闭会弹
+      「Turn On Location Services」「Allow Location Access」引导框（文案与 Dali 一致），
+      选择设置或本次拒绝都中止申请，取消引导按 Dali 口径放行；通过后补一轮定位 / 设备
+      上报，再走准入接口。
+    `getReportLocation` 只读不弹窗：系统定位弹窗只在「立即申请」时出现（原生走
+    `ReportBridge.requestLocationPermission`）；ATT 弹窗只由启动权限流程拉起，
+    上报路径（`reportGoogleMarket`）只读状态、未决定就直接跳过。
     google_market 拿到 `adjust_token` 后用 **Adjust SDK**（`adjust_sdk` 依赖）
     初始化归因，跨启动用 `ReportStore.isAdjustInitialized` 去重（对齐 Dali）。
     风控埋点场景已接：1 登录（`login_page`）、2 认证选择（`id_verification_page`）、
@@ -851,11 +865,13 @@ lib/
     （WebView `uploadRisk` 动作）。
     同盾活体结果在 `face_verification_page` 与人脸分支的 `bind_card_page` 上报。
     测试：`test/core/report/report_data_test.dart`（设备报文加解密 + 字段映射、
-    定位快照解析、文本兜底）与 `test/core/report/report_store_test.dart`。
+    定位快照解析、文本兜底）与 `test/core/report/report_store_test.dart`；
+    权限侧 `test/core/permissions/permission_coordinator_test.dart`（启动顺序 /
+    恢复重试 / 定位决策与并发单飞）与 `test/core/permissions/ios_permission_config_test.dart`
+    （Info.plist、Podfile 权限宏、原生注册路径）。
     **遗留风险 / 待确认**：
-    - 本项目没有 Dali 的 `PermissionCoordinator` / `startupPermissionsResolved`
-      生命周期，ATT 与定位授权改由 `ReportService` 在上报时按需拉起（首次启动会弹一次），
-      少了 Dali「权限弹窗完成后再补一轮启动上报」的时序，待确认是否要补权限协调器；
+    - iOS 权限宏只放行本 App 真的会申请的项（相机 / 通知 / 定位），ATT 走原生
+      `ATTrackingManager`，不依赖 permission_handler 的 ATT 实现；
     - Apple 推送 token 为空时直接跳过（Dali 未做此校验，按审计结论属改进，故意保留差异）；
     - 定位 / 设备 / ATT 采集与各场景埋点尚未在真机上端到端联调。
 
