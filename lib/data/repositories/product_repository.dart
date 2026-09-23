@@ -13,11 +13,6 @@ class ProductRepository {
 
   final HttpClient _client;
 
-  /// 文档标注「已弃用」的固定参数，照发。
-  static const _moduleId = '1001';
-  static const _position = '1000';
-  static const _subModuleId = '1000';
-
   /// 点击申请（准入）。[apiRemind] 是来源标识，默认 0。
   Future<ApiResponse<ProductApplyResult>> applyProduct({
     required String productId,
@@ -26,9 +21,6 @@ class ProductRepository {
     return _client.post<ProductApplyResult>(
       ApiEndpoints.productApply,
       params: {
-        ApiFields.applyModuleId: _moduleId,
-        ApiFields.applyPosition: _position,
-        ApiFields.applySubModuleId: _subModuleId,
         ApiFields.productId: productId,
         ApiFields.apiRemind: apiRemind.toString(),
         ApiFields.obfuscateApply1: ObfuscationHelper.randomParam(),

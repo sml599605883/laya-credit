@@ -159,7 +159,7 @@ class ReportService {
   Future<ReportLocationSnapshot?> _loadLocation() async {
     try {
       final location = await bridge.getReportLocation().timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 10),
       );
       if (location == null || !location.isValid) return null;
       await store.saveLocation(location);

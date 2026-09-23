@@ -2864,9 +2864,6 @@ void main() {
     expect(params[ApiFields.productId], '7');
     expect(params[ApiFields.apiRemind], '0');
     // 文档标注已弃用，但仍要固定下发。
-    expect(params[ApiFields.applyModuleId], '1001');
-    expect(params[ApiFields.applyPosition], '1000');
-    expect(params[ApiFields.applySubModuleId], '1000');
     expect(params.containsKey(ApiFields.obfuscateApply1), isTrue);
     expect(params.containsKey(ApiFields.obfuscateApply2), isTrue);
   });

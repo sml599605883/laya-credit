@@ -79,11 +79,6 @@ abstract final class ApiFields {
   static const orderStatusText = 'cuboid';
 
   // ---------- 产品申请 / 准入（`/outsulk/weaken`）----------
-  /// 模块 id / 位置 / 子模块 id：文档标注已弃用，固定写死。
-  static const applyModuleId = 'monotheist';
-  static const applyPosition = 'besmeared';
-  static const applySubModuleId = 'unidentifying';
-
   /// 来源标识（0 默认，1 首页 banner，2 首页弹窗 ...）。
   static const apiRemind = 'dirdum';
   static const obfuscateApply1 = 'baaing';
