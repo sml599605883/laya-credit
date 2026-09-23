@@ -90,8 +90,6 @@ class ReportService {
   bool _marketReporting = false;
   bool _startupGoogleReportTriggered = false;
   bool _adjustInitializing = false;
-  final Set<String> _reportingAppleTokens = <String>{};
-  final Set<String> _reportedAppleTokens = <String>{};
   Future<ReportLocationSnapshot?>? _pendingLocation;
   StreamSubscription<PushEvent>? _pushSubscription;
 
@@ -133,7 +131,7 @@ class ReportService {
     await store.saveLoginAt(_nowMillis());
     unawaited(reportGoogleMarket());
     unawaited(reportLocationAndDevice());
-    unawaited(reportAppleToken(force: true));
+    unawaited(reportAppleToken());
   }
 
   /// 读取当前定位（带单飞：并发调用只触发一次原生定位）。
@@ -295,22 +293,15 @@ class ReportService {
 
   /// 上报 Apple 推送 token。
   ///
-  /// 对齐 dali：token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次），
-  /// 不做「空值跳过」的额外校验。
-  Future<void> reportAppleToken({bool force = false}) async {
-    String? token;
+  /// 按业务要求**完全不去重**：每次调用都真实上报一次（启动权限流程结束、
+  /// 原生 `push_token` 事件、登录成功三条路径各报一次）；
+  /// token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次）。
+  Future<void> reportAppleToken() async {
     try {
-      token = (await _pushBridge.getPushToken()).trim();
-      if ((!force && _reportedAppleTokens.contains(token)) ||
-          !_reportingAppleTokens.add(token)) {
-        return;
-      }
+      final token = (await _pushBridge.getPushToken()).trim();
       await repository.reportApplePushToken(token: token);
-      _reportedAppleTokens.add(token);
     } catch (error) {
       _log(error);
-    } finally {
-      if (token != null) _reportingAppleTokens.remove(token);
     }
   }
 

@@ -866,11 +866,13 @@ lib/
     同盾活体结果在 `face_verification_page` 与人脸分支的 `bind_card_page` 上报。
     测试：`test/core/report/report_data_test.dart`（设备报文加解密 + 字段映射、
     定位快照解析、文本兜底）、`test/core/report/report_store_test.dart` 与
-    `test/core/report/report_service_test.dart`（Apple token 空值照报 / 去重 / 事件触发）；
+    `test/core/report/report_service_test.dart`（Apple token 空值照报 / 不去重 / 事件触发）；
     权限侧 `test/core/permissions/permission_coordinator_test.dart`（启动顺序 /
     恢复重试 / 定位决策与并发单飞）与 `test/core/permissions/ios_permission_config_test.dart`
     （Info.plist、Podfile 权限宏、原生注册路径）。
     **遗留风险 / 待确认**：
+    - Apple 推送 token 上报**故意不去重**（业务要求）：每次调用都真实发一次，
+      与 dali 的「单次启动内同 token 去重」不同，后端需能接受重复上报；
     - iOS 权限宏只放行本 App 真的会申请的项（相机 / 通知 / 定位），ATT 走原生
       `ATTrackingManager`，不依赖 permission_handler 的 ATT 实现；
     - 定位 / 设备 / ATT 采集与各场景埋点尚未在真机上端到端联调。

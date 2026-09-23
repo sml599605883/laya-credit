@@ -22,15 +22,15 @@ void main() {
     expect(repository.appleTokens, ['']);
   });
 
-  test('同一 token 只上报一次，force 时允许重复', () async {
+  test('完全不去重：每次调用都上报一次', () async {
     final repository = _RecordingRepository();
     final service = _service(repository, pushToken: 'token-1');
 
     await service.reportAppleToken();
     await service.reportAppleToken();
-    await service.reportAppleToken(force: true);
+    await service.reportAppleToken();
 
-    expect(repository.appleTokens, ['token-1', 'token-1']);
+    expect(repository.appleTokens, ['token-1', 'token-1', 'token-1']);
   });
 
   test('原生 push_token 事件触发一次上报', () async {
