@@ -294,11 +294,13 @@ class ReportService {
   }
 
   /// 上报 Apple 推送 token。
+  ///
+  /// 对齐 dali：token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次），
+  /// 不做「空值跳过」的额外校验。
   Future<void> reportAppleToken({bool force = false}) async {
     String? token;
     try {
       token = (await _pushBridge.getPushToken()).trim();
-      if (token.isEmpty) return;
       if ((!force && _reportedAppleTokens.contains(token)) ||
           !_reportingAppleTokens.add(token)) {
         return;
