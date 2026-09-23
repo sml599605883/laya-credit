@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import CFNetwork
 import StoreKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -11,11 +12,23 @@ import StoreKit
   ) -> Bool {
     // Initialize device-risk collection as early as possible during launch.
     TrustDecisionRegistrar.shared.activate()
+    // 推送：接管通知回调；冷启动点通知时先把路由暂存，等 Flutter 侧监听后补发。
+    UNUserNotificationCenter.current().delegate = self
+    if let payload = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+      PushNotificationRegistrar.shared.acceptNotificationPayload(payload)
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    // 推送通道：APNs token 注册与通知点击路由。
+    if let pushRegistrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "LayaCreditPush"
+    ) {
+      PushNotificationRegistrar.shared.register(with: pushRegistrar.messenger())
+    }
 
     // 抓包代理通道：读 iOS 系统代理设置下发给 Dart 侧（dart:io 不会自动读系统代理）。
     guard
@@ -76,5 +89,50 @@ import StoreKit
         result(nil)
       }
     }
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    super.application(
+      application,
+      didRegisterForRemoteNotificationsWithDeviceToken: deviceToken
+    )
+    let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+    PushNotificationRegistrar.shared.updatePushToken(token)
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    super.application(
+      application,
+      didFailToRegisterForRemoteNotificationsWithError: error
+    )
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    // 带跳转地址的通知由 App 内自行处理，不再重复弹系统横幅。
+    let routed = PushNotificationRegistrar.shared.acceptNotificationPayload(
+      notification.request.content.userInfo
+    )
+    completionHandler(routed ? [] : [.banner, .badge, .sound])
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    PushNotificationRegistrar.shared.acceptNotificationPayload(
+      response.notification.request.content.userInfo
+    )
+    completionHandler()
   }
 }
