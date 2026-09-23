@@ -7,13 +7,13 @@ import 'dart:math';
 abstract final class ObfuscationHelper {
   static final _random = Random();
 
-  static const _alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  static const _digits = '0123456789';
 
-  /// 生成一个 16 位随机串。
+  /// 生成一个 16 位随机数字串。
   static String randomParam() {
     return List.generate(
       16,
-      (_) => _alphabet[_random.nextInt(_alphabet.length)],
+      (_) => _digits[_random.nextInt(_digits.length)],
     ).join();
   }
 }
