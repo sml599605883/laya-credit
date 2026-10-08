@@ -25,7 +25,6 @@ abstract final class AppAssets {
   /// 弧形卡身 + 文案都烘焙在切图里，按后端 `holts`（1 高亮 / 0 正常 / -1 置灰）三态选图：
   /// 柠檬绿 / 品牌红 / 灰，对应设计稿从上到下的三张卡。
   static const homeApplyNowHighlight = 'assets/home/apply_now_highlight.png';
-  static const homeApplyNowNormal = 'assets/home/apply_now_normal.png';
   static const homeApplyNowDisabled = 'assets/home/apply_now_disabled.png';
 
   /// 首页 / 个人中心「应用内升级」弹窗的头部切图（蓝湖稿 `08-03 - 弹窗-升级提示`，

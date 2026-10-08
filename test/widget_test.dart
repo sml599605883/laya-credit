@@ -1306,6 +1306,7 @@ const _recommendationCard = HomeProductListCard(
   termInfoText: 'Loan terms',
   tips: ['Low interest rates', 'Ages 17 years and over can borrow'],
   buttonStyle: HomeProductCardButtonStyle.highlighted,
+  buttonText: 'Apply Now',
 );
 
 void _usePhoneSurface(WidgetTester tester) {
@@ -1910,6 +1911,44 @@ void main() {
       (button.image as AssetImage).assetName,
       AppAssets.homeApplyNowHighlight,
     );
+    // 文案由代码绘制：高亮态用深色。
+    expect(
+      tester.widget<Text>(find.text('Apply Now')).style?.color,
+      AppColors.cardValue,
+    );
+  });
+
+  testWidgets('推荐卡按钮文案取后端 curitiba，置灰态文案为白色', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: null,
+          orders: [],
+          notices: [],
+          productList: [
+            HomeProductListCard(
+              id: '2',
+              productName: 'Pera Pitaka(AA)',
+              productLogo: '',
+              amountRange: '\u20b150,000',
+              amountRangeDes: 'Available up to',
+              loanRate: '\u2264 0.5% Day',
+              loanRateDes: 'Interest rate',
+              termInfo: '\u2264 0.5% Day',
+              termInfoText: 'Loan terms',
+              tips: [],
+              buttonStyle: HomeProductCardButtonStyle.grayed,
+              buttonText: 'Repay Now',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final label = tester.widget<Text>(find.text('Repay Now'));
+    expect(label.style?.color, AppColors.white);
   });
 
   testWidgets('首页推荐卡整块可点击：点空白处同样走申请流程', (tester) async {
@@ -2818,6 +2857,7 @@ void main() {
               'gundy': '121day',
               'islet': ['Low Interest Rates', '17 years old can be borrowed'],
               'holts': 1,
+              'curitiba': 'Apply Now',
             },
           ],
         },
@@ -2836,6 +2876,7 @@ void main() {
     expect(card.termInfo, '121day');
     expect(card.tips, ['Low Interest Rates', '17 years old can be borrowed']);
     expect(card.buttonStyle, HomeProductCardButtonStyle.highlighted);
+    expect(card.buttonText, 'Apply Now');
     // 推荐列表不是产品大卡，不能顶掉头图的 LARGE_CARD。
     expect(home.product, isNull);
   });

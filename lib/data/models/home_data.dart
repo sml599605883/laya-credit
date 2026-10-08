@@ -358,6 +358,7 @@ class HomeProductListCard {
     required this.termInfoText,
     required this.tips,
     required this.buttonStyle,
+    required this.buttonText,
   });
 
   factory HomeProductListCard.fromJson(Map<String, dynamic> json) {
@@ -373,6 +374,8 @@ class HomeProductListCard {
       termInfo: json[ApiFields.termInfo]?.toString() ?? '',
       termInfoText: json[ApiFields.termText]?.toString() ?? '',
       tips: _titles(json[ApiFields.tips]),
+      // 按钮文案由后端下发（字段 `curitiba`），为空时回落到设计稿文案。
+      buttonText: json[ApiFields.buttonText]?.toString() ?? '',
       buttonStyle: HomeProductCardButtonStyle.fromCode(
         int.tryParse(json[ApiFields.buttonColorCode]?.toString() ?? '') ?? 0,
       ),
@@ -397,6 +400,9 @@ class HomeProductListCard {
   /// 卡片底部的提示文案，多段用「 / 」拼接（设计稿的粉色一行）。
   final List<String> tips;
   final HomeProductCardButtonStyle buttonStyle;
+
+  /// 右侧按钮文案（后端 `curitiba`），为空时回落设计稿「Apply Now」。
+  final String buttonText;
 }
 
 List<String> _titles(Object? raw) {

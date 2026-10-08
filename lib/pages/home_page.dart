@@ -1176,10 +1176,34 @@ class _RecommendationCard extends ConsumerWidget {
   /// 按钮切图尺寸（设计稿 `text-wrapper_10`：96x130）。
   static const _buttonWidth = 96.0;
 
+  /// 按钮文案（切图只保留弧形卡身，文案改由代码绘制）。
+  /// 优先取后端 `curitiba`，为空时回落到设计稿文案。
+  static const _buttonLabelFallback = 'Apply Now';
+
+  String get _buttonLabel {
+    return card.buttonText.isEmpty ? _buttonLabelFallback : card.buttonText;
+  }
+
+  /// 按钮文案色：置灰态用白色，其余用深色（设计稿）。
+  Color get _buttonLabelColor =>
+      card.buttonStyle == HomeProductCardButtonStyle.grayed
+      ? AppColors.white
+      : AppColors.cardValue;
+
+  /// 文案字号 / 行高（设计稿加粗、两行）。
+  static const _buttonLabelFontSize = 16.0;
+  static const _buttonLabelLineHeight = 1.4;
+
+  /// 文案强制折成两行的最大宽度（设计稿「Apply」/「Now」上下排布）。
+  static const _buttonLabelWidth = 52.0;
+
+  /// 文案区左侧避让弧形卡身（设计稿弧形最右约 25pt）。
+  static const _buttonLabelLeftInset = 25.0;
+
   /// 按钮切图按后端下发的配色选：高亮 / 正常 / 置灰。
   String get _buttonAsset => switch (card.buttonStyle) {
     HomeProductCardButtonStyle.highlighted => AppAssets.homeApplyNowHighlight,
-    HomeProductCardButtonStyle.normal => AppAssets.homeApplyNowNormal,
+    HomeProductCardButtonStyle.normal => AppAssets.homeApplyNowHighlight,
     HomeProductCardButtonStyle.grayed => AppAssets.homeApplyNowDisabled,
   };
 
@@ -1257,16 +1281,45 @@ class _RecommendationCard extends ConsumerWidget {
                 ),
               ),
             ),
-            // 整块按钮切图（弧形卡身 + 文案都烘焙在图里），上下与外框找平。
+            // 按钮切图只保留弧形卡身，上下与外框找平；文案由代码绘制。
             Positioned(
               top: 0,
               right: 0,
               bottom: 0,
               width: layout.px(_buttonWidth),
-              child: Image.asset(
-                _buttonAsset,
-                key: ValueKey('home-recommendation-apply-${card.id}'),
-                fit: BoxFit.fill,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      _buttonAsset,
+                      key: ValueKey('home-recommendation-apply-${card.id}'),
+                      fit: BoxFit.fill,
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Padding(
+                      // 避开左侧弧身，文案在剩余区域居中。
+                      padding: layout.edgeInsets(left: _buttonLabelLeftInset),
+                      child: Center(
+                        child: SizedBox(
+                          width: layout.px(_buttonLabelWidth),
+                          child: Text(
+                            _buttonLabel,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _buttonLabelColor,
+                              fontSize: layout.px(_buttonLabelFontSize),
+                              fontWeight: FontWeight.w700,
+                              height: _buttonLabelLineHeight,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
