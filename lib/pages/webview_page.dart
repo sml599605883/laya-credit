@@ -584,6 +584,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
       _loading = true;
       _loadFailed = false;
     });
+    // 错误态是浮层、WebView 未卸载，controller 对应的原生通道仍然有效。
     await _safeControllerCall(
       'loadUrl',
       () => controller.loadUrl(urlRequest: URLRequest(url: WebUri.uri(uri))),
@@ -641,12 +642,23 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
             Expanded(
               child: uri == null
                   ? const _WebViewPlaceholder('Invalid page address')
-                  : _loadFailed
-                  ? ErrorView(
-                      message: 'Page failed to load',
-                      onRetry: () => unawaited(_retry()),
-                    )
-                  : _buildWebView(uri),
+                  : Stack(
+                      children: [
+                        // WebView 常驻不卸载：加载失败只在上层盖错误浮层，
+                        // 避免原生平台视图（连同方法通道）被销毁后 controller 失效。
+                        _buildWebView(uri),
+                        if (_loadFailed)
+                          Positioned.fill(
+                            child: ColoredBox(
+                              color: AppColors.surfaceMint,
+                              child: ErrorView(
+                                message: 'Page failed to load',
+                                onRetry: () => unawaited(_retry()),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
             ),
           ],
         ),

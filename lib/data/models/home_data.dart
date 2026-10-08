@@ -16,7 +16,8 @@ class HomeData {
   factory HomeData.fromJson(Map<String, dynamic> json) {
     final sections = json[ApiFields.homeKneeing];
     final banners = <HomeBanner>[];
-    final products = <HomeProductCard>[];
+    final largeCardProducts = <HomeProductCard>[];
+    final smallCardProducts = <HomeProductCard>[];
     final productList = <HomeProductListCard>[];
     final orders = <HomeOrderCard>[];
     final notices = <String>[];
@@ -36,8 +37,9 @@ class HomeData {
           case HomeSectionType.banner:
             banners.addAll(maps.map(HomeBanner.fromJson));
           case HomeSectionType.largeCard:
+            largeCardProducts.addAll(maps.map(HomeProductCard.fromJson));
           case HomeSectionType.smallCard:
-            products.addAll(maps.map(HomeProductCard.fromJson));
+            smallCardProducts.addAll(maps.map(HomeProductCard.fromJson));
           case HomeSectionType.productList:
             productList.addAll(maps.map(HomeProductListCard.fromJson));
           case HomeSectionType.process:
@@ -54,9 +56,14 @@ class HomeData {
       }
     }
 
+    // 大卡优先、小卡兜底：两种卡同时下发时不能被小卡顶掉头图（对齐 Peso Shield 策略）。
+    final product = largeCardProducts.isNotEmpty
+        ? largeCardProducts.first
+        : (smallCardProducts.isNotEmpty ? smallCardProducts.first : null);
+
     return HomeData(
       banners: banners,
-      product: products.isEmpty ? null : products.first,
+      product: product,
       productList: productList,
       orders: orders,
       notices: notices,
@@ -106,11 +113,14 @@ abstract final class HomeSectionType {
 /// Sixcylinder=PRODUCT_LIST、Broadtoothed=PROCESS_LIST、
 /// BelliferousOverfertilizing=AD_LIST。
 ///
+/// 混淆值由每个包各自生成，**不能跨项目套用**（例如 Peso Shield 的
+/// SMALL_CARD 是 `MaximalsNatriureses`，与本项目的 `Abaca` 无关）。
 /// 目前只有实际用到的类型在渲染，其余取值原样返回、由调用方忽略
 /// （映射表是逐行对应的，补类型时务必核对行序，不要再按名字猜）。
 String _canonicalSectionType(String type) => switch (type) {
   'MalvernePlucked' => HomeSectionType.banner,
   'LupusesWheelrace' => HomeSectionType.largeCard,
+  'Abaca' => HomeSectionType.smallCard,
   'BelliferousOverfertilizing' => HomeSectionType.adList,
   'Broadtoothed' => HomeSectionType.process,
   'Sixcylinder' => HomeSectionType.productList,

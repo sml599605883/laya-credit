@@ -19,6 +19,22 @@ typedef WebViewAsyncAction = Future<void> Function();
 typedef WebViewMessageAction = Future<void> Function(String message);
 typedef WebViewLogger = void Function(String message);
 
+/// 解析 `openGooglePlay` 的入参：H5 可能下发完整商店链接（http/https），
+/// 也可能只给包名（形如 `com.example.app`）。返回 null 表示两者都不成立。
+Uri? resolveGooglePlayUri(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return null;
+  final direct = Uri.tryParse(value);
+  if (direct != null &&
+      (direct.scheme == 'http' || direct.scheme == 'https') &&
+      direct.host.isNotEmpty) {
+    return direct;
+  }
+  // 包名形如 `com.example.app`：只允许字母 / 数字 / 点 / 下划线 / 连字符。
+  if (!RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(value)) return null;
+  return Uri.https('play.google.com', '/store/apps/details', {'id': value});
+}
+
 /// action 执行失败时抛出。[message] 会原样展示给用户，
 /// 避免把 `ApiException(...)` 这类内部前缀透出到 Toast。
 class WebViewActionException implements Exception {
@@ -75,7 +91,7 @@ class WebViewActionCoordinator {
     try {
       return switch (request.action) {
         WebViewActions.uploadRisk => await _uploadRisk(request),
-        WebViewActions.openGooglePlay => _ignoreGooglePlay(request),
+        WebViewActions.openGooglePlay => await _openGooglePlay(request),
         WebViewActions.openUrl => await _openUrl(request),
         WebViewActions.close => await _run(closePage),
         WebViewActions.home => await _run(jumpHome),
@@ -109,11 +125,18 @@ class WebViewActionCoordinator {
     return const WebViewResult.success();
   }
 
-  WebViewResult _ignoreGooglePlay(WebViewRequest request) {
-    // H5 直接把包名（裸串）作为 data 下发。
-    final package = request.rawDataString;
-    logger?.call('Google Play action ignored on iOS: package=$package');
-    return const WebViewResult.success();
+  Future<WebViewResult> _openGooglePlay(WebViewRequest request) async {
+    // H5 可能直接下发商店链接，也可能只给包名（裸串）。
+    final target = resolveGooglePlayUri(request.rawDataString);
+    if (target == null) {
+      logger?.call('Invalid Google Play target: ${request.rawDataString}');
+      return const WebViewResult.failure('Invalid Google Play target');
+    }
+    logger?.call('Opening Google Play target: $target');
+    final opened = await openExternal?.call(target) ?? false;
+    return opened
+        ? const WebViewResult.success()
+        : const WebViewResult.failure('Unable to open url');
   }
 
   Future<WebViewResult> _openUrl(WebViewRequest request) async {

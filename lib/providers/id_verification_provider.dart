@@ -6,10 +6,10 @@ import 'repository_provider.dart';
 
 /// 证件类型列表（认证第一项）。
 ///
-/// 按产品维度缓存：同一产品反复进出页面不会重复请求；失败时页面用
+/// 不缓存：离开页面即释放结果，重新进入会重新请求；失败时页面用
 /// `ref.invalidate(idVerificationProvider(productId))` 重试。
-final idVerificationProvider =
-    FutureProvider.family<IdVerificationData, String>((ref, productId) async {
+final idVerificationProvider = FutureProvider.autoDispose
+    .family<IdVerificationData, String>((ref, productId) async {
       final repository = await ref.watch(
         certificationRepositoryProvider.future,
       );

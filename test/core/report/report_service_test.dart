@@ -75,25 +75,72 @@ void main() {
     expect(repository.appleTokens, ['token-2']);
     await service.dispose();
   });
+
+  test('每次启动都按型号查设备信息并落库（不看登录态、不看缓存）', () async {
+    final repository = _RecordingRepository();
+    final store = ReportStore.memory();
+    // 故意先塞一份旧缓存：新逻辑必须照查照写，不能被缓存挡住。
+    await store.saveDeviceModel('stale-model');
+    final service = _service(
+      repository,
+      pushToken: '',
+      bridge: _StubReportBridge(),
+      store: store,
+      accessToken: '',
+    );
+
+    await service.syncDeviceInfo();
+
+    expect(repository.deviceLookups, ['iPhone11,8']);
+    expect(await store.deviceModel(), 'iPhone 12');
+    expect(await store.physicalSize(), '6.1');
+  });
+
+  test('启动预热与设备上报并发时只查一次设备信息', () async {
+    final repository = _RecordingRepository()..releaseDeviceLookup = Completer();
+    final service = _service(
+      repository,
+      pushToken: '',
+      bridge: _StubReportBridge(),
+      accessToken: 'token',
+    );
+
+    final first = service.syncDeviceInfo();
+    final second = service.syncDeviceInfo();
+    repository.releaseDeviceLookup!.complete();
+    await Future.wait([first, second]);
+
+    expect(repository.deviceLookups, ['iPhone11,8']);
+  });
 }
 
 ReportService _service(
   ReportRepository repository, {
   required String pushToken,
+  ReportBridge? bridge,
+  ReportStore? store,
+  String accessToken = 'token',
   Stream<PushEvent>? events,
   int Function()? nowMillis,
 }) {
   return ReportService(
     repository,
-    ReportBridge(),
-    store: ReportStore.memory(),
+    bridge ?? ReportBridge(),
+    store: store ?? ReportStore.memory(),
     pushBridge: _StubPushBridge(pushToken),
     encryptKey: '0123456789abcdef',
     encryptIv: '0123456789abcdef',
-    accessToken: () => 'token',
+    accessToken: () => accessToken,
     pushEvents: events,
     nowMillis: nowMillis,
   );
+}
+
+class _StubReportBridge extends ReportBridge {
+  @override
+  Future<ReportDeviceSnapshot> getReportDeviceSnapshot() async {
+    return const ReportDeviceSnapshot(model: 'iPhone11,8');
+  }
 }
 
 class _StubPushBridge extends PushBridge {
@@ -109,9 +156,30 @@ class _RecordingRepository extends ReportRepository {
   _RecordingRepository() : super(_StubHttpClient());
 
   final List<String> appleTokens = [];
+  final List<String> deviceLookups = [];
 
   /// 非空时第一条上报会等它完成，用来构造并发场景。
   Completer<void>? releaseFirstCall;
+
+  /// 非空时第一条设备查询会等它完成，用来构造并发场景。
+  Completer<void>? releaseDeviceLookup;
+
+  @override
+  Future<ApiResponse<ReportDeviceInfo>> lookupDeviceInfo({
+    required String identifier,
+  }) async {
+    final release = releaseDeviceLookup;
+    if (release != null) {
+      releaseDeviceLookup = null;
+      await release.future;
+    }
+    deviceLookups.add(identifier);
+    return const ApiResponse<ReportDeviceInfo>(
+      code: 0,
+      message: '',
+      data: ReportDeviceInfo(deviceModel: 'iPhone 12', physicalSize: '6.1'),
+    );
+  }
 
   @override
   Future<ApiResponse<void>> reportApplePushToken({

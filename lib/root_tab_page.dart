@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/navigation.dart';
+import 'data/models/app_dialog.dart';
 import 'pages/home_page.dart';
 import 'pages/mine_page.dart';
 import 'pages/progress_page.dart';
+import 'pages/widgets/app_marketing_popup.dart';
+import 'pages/widgets/app_upgrade_popup.dart';
 import 'providers/home_provider.dart';
+import 'providers/popup_provider.dart';
 import 'providers/session_provider.dart';
 import 'theme/theme.dart';
 import 'widgets/tab_bar/app_tab_bar.dart';
@@ -50,6 +54,8 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
         .read(sessionExpirySignalProvider)
         .events
         .listen((_) => _handleSessionExpired());
+    // 首帧就停在首页，对齐 dali_cash 的 onReady：拉一次首页弹窗（场景 1）。
+    _requestTabPopup(_currentIndex);
   }
 
   @override
@@ -101,14 +107,47 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// 本路由是否处于最上层。
   bool get _isTopRoute => ModalRoute.of(context)?.isCurrent ?? true;
 
-  /// 刷新首页接口数据。
+  /// 刷新当前 Tab 的数据并请求该 Tab 的弹窗。
   ///
   /// 首页 Tab（0）与进度 Tab（1）共用同一份 `homeDataProvider`（进度卡来自
   /// 首页接口的 `PROCESS_LIST` 模块），所以这两个 Tab 可见时都要刷；
-  /// 个人中心（2）是纯本地内容，不拉接口。
+  /// 个人中心（2）是纯本地内容，不拉首页接口，只在可见时请求弹窗（场景 2）。
   void _refreshHomeData() {
-    if (_currentIndex == 2) return;
-    unawaited(ref.read(homeDataProvider.notifier).refresh());
+    final index = _currentIndex;
+    if (index == 0 || index == 1) {
+      unawaited(ref.read(homeDataProvider.notifier).refresh());
+    }
+    _requestTabPopup(index);
+  }
+
+  /// 请求当前 Tab 对应的弹窗（`GET /outsulk/agatize`）。
+  ///
+  /// 首页场景 `1` / 个人中心场景 `2`，进度 Tab 不请求。请求失败不影响页面，
+  /// 拿到弹窗后由 [appPopupProvider] 的监听统一展示，见 [AppPopupNotifier]。
+  void _requestTabPopup(int index) {
+    final scene = switch (index) {
+      0 => AppPopupScene.home,
+      2 => AppPopupScene.mine,
+      _ => null,
+    };
+    if (scene == null) return;
+    unawaited(ref.read(appPopupProvider.notifier).request(scene));
+  }
+
+  /// 按弹窗类型展示。当前已接入应用内升级与营销弹窗，其余类型先记日志。
+  void _showPopup(AppDialog dialog) {
+    // 在回调里直接弹窗可能撞上当前帧的构建，延后到帧末再弹。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      switch (dialog.type) {
+        case AppPopupType.appUpgrade:
+          showAppUpgradePopup(context: context, dialog: dialog);
+        case AppPopupType.marketing:
+          showAppMarketingPopup(context: context, dialog: dialog);
+        default:
+          debugPrint('[Popup] 暂未接入的弹窗类型: ${dialog.type}');
+      }
+    });
   }
 
   /// 回落到首页 Tab 并刷新（退出登录 / token 过期）。
@@ -160,6 +199,12 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
           _requiresLogin(_currentIndex)) {
         _returnToHome();
       }
+    });
+
+    // 弹窗请求结果 -> 展示弹窗：由状态变化驱动，不在请求回调里直接用 context。
+    ref.listen(appPopupProvider, (previous, next) {
+      if (next == null || !next.hasPopup) return;
+      _showPopup(next);
     });
 
     return Scaffold(

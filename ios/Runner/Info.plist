@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- 测试环境为 IP + 明文 HTTP，WKWebView 需要放行；发布前换 HTTPS 并删除。 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera so we can shoot your ID and a facial snapshot, then confirm both images show the same person.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

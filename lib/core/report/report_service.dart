@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/repositories/report_repository.dart';
 import '../push/push_bridge.dart';
+import 'device_info_sync.dart';
 import 'report_bridge.dart';
 import 'report_data.dart';
 import 'report_store.dart';
@@ -102,6 +103,7 @@ class ReportService {
   bool _startupGoogleReportTriggered = false;
   bool _adjustInitializing = false;
   Future<ReportLocationSnapshot?>? _pendingLocation;
+  Future<void>? _deviceInfoSync;
   StreamSubscription<PushEvent>? _pushSubscription;
   final Set<String> _reportingAppleTokens = <String>{};
   final Map<String, int> _lastAppleTokenReportedAt = <String, int>{};
@@ -120,6 +122,8 @@ class ReportService {
       _listenToPushEvents();
       _started = true;
       if (!isFirstLaunch) unawaited(_reportStartupGoogleMarket());
+      // 设备信息已在网络探测（`StartupNetworkGate`）时串行查过一次并落库 / 落缓存，
+      // 这里不再重复请求；[syncDeviceInfo] 仅作为上报路径的兜底重试保留。
       unawaited(reportLocationAndDevice());
     } catch (error) {
       _log(error);
@@ -265,7 +269,7 @@ class ReportService {
     try {
       if (!await _hasSession()) return;
       final snapshot = await bridge.getReportDeviceSnapshot();
-      final deviceModel = await _resolveDeviceModel(snapshot);
+      final deviceModel = await _resolveDeviceModel();
       final encrypted = encryptReportDevicePayload(
         snapshot: snapshot,
         deviceModel: deviceModel,
@@ -282,26 +286,31 @@ class ReportService {
     }
   }
 
-  /// 设备报文里的 `chlor`：优先用缓存的型号名，没有则按型号标识查一次接口。
-  Future<String> _resolveDeviceModel(ReportDeviceSnapshot snapshot) async {
+  /// 按设备型号标识查询 iOS 设备名称 / 物理尺寸并落库 + 落进程内缓存。
+  ///
+  /// 正常启动时该查询已由 `StartupNetworkGate` 在网络探测阶段串行执行过一次
+  /// （对齐 Dali），这里只在缓存缺失时兜底重试：**不要求登录态**，失败只打日志。
+  /// 与 [reportDevice] 共用单飞，避免同一进程内重复请求同一接口。
+  Future<void> syncDeviceInfo() {
+    return _deviceInfoSync ??= _syncDeviceInfo().whenComplete(() {
+      _deviceInfoSync = null;
+    });
+  }
+
+  Future<void> _syncDeviceInfo() async {
+    await DeviceInfoSync(
+      repository: repository,
+      bridge: bridge,
+      store: store,
+    ).sync();
+  }
+
+  /// 设备报文里的 `chlor`：优先读缓存（启动预热已写入），没有则兜底再查一次。
+  Future<String> _resolveDeviceModel() async {
     final cached = await store.deviceModel();
     if (cached.isNotEmpty) return cached;
-
-    final identifier = reportText(snapshot.model);
-    if (identifier.isEmpty) return '';
-    try {
-      final response = await repository.lookupDeviceInfo(
-        identifier: identifier,
-      );
-      final info = response.data;
-      if (!response.isSuccess || !info.isValid) return '';
-      await store.saveDeviceModel(info.deviceModel);
-      await store.savePhysicalSize(info.physicalSize);
-      return info.deviceModel;
-    } catch (error) {
-      _log(error);
-      return '';
-    }
+    await syncDeviceInfo();
+    return store.deviceModel();
   }
 
   /// 上报 Apple 推送 token。

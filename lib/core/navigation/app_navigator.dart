@@ -215,12 +215,13 @@ class AppNavigator {
     return uri;
   }
 
-  /// 用 H5 站点根地址 + 相对路径打开 WebView。
-  ///
-  /// TODO(混淆串): H5 路由路径待接口文档下发后替换（dali 用 `/#/Turbocharger` 等）。
-  static const privacyAgreementPath = '/#/PrivacyAgreement';
-  static const customerServicePath = '/#/CustomerService';
+  /// 隐私协议（混淆路径，接口文档下发）。
+  static const privacyAgreementPath = '/#/UnextenuableProsectorship';
 
+  /// 客服中心（混淆路径，接口文档下发）。
+  static const customerServicePath = '/#/Canaanites';
+
+  /// 用 H5 站点根地址 + 相对路径打开 WebView。
   static Future<T?>? toWebPath<T extends Object?>({
     required String path,
     String? title,

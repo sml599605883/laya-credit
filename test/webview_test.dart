@@ -100,6 +100,65 @@ void main() {
       expect(navigated, ['ph://laya-credit/ios/DrivepipeAlphyl']);
     });
 
+    test('openGooglePlay 是完整链接时直接外跳', () async {
+      final opened = <Uri>[];
+      final coordinator = WebViewActionCoordinator(
+        openExternal: (uri) async {
+          opened.add(uri);
+          return true;
+        },
+      );
+      final result = await coordinator.dispatch(
+        WebViewRequest.decode({
+          'action': WebViewActions.openGooglePlay,
+          'data':
+              'https://play.google.com/store/apps/details?id=com.example.app',
+        }),
+      );
+      expect(result.code, 0);
+      expect(opened.single.toString(), contains('com.example.app'));
+    });
+
+    test('openGooglePlay 只给包名时拼商店详情页', () async {
+      final opened = <Uri>[];
+      final coordinator = WebViewActionCoordinator(
+        openExternal: (uri) async {
+          opened.add(uri);
+          return true;
+        },
+      );
+      final result = await coordinator.dispatch(
+        WebViewRequest.decode({
+          'action': WebViewActions.openGooglePlay,
+          'data': 'com.example.app',
+        }),
+      );
+      expect(result.code, 0);
+      expect(opened.single.host, 'play.google.com');
+      expect(opened.single.queryParameters['id'], 'com.example.app');
+    });
+
+    test('openGooglePlay 外跳失败返回失败', () async {
+      final coordinator = WebViewActionCoordinator(
+        openExternal: (uri) async => false,
+      );
+      final result = await coordinator.dispatch(
+        WebViewRequest.decode({
+          'action': WebViewActions.openGooglePlay,
+          'data': 'com.example.app',
+        }),
+      );
+      expect(result.code, isNot(0));
+    });
+
+    test('openGooglePlay 非法入参失败', () async {
+      final result = await WebViewActionCoordinator().dispatch(
+        WebViewRequest.decode({'action': WebViewActions.openGooglePlay}),
+      );
+      expect(result.code, isNot(0));
+      expect(result.message, contains('Google Play'));
+    });
+
     test('未知 action 返回 -2', () async {
       final result = await WebViewActionCoordinator().dispatch(
         WebViewRequest.decode({'action': 'not_an_action'}),

@@ -20,6 +20,12 @@ abstract final class ApiEndpoints {
   /// APP 首页。GET
   static const homePage = '/outsulk/connectedly';
 
+  /// 首页 / 个人中心弹窗。GET
+  ///
+  /// 入参 `creaturely`：场景 `1` 首页 / `2` 个人中心（见 [ApiFields.popupScene]）；
+  /// 返回弹窗类型与内容（见 [ApiFields.popupType] / [ApiFields.popupData]）。
+  static const dialog = '/outsulk/agatize';
+
   /// banner 点击记录上报。POST
   static const bannerClick = '/outsulk/gaile';
 

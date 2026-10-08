@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/navigation.dart';
 import 'core/push/ios_notification_route_coordinator.dart';
+import 'core/report/device_info_sync.dart';
+import 'core/report/report_bridge.dart';
 import 'core/report/report_lifecycle_host.dart';
+import 'core/report/report_store.dart';
+import 'core/startup/startup_network_gate.dart';
+import 'data/repositories/report_repository.dart';
+import 'providers/network_provider.dart';
 import 'providers/session_provider.dart';
 import 'theme/theme.dart';
 
@@ -22,7 +28,27 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const ReportLifecycleHost(child: LayaCreditApp()),
+      child: StartupNetworkGate(
+        // 启动先探一次后端是否可达：不可达就停无网重试页，不进首页。
+        // 探测会顺带把 HttpClient（设备信息 / 系统代理）就绪，等于把网络层
+        // 的初始化提到首屏之前完成。
+        probe: () async {
+          final client = await container.read(httpClientProvider.future);
+          final available = await client.probeTransport();
+          if (!available) return false;
+          // 对齐 Dali：网络可达后、进入首页前，串行按型号标识查一次设备信息。
+          // 结果写入 ReportStore（设备报文 `chlor` / `squattest`）与
+          // DeviceInfoCache（公参 `beautifully`）；失败只打日志，不阻塞启动。
+          await DeviceInfoSync(
+            repository: ReportRepository(client),
+            bridge: ReportBridge.shared,
+            store: ReportStore(),
+          ).sync();
+          return true;
+        },
+        // 网络就绪后才挂上报 / 权限宿主，与 fund_nexus「闸门通过再启动业务」一致。
+        readyBuilder: () => const ReportLifecycleHost(child: LayaCreditApp()),
+      ),
     ),
   );
 }

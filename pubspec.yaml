@@ -78,6 +78,7 @@ flutter:
   # 下面注册的是按用途重命名后的副本。
   assets:
     - assets/home/
+    - assets/launch/
     - assets/mine/
     - assets/navigation/
     - assets/login/

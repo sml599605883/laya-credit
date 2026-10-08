@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../device/device_info_cache.dart';
 import '../device/device_params.dart';
 import 'api_exception.dart';
 import 'api_protocol.dart';
@@ -110,11 +111,16 @@ class HttpClient {
   /// 与 [_onRequest] 走同一套逻辑，供 H5 的 `publicParams` 桥动作复用：
   /// H5 自己发起的请求也必须带完全一致的签名，否则后端会判 `code 400`。
   Map<String, Object?> buildSignedQuery(String path) {
+    // 公参 `beautifully` 优先用接口（`POST /outsulk/omphacy`）下发的设备名称，
+    // 与 Dali 一致；接口查询完成前回退到本地读到的型号，保证首个请求也带得上值。
+    final resolvedDeviceName = DeviceInfoCache.shared.deviceName;
     final commonParams = CommonParams.create(
       deviceId: _device.deviceId,
       market: _config.marketIdentifier,
       appVersion: _device.appVersion,
-      deviceName: _device.modelName,
+      deviceName: resolvedDeviceName.isNotEmpty
+          ? resolvedDeviceName
+          : _device.modelName,
       osVersion: _device.systemVersion,
       advertisingId: _device.advertisingId,
       sessionId: _getUserToken(),
@@ -135,6 +141,27 @@ class HttpClient {
 
   void _onError(DioException error, ErrorInterceptorHandler handler) {
     handler.reject(error);
+  }
+
+  /// 启动网络探测：对 baseUrl 发一次 GET，只要能拿到任意 HTTP 状态码，
+  /// 就说明传输层可达。
+  ///
+  /// 与业务接口刻意不同：这里不解析响应协议、不抛 [ApiException]，
+  /// 401 / 404 / 500 都算「网络可达」，只有连接建立失败才算「不可达」，
+  /// 免得探测失败被当成业务错误弹提示。
+  Future<bool> probeTransport() async {
+    try {
+      final response = await _dio.getUri<String>(
+        Uri.parse(_config.apiBase.toString()),
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (_) => true,
+        ),
+      );
+      return response.statusCode != null;
+    } on DioException catch (error) {
+      return error.response?.statusCode != null;
+    }
   }
 
   Future<ApiResponse<T>> get<T>(

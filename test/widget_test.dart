@@ -2919,6 +2919,42 @@ void main() {
     expect(home.notices, hasLength(1));
   });
 
+  test('首页 SMALL_CARD 用 Abaca 混淆值解析，无大卡时兜底出头图产品', () {
+    final home = HomeData.fromJson(const {
+      'kneeing': [
+        {
+          'liquidators': 'Abaca',
+          'stabiliment': [
+            {'heartfelt': 'Pera Milo', 'wastefulnesses': '\u20b110,000'},
+          ],
+        },
+      ],
+    });
+
+    expect(home.product?.productName, 'Pera Milo');
+  });
+
+  test('首页大卡与小卡同时下发时，大卡优先出头图产品', () {
+    final home = HomeData.fromJson(const {
+      'kneeing': [
+        {
+          'liquidators': 'Abaca',
+          'stabiliment': [
+            {'heartfelt': 'Small Card'},
+          ],
+        },
+        {
+          'liquidators': 'LupusesWheelrace',
+          'stabiliment': [
+            {'heartfelt': 'Large Card'},
+          ],
+        },
+      ],
+    });
+
+    expect(home.product?.productName, 'Large Card');
+  });
+
   test('加签覆盖的参数与实际下发的公共参数完全一致', () {
     final common = CommonParams.create(
       deviceId: 'device',

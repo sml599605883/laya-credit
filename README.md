@@ -837,6 +837,11 @@ lib/
       `POST /outsulk/mesometral` 风控埋点；`POST /outsulk/vesperal` 设备信息（AES 加密）；
       `POST /outsulk/tightens` Apple 推送 token；`POST /outsulk/wastefulnesses` 同盾活体结果；
       `POST /outsulk/omphacy` 按型号标识查设备名称 / 物理尺寸。
+    - **设备信息查询对齐 Dali**（`DeviceInfoSync`）：`StartupNetworkGate` 网络探测通过后、
+      进入首页前**串行 await** 查一次，结果写入 `ReportStore`（设备报文 `chlor` / `squattest`）
+      与 `DeviceInfoCache`（进程内同步缓存）。公参 `beautifully` 优先取接口下发的设备名称
+      （`HttpClient.buildSignedQuery`），查询完成前回退到本地型号；落库值会在查询前预热缓存，
+      网络失败时仍带上一次查到的值。`ReportService.syncDeviceInfo()` 退化为缓存缺失时的兜底重试。
     - **不上报通讯录**：文档里的 `POST /outsulk/kailua` 不接入（`ApiEndpoints` 里刻意不登记）。
     字段名一律按接口文档的「混淆前 → 混淆后」映射表（`doc-obf-data`）对齐，
     `report_data.dart` 每个分组都标了混淆前语义名（如 `board → amativeness`、

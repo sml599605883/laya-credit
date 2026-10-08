@@ -18,7 +18,7 @@ abstract final class WebViewActions {
   /// 风控数据上报。
   static const uploadRisk = 'laya_credit_rqHm8jp3XV4JDoI';
 
-  /// 跳转 Google Play（iOS 忽略）。
+  /// 打开 Google Play 商店页（入参为商店链接或包名，均外跳浏览器）。
   static const openGooglePlay = 'laya_credit_lgr5GnQLGtwyPTU';
 
   /// 打开链接。

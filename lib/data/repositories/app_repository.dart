@@ -3,6 +3,7 @@ import '../../core/network/api_fields.dart';
 import '../../core/network/api_response.dart';
 import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
+import '../models/app_dialog.dart';
 import '../models/home_data.dart';
 
 /// 首页相关接口。
@@ -27,6 +28,19 @@ class AppRepository {
               orders: [],
               notices: [],
             ),
+    );
+  }
+
+  /// 首页 / 个人中心弹窗（`GET /outsulk/agatize`）。
+  ///
+  /// [scene] 取 [AppPopupScene]（`1` 首页 / `2` 个人中心）。
+  Future<ApiResponse<AppDialog>> getDialog({required int scene}) {
+    return _client.get<AppDialog>(
+      ApiEndpoints.dialog,
+      params: {ApiFields.popupScene: scene},
+      parse: (data) => data is Map
+          ? AppDialog.fromJson(data.cast<String, dynamic>())
+          : const AppDialog(),
     );
   }
 

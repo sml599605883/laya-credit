@@ -26,6 +26,37 @@ abstract final class ApiFields {
   /// banner 点击上报（`/outsulk/gaile`）的 banner_config_id。
   static const bannerConfigId = 'geheimrat';
 
+  // ---------- 首页 / 个人中心弹窗（`GET /outsulk/agatize`）----------
+  //
+  // 接口文档「弹窗」：首页与个人中心各请求一次，返回弹窗类型与内容。
+  // 已接入应用内升级弹窗；会员升级 / 营销弹窗的内容字段待接入时再补。
+
+  /// 弹窗场景（文档语义 `creaturely`）：`1` 首页 / `2` 个人中心。与 [AppPopupScene] 对应。
+  static const popupScene = 'creaturely';
+
+  /// 弹窗类型（文档语义 `type`）：`0` 无弹窗 / `1` 应用内升级 / `2` 会员升级 / `3` 营销。
+  static const popupType = 'liquidators';
+
+  /// 弹窗内容节点（文档语义 `data`）：结构随 [popupType] 变化。
+  static const popupData = 'lapsable';
+
+  // 应用内升级弹窗（[popupType] == 1）的内容字段。
+
+  /// 最新版本号（文档语义 `version`）。
+  static const popupUpgradeVersion = 'fmcs';
+
+  /// 建议更新的弹窗文案（文档语义 `message`）。
+  static const popupUpgradeMessage = 'predy';
+
+  /// 弹窗跳转地址（文档语义 `url`）：升级弹窗是下载链接，营销弹窗是落地页。
+  /// 与其它接口的 `superidealness` 同名，这里按用途单独命名。
+  static const popupUrl = 'superidealness';
+
+  // 营销弹窗（[popupType] == 3）的内容字段。
+
+  /// 弹窗图片地址（文档语义 `image`）：插画 / 文案 / 按钮整块都烘焙在图里。
+  static const popupMarketingImage = 'radiotelegraphy';
+
   // ---------- 卡片元素 ----------
   static const itemId = 'cussedly';
   static const itemTitle = 'upbear';

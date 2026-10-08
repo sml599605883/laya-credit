@@ -2,6 +2,9 @@
 ///
 /// 路径对应 `pubspec.yaml` 中注册的 `assets/` 子目录。
 abstract final class AppAssets {
+  // 启动页（设计稿「位图 + 编组 2蒙版」，375x812 通栏，Logo 与产品名已烘焙在图里）
+  static const launch = 'assets/launch/launch.png';
+
   // 首页
   static const homeBackground = 'assets/home/home_background.png';
   static const homeHeaderGlow = 'assets/home/home_header_glow.png';
@@ -24,6 +27,18 @@ abstract final class AppAssets {
   static const homeApplyNowHighlight = 'assets/home/apply_now_highlight.png';
   static const homeApplyNowNormal = 'assets/home/apply_now_normal.png';
   static const homeApplyNowDisabled = 'assets/home/apply_now_disabled.png';
+
+  /// 首页 / 个人中心「应用内升级」弹窗的头部切图（蓝湖稿 `08-03 - 弹窗-升级提示`，
+  /// 用户提供的 `编组 2@3x.png`，1029x423 = 343x141 @3x）：
+  /// 白色卡顶（含 12pt 圆角）、`New version released` 标题、绿色斜切装饰与
+  /// 火箭插画都烘焙在这一张里，火箭顶端透明区需溢出到白卡上方。
+  static const homePopupUpgradeHeader =
+      'assets/home/home_popup_upgrade_header.png';
+
+  /// 营销弹窗底部的关闭按钮（蓝湖稿 `08-03 - 弹窗-新产品`，用户提供的
+  /// `编组@3x.png`，96x96 = 32x32 @3x）：白色描边圆 + 白色叉号，背景透明。
+  static const homePopupMarketingClose =
+      'assets/home/home_popup_marketing_close.png';
 
   // 证件选择页（蓝湖稿 `03 - 认证流程模块`）
   /// 顶部头图（375x213）：绿色渐变 + 大标题 + 吉祥物，整块切图。

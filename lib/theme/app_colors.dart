@@ -405,6 +405,23 @@ abstract final class AppColors {
   /// （设计稿实测取色：填充条与 `text_5` 均为 rgba(19,19,19,1)）。
   static const recreditProgressFill = Color(0xFF131313);
 
+  // ---------- 应用内升级弹窗（蓝湖稿 `08-03 - 弹窗-升级提示`） ----------
+  //
+  // 卡顶切图（含标题 / 火箭 / 绿色装饰）由 [AppAssets.homePopupUpgradeHeader]
+  // 提供，这里只补代码绘制的版本号胶囊、正文与按钮。
+
+  /// 版本号胶囊底色（设计稿 `text-wrapper_1` rgba(254,41,92,1)）。
+  static const popupUpgradeVersionBackground = Color(0xFFFE295C);
+
+  /// 弹窗正文文案色（设计稿 `text_3` rgba(51,51,51,1)）。
+  static const popupUpgradeMessageText = Color(0xFF333333);
+
+  /// `Update Now` 按钮底色（设计稿 `text-wrapper_2` 切图实测 rgba(195,231,95,1)）。
+  static const popupUpgradeButton = Color(0xFFC3E75F);
+
+  /// `Update Now` 按钮文案色（设计稿 `text_6` rgba(19,19,19,1)）。
+  static const popupUpgradeButtonText = Color(0xFF131313);
+
   static const white = Color(0xFFFFFFFF);
   static const black = Color(0xFF000000);
 }
