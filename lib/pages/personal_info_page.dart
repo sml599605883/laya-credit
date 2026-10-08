@@ -141,16 +141,14 @@ class PersonalInfoPage extends ConsumerStatefulWidget {
     super.key,
     required this.productId,
     this.orderNo = '',
-  })
-    : _kind = _CertificationFormKind.personal;
+  }) : _kind = _CertificationFormKind.personal;
 
   /// 工作信息形态（认证第三项）：与个人信息同一套 UI，只换数据源 / 保存接口。
   const PersonalInfoPage.work({
     super.key,
     required this.productId,
     this.orderNo = '',
-  })
-    : _kind = _CertificationFormKind.work;
+  }) : _kind = _CertificationFormKind.work;
 
   /// 产品 id。
   final String productId;
@@ -460,6 +458,7 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
             alignment: Alignment.centerLeft,
             child: Text(
               field.title,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppColors.personalInfoFieldTitle,
                 fontSize: layout.px(16),
