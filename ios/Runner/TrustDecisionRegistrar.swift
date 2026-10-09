@@ -13,6 +13,8 @@ final class TrustDecisionRegistrar: NSObject {
   private static let channelName = "laya_credit/client_bridge"
   private let trustDecisionPartnerCode = "boqin_ph"
   private let trustDecisionAppKey = "1dc25522f2adc77f5347816c0f7fa31b"
+  /// 只有这些结果码才算活体通过；其余（含 successBlock 携带的错误码）一律按失败处理。
+  private static let acceptedLivenessCodes: Set<Int> = [0]
   private var hasActivated = false
   private lazy var manager = TDMobRiskManager.sharedManager()
 
@@ -62,30 +64,48 @@ final class TrustDecisionRegistrar: NSObject {
       let license = arguments as? String, !license.isEmpty,
       let viewController = topViewController()
     else {
-      result(livenessResult(success: false, payload: nil))
+      result(makeLivenessReply(payload: nil))
       return
     }
 
+    // successBlock / failBlock 仅表示「回调到达」，是否通过一律由 payload 的 code 决定：
+    // successBlock 里同样会带非 0 的错误码，不能按其回调类型下结论。
+    let reply: ([AnyHashable: Any]?) -> Void = { [self] payload in
+      result(makeLivenessReply(payload: payload))
+    }
     manager?.pointee.showLivenessWithShowStyle(
       viewController,
       license,
       TDLivenessShowStylePresent,
-      { payload in result(self.livenessResult(success: true, payload: payload)) },
-      { payload in result(self.livenessResult(success: false, payload: payload)) }
+      reply,
+      reply
     )
   }
 
-  private func livenessResult(success: Bool, payload: [AnyHashable: Any]?) -> [String: Any] {
+  private func makeLivenessReply(payload: [AnyHashable: Any]?) -> [String: Any] {
     let raw = (payload as? [String: Any]) ?? [:]
+    let code = Self.livenessCode(in: raw)
     return [
-      "success": success,
-      "code": (raw["code"] as? NSNumber)?.intValue ?? (success ? 0 : -1),
+      "success": Self.acceptedLivenessCodes.contains(code),
+      "code": code,
       "message": raw["message"] as? String ?? "",
       "image": raw["image"] as? String ?? "",
       "sequence_id": raw["sequence_id"] as? String ?? "",
       "liveness_id": raw["liveness_id"] as? String ?? "",
       "raw": raw,
     ]
+  }
+
+  /// 读取 SDK 回传的结果码，兼容数值与字符串两种形态；缺失或无法解析时按失败（-1）处理。
+  private static func livenessCode(in payload: [String: Any]) -> Int {
+    switch payload["code"] {
+    case let number as NSNumber:
+      return number.intValue
+    case let text as String:
+      return Int(text) ?? -1
+    default:
+      return -1
+    }
   }
 
   private func topViewController(
