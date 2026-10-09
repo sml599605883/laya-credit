@@ -30,7 +30,6 @@ import 'package:laya_credit/data/models/identity_recognition.dart';
 import 'package:laya_credit/data/models/login_result.dart';
 import 'package:laya_credit/data/models/loan_confirm_data.dart';
 import 'package:laya_credit/data/models/personal_info_data.dart';
-import 'package:laya_credit/data/models/sms_channel_options.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/data/repositories/auth_repository.dart';
 import 'package:laya_credit/data/repositories/certification_repository.dart';
@@ -142,10 +141,7 @@ class _StubAuthRepository extends AuthRepository {
   int deleteAccountCalls = 0;
 
   @override
-  Future<ApiResponse<void>> sendSmsCode({
-    required String phone,
-    required SmsChannel channel,
-  }) async {
+  Future<ApiResponse<void>> sendSmsCode({required String phone}) async {
     sendCodeCalls++;
     if (delay case final wait?) await Future<void>.delayed(wait);
     if (failure case final error?) throw error;

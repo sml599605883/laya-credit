@@ -13,11 +13,6 @@ abstract final class ApiFields {
   static const realName = 'fashioned';
   static const sessionId = 'rear';
 
-  // 短信渠道开关
-  static const channelSms = 'phantom';
-  static const channelVoice = 'agatize';
-  static const channelViber = 'gaile';
-
   // ---------- 首页 ----------
   static const homeKneeing = 'kneeing';
   static const homeType = 'liquidators';
@@ -104,7 +99,6 @@ abstract final class ApiFields {
   static const amountText = 'lepidophyllum';
   static const date = 'lauryn';
   static const dateText = 'obsequeence';
-  static const orderStatus = 'firebreaks';
   static const cardStatus = 'satin';
   static const displayAmount = 'libertytown';
   static const orderStatusText = 'cuboid';

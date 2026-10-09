@@ -312,6 +312,21 @@ void main() {
     test('保留确认路径未命中时不拦截', () {
       expect(webViewConfirmProductId('https://h5.example/#/Order'), isEmpty);
     });
+
+    test('保留确认路径命中时取 productId', () {
+      expect(webViewConfirmPathSegment, 'AnapaestsManuri');
+      expect(webViewConfirmProductKey, 'podostemon');
+      expect(
+        webViewConfirmProductId(
+          'https://h5.example/#/AnapaestsManuri?podostemon=p-1',
+        ),
+        'p-1',
+      );
+      expect(
+        webViewConfirmProductId('/AnapaestsManuri?podostemon=p-2'),
+        'p-2',
+      );
+    });
   });
 
   group('AppNavigator.webViewUri', () {

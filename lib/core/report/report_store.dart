@@ -32,9 +32,6 @@ class ReportStore {
 
   Future<void> saveLoginAt(int value) => _setInt(_loginAtKey, value);
 
-  /// 是否已经上报过（弹出过）定位授权。文档要求：登录后先完成授权再上报。
-  Future<bool> hasOpenedBefore() => _bool(_hasOpenedKey);
-
   /// Adjust 归因 SDK 是否已初始化（跨启动只初始化一次）。
   Future<bool> isAdjustInitialized() => _bool(_adjustInitializedKey);
 

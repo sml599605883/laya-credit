@@ -17,8 +17,6 @@ class ReportLocationSnapshot {
     this.permissionStatus = '',
   });
 
-  static const empty = ReportLocationSnapshot();
-
   final String province;
   final String locality;
   final String fullAddress;

@@ -146,11 +146,10 @@ bool canUseWebViewController({
 
 /// H5 的「返回保留确认」路径。
 ///
-/// TODO(混淆串): 路径段与参数名待接口文档确认后替换
-/// （dali 用 `Florescences` + `thunderstruck`）。当前占位值下不会命中，
-/// 命中时也只打日志、继续正常返回（本项目暂不做保留弹窗）。
-const String webViewConfirmPathSegment = 'RetentionConfirm';
-const String webViewConfirmProductKey = 'productId';
+/// 路径段 / 参数名为接口文档确认后的混淆串（对齐 dali 的
+/// `Florescences` + `thunderstruck`，本项目为 `AnapaestsManuri` + `podostemon`）。
+const String webViewConfirmPathSegment = 'AnapaestsManuri';
+const String webViewConfirmProductKey = 'podostemon';
 
 String webViewConfirmProductId(String rawUrl) {
   final uri = Uri.tryParse(rawUrl.trim());

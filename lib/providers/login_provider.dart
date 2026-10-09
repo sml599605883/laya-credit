@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_exception.dart';
 import '../data/models/login_result.dart';
-import '../data/models/sms_channel_options.dart';
 import 'repository_provider.dart';
 import 'session_provider.dart';
 
@@ -22,18 +21,12 @@ class LoginController extends AsyncNotifier<void> {
   FutureOr<void> build() {}
 
   /// 发送验证码。失败时把异常写进 state，由页面展示 Toast。
-  Future<bool> sendCode({
-    required String phone,
-    SmsChannel channel = SmsChannel.sms,
-  }) async {
+  Future<bool> sendCode({required String phone}) async {
     state = const AsyncLoading();
     var succeeded = false;
     state = await AsyncValue.guard(() async {
       final repository = await ref.read(authRepositoryProvider.future);
-      final response = await repository.sendSmsCode(
-        phone: phone,
-        channel: channel,
-      );
+      final response = await repository.sendSmsCode(phone: phone);
       if (!response.isSuccess) {
         throw ApiException(
           type: ApiFailureType.business,

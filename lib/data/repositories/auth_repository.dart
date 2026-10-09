@@ -4,7 +4,6 @@ import '../../core/network/api_response.dart';
 import '../../core/network/http_client.dart';
 import '../../core/network/obfuscation_helper.dart';
 import '../models/login_result.dart';
-import '../models/sms_channel_options.dart';
 
 /// 账号相关接口（登录/注册、验证码、退出登录）。
 class AuthRepository {
@@ -12,36 +11,19 @@ class AuthRepository {
 
   final HttpClient _client;
 
+  /// 验证码发送渠道。当前只支持短信，后端字段按协议原样上送。
+  static const _smsChannel = 'sms';
+
   /// 获取登录/注册短信验证码。
-  Future<ApiResponse<void>> sendSmsCode({
-    required String phone,
-    required SmsChannel channel,
-  }) {
+  Future<ApiResponse<void>> sendSmsCode({required String phone}) {
     return _client.post<void>(
       ApiEndpoints.sendSmsCode,
       params: {
         ApiFields.phone: phone,
-        ApiFields.channel: channel.value,
+        ApiFields.channel: _smsChannel,
         ApiFields.obfuscateSendSms: ObfuscationHelper.randomParam(),
       },
       parse: (_) {},
-    );
-  }
-
-  /// 首次发送失败后查询可用的验证码渠道。
-  Future<ApiResponse<SmsChannelOptions>> fetchSmsChannels({
-    required String phone,
-  }) {
-    return _client.post<SmsChannelOptions>(
-      ApiEndpoints.smsChannels,
-      params: {
-        ApiFields.phone: phone,
-        ApiFields.obfuscateLogin1: ObfuscationHelper.randomParam(),
-        ApiFields.obfuscateLogin2: ObfuscationHelper.randomParam(),
-      },
-      parse: (data) => data is Map
-          ? SmsChannelOptions.fromJson(data.cast<String, dynamic>())
-          : const SmsChannelOptions(sms: true, voice: false, viber: false),
     );
   }
 

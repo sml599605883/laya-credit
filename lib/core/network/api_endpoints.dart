@@ -5,9 +5,6 @@ abstract final class ApiEndpoints {
   /// 获取登录/注册短信验证码。POST
   static const sendSmsCode = '/outsulk/acarology';
 
-  /// 获取支持的验证码发送渠道（首次发送失败后换渠道）。POST
-  static const smsChannels = '/outsulk/tectites';
-
   /// 验证码登录/注册。POST
   static const smsLogin = '/outsulk/chlorpikrin';
 

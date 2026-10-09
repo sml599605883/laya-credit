@@ -1,11 +1,16 @@
 import 'dart:convert';
 
+import 'package:encrypt/encrypt.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:laya_credit/core/network/api_crypto.dart';
 import 'package:laya_credit/core/report/report.dart';
 
 const _key = '27f7dd9897297dbd';
 const _iv = '9feade03e8f337e2';
+
+String _decrypt(String cipherText) {
+  return Encrypter(AES(Key.fromUtf8(_key), mode: AESMode.cbc))
+      .decrypt64(cipherText, iv: IV.fromUtf8(_iv));
+}
 
 void main() {
   group('reportText', () {
@@ -99,7 +104,7 @@ void main() {
       );
 
       final decoded = jsonDecode(
-        ApiCrypto(key: _key, iv: _iv).decryptText(encrypted),
+        _decrypt(encrypted),
       ) as Map<String, dynamic>;
 
       // 文档标注已弃用的 deceleron 不传。
@@ -161,7 +166,7 @@ void main() {
       );
 
       final decoded = jsonDecode(
-        ApiCrypto(key: _key, iv: _iv).decryptText(encrypted),
+        _decrypt(encrypted),
       ) as Map<String, dynamic>;
       final scalloper = decoded['scalloper'] as Map<String, dynamic>;
       expect(scalloper['print'], '');

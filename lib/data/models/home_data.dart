@@ -94,7 +94,6 @@ abstract final class HomeSectionType {
   static const banner = 'BANNER';
   static const largeCard = 'LARGE_CARD';
   static const smallCard = 'SMALL_CARD';
-  static const repay = 'REPAY';
 
   /// 推荐列表（首页「Recommendation」区块）。
   static const productList = 'PRODUCT_LIST';

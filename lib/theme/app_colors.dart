@@ -14,9 +14,6 @@ abstract final class AppColors {
   /// 深色底（首页往上滚动区域）。
   static const surfaceDark = Color(0xFF191F1F);
 
-  /// 深色高光（首页顶部金色光晕）。
-  static const darkGlow = Color(0xFF59542A);
-
   /// 抽屉/纯白底。
   static const surface = Color(0xFFFFFFFF);
 
@@ -26,21 +23,11 @@ abstract final class AppColors {
   /// 次级文字色。
   static const textSecondary = Color(0xFF606060);
 
-  /// 提示性文字/图标（箭头）。
-  static const textHint = Color(0xFF989898);
-
-  /// 深色图标（浅色底上的选中态）。
-  static const iconDark = Color(0xFF101010);
-
   /// 底部导航悬浮胶囊底色。
   static const tabBarPill = Color(0xFF131313);
 
   /// 底部导航未选中项的圆形托底色。
   static const tabItemTrack = Color(0xFF2A2A2A);
-
-  /// 首页运营位渐变（左 -> 右）。
-  static const bannerStart = Color(0xFFEA3B26);
-  static const bannerEnd = Color(0xFFDA202D);
 
   /// 订单卡片渐变（左 -> 右）。
   static const orderCardStart = Color(0xFF0E494F);
