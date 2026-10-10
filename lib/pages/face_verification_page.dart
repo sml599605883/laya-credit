@@ -199,6 +199,12 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
         );
         return;
       }
+      // 客户端只接了同盾（7）；其它活体类型没有对应 SDK，提前拦截，
+      // 避免拿 face++ 的 token 去拉起同盾。
+      if (token.livenessType != 7) {
+        ToastHelper.showError('Unsupported liveness verification type');
+        return;
+      }
 
       final outcome = await ref.read(livenessGatewayProvider).run(token.token);
       if (!mounted) return;
@@ -214,16 +220,15 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
             Future<void>.value(),
       );
 
-      if (!outcome.passed) {
+      // 同盾回调只要带回图片和 liveness_id 就视为识别成功并上传，
+      // 不再依据返回码推导的 [LivenessOutcome.passed] 判定：success/code
+      // 判定的偏差会把有效结果丢掉，导致上传接口不被调用。
+      if (!outcome.hasUploadPayload) {
         ToastHelper.showError(
           outcome.message.isNotEmpty
               ? outcome.message
               : 'Face verification was not completed',
         );
-        return;
-      }
-      if (!outcome.hasUploadPayload) {
-        ToastHelper.showError('Face verification returned incomplete data');
         return;
       }
 

@@ -4016,6 +4016,39 @@ void main() {
     expect(find.text('Liveness failed'), findsOneWidget);
   });
 
+  testWidgets('人脸识别页活体回调带图与 livenessId 时，结果码非通过也上传', (tester) async {
+    _mockCameraPermission(1);
+    final certificationRepository = _StubCertificationRepository();
+    // 同盾结果码判定的通过标记为 false，但回调带回了图片与 liveness_id：
+    // 对齐 dali_cash 后应以「有可上传数据」为准继续上传，不能丢弃有效结果。
+    final livenessGateway = _StubLivenessGateway(
+      outcome: const LivenessOutcome(
+        passed: false,
+        code: 3001,
+        message: 'completed',
+        imageBase64: _faceImageBase64,
+        livenessId: 'LIVE-42',
+      ),
+    );
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+      productRepository: productRepository,
+    );
+    _openFaceVerificationPage(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.faceUploadCalls, hasLength(1));
+    expect(certificationRepository.faceUploadCalls.single.$2, 'LIVE-42');
+    expect(productRepository.detailCalls, greaterThan(0));
+  });
+
   testWidgets('人脸识别页相机权限被拒时弹引导、不取 token 也不拉起活体', (tester) async {
     _mockCameraPermission(0);
     final certificationRepository = _StubCertificationRepository();
@@ -5927,6 +5960,42 @@ void main() {
     expect(retry.fields[BindCardField.channelKey], 'PAYMAYA');
     expect(retry.fields['firstName'], 'Anna');
 
+    expect(productRepository.detailCalls, greaterThan(0));
+  });
+
+  testWidgets('绑卡页活体回调只带回 livenessId 时，结果码非通过也补交', (tester) async {
+    _mockCameraPermission(1);
+    final certificationRepository = _StubCertificationRepository()
+      ..submitBindCardCodes = const [20000, 0];
+    // 结果码判定的通过标记为 false 且没有人脸图，但带回了 liveness_id：
+    // 对齐 dali_cash 后绑卡补交只要求 liveness_id，不能因缺图丢弃结果。
+    final livenessGateway = _StubLivenessGateway(
+      outcome: const LivenessOutcome(
+        passed: false,
+        code: 3001,
+        message: 'completed',
+        livenessId: 'LIVE-42',
+      ),
+    );
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+      livenessGateway: livenessGateway,
+      productRepository: productRepository,
+    );
+    _openBindCardPage(tester, orderNo: 'ORDER-9');
+    await tester.pumpAndSettle();
+
+    await _fillBindCardForm(tester);
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.submitBindCardCalls, hasLength(2));
+    final retry = certificationRepository.submitBindCardCalls.last;
+    expect(retry.faceType, '7');
+    expect(retry.livenessId, 'LIVE-42');
     expect(productRepository.detailCalls, greaterThan(0));
   });
 

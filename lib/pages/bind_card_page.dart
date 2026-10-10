@@ -942,6 +942,11 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
         );
         return null;
       }
+      // 客户端只接了同盾（7）；其它活体类型没有对应 SDK，提前拦截。
+      if (token.livenessType != 7) {
+        ToastHelper.showError('Unsupported liveness verification type');
+        return null;
+      }
 
       final outcome = await ref.read(livenessGatewayProvider).run(token.token);
       if (!mounted) return null;
@@ -957,7 +962,9 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
             Future<void>.value(),
       );
 
-      if (!outcome.passed || !outcome.hasUploadPayload) {
+      // 同盾回调只要带回 liveness_id 就视为识别成功并补交绑卡，不再依据
+      // 返回码推导的 [LivenessOutcome.passed] 判定；绑卡这一步不依赖人脸图。
+      if (outcome.livenessId.trim().isEmpty) {
         ToastHelper.showError(
           outcome.message.isNotEmpty
               ? outcome.message
