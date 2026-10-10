@@ -14,7 +14,8 @@ final class TrustDecisionRegistrar: NSObject {
   private let trustDecisionPartnerCode = "boqin_ph"
   private let trustDecisionAppKey = "1dc25522f2adc77f5347816c0f7fa31b"
   /// 只有这些结果码才算活体通过；其余（含 successBlock 携带的错误码）一律按失败处理。
-  private static let acceptedLivenessCodes: Set<Int> = [0]
+  /// 同盾活体成功码为 200（并非 0）。
+  private static let acceptedLivenessCodes: Set<Int> = [200]
   private var hasActivated = false
   private lazy var manager = TDMobRiskManager.sharedManager()
 
