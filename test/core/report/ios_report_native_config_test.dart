@@ -17,7 +17,7 @@ void main() {
     expect(collector, isNot(contains('sysctlbyname("hw.model"')));
   });
 
-  test('设备 ID 取当前 idfv，keychain 只作兜底', () {
+  test('设备 ID 优先取 keychain，并由 Flutter 公参与设备报文共用', () {
     final registrar = File('ios/Runner/ReportRegistrar.swift')
         .readAsStringSync();
     final body = registrar.substring(
@@ -25,11 +25,16 @@ void main() {
       registrar.indexOf('private func deviceModelName()'),
     );
 
-    // 先读当前 idfv（卸载重装后会变），keychain 只在 idfv 拿不到时兜底；
-    // 反过来的话，公参 `genuflection` / `shapely` 会和设备报文里的 idfv 对不上。
+    // 先读 Keychain，首次安装再以当前 IDFV 初始化。Flutter 侧也必须通过
+    // `getStableDeviceId` 读取同一值，否则重装后公参与设备报文会不一致。
     expect(
-      body.indexOf('identifierForVendor'),
-      lessThan(body.indexOf('keychainValue')),
+      body.indexOf('keychainValue'),
+      lessThan(body.indexOf('identifierForVendor')),
     );
+    expect(registrar, contains('case "getStableDeviceId"'));
+
+    final deviceParams = File('lib/core/device/device_params.dart')
+        .readAsStringSync();
+    expect(deviceParams, contains('getStableDeviceId'));
   });
 }

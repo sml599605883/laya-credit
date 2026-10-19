@@ -22,6 +22,7 @@ class ReportBridge {
   static const getReportLocationMethod = 'getReportLocation';
   static const requestLocationPermissionMethod = 'requestLocationPermission';
   static const getReportDeviceSnapshotMethod = 'getReportDeviceSnapshot';
+  static const getStableDeviceIdMethod = 'getStableDeviceId';
   static const getTrackingStatusMethod = 'getTrackingStatus';
   static const requestTrackingAuthorizationMethod =
       'requestTrackingAuthorization';
@@ -52,6 +53,13 @@ class ReportBridge {
     final result = await _safeInvokeMap(getReportDeviceSnapshotMethod);
     return ReportDeviceSnapshot.fromMap(result ?? const <Object?, Object?>{});
   }
+
+  /// 读取跨卸载重装保持稳定的设备 ID。
+  ///
+  /// 原生侧首次以当前 IDFV 初始化并写入 Keychain，后续优先返回 Keychain 值。
+  /// 公共参数与设备报文都使用这一值，避免重装后两处设备标识不一致。
+  Future<String> getStableDeviceId() =>
+      _safeInvokeString(getStableDeviceIdMethod);
 
   /// 读取 ATT 跟踪授权状态。
   ///

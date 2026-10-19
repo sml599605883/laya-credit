@@ -22,21 +22,18 @@ void main() {
     expect(repository.appleTokens, ['']);
   });
 
-  test('突发窗口内同一 token 只上报一次，窗口过后重新上报', () async {
-    var now = DateTime.now().millisecondsSinceEpoch;
+  test('同一 token 进程内只成功上报一次，登录成功强制补报', () async {
     final repository = _RecordingRepository();
-    final service = _service(
-      repository,
-      pushToken: 'token-1',
-      nowMillis: () => now,
-    );
+    final service = _service(repository, pushToken: 'token-1');
 
     await service.reportAppleToken();
     await service.reportAppleToken();
     await service.reportAppleToken();
     expect(repository.appleTokens, ['token-1']);
 
-    now += ReportService.appleTokenBurstWindow.inMilliseconds + 1;
+    await service.reportAppleToken(force: true);
+    expect(repository.appleTokens, ['token-1', 'token-1']);
+
     await service.reportAppleToken();
     expect(repository.appleTokens, ['token-1', 'token-1']);
   });
@@ -70,7 +67,6 @@ void main() {
   });
 
   test('push_token 事件与启动补报重叠时只上报一次', () async {
-    var now = DateTime.now().millisecondsSinceEpoch;
     final repository = _RecordingRepository();
     final events = StreamController<PushEvent>.broadcast();
     addTearDown(events.close);
@@ -78,7 +74,6 @@ void main() {
       repository,
       pushToken: 'token-2',
       events: events.stream,
-      nowMillis: () => now,
     );
 
     await service.start();
@@ -90,6 +85,19 @@ void main() {
 
     expect(repository.appleTokens, ['token-2']);
     await service.dispose();
+  });
+
+  test('推送上报业务失败不进入长期去重，后续事件可以重试', () async {
+    final repository = _RecordingRepository()..appleReportSucceeds = false;
+    final service = _service(repository, pushToken: 'token-retry');
+
+    await service.reportAppleToken();
+    expect(repository.appleTokens, ['token-retry']);
+
+    repository.appleReportSucceeds = true;
+    await service.reportAppleToken();
+    await service.reportAppleToken();
+    expect(repository.appleTokens, ['token-retry', 'token-retry']);
   });
 
   test('每次启动都按型号查设备信息并落库（不看登录态、不看缓存）', () async {
@@ -149,6 +157,27 @@ void main() {
 
     expect(repository.riskEndTimes, ['1000']);
   });
+
+  test('定位挂起时埋点在兜底时间内发出，结束时间不会穿越', () async {
+    var now = 2000000;
+    final repository = _RecordingRepository();
+    final service = _service(
+      repository,
+      pushToken: '',
+      bridge: _HangingLocationReportBridge(),
+      nowMillis: () => now,
+      locationTimeout: const Duration(milliseconds: 20),
+    );
+
+    await service.reportRisk(
+      productId: '1',
+      scene: '6',
+      orderNo: 'ORDER-1',
+      startedAtSeconds: 1900000,
+    );
+
+    expect(repository.riskEndTimes, ['2000']);
+  });
 }
 
 ReportService _service(
@@ -160,6 +189,7 @@ ReportService _service(
   Stream<PushEvent>? events,
   int Function()? nowMillis,
   PushBridge? pushBridge,
+  Duration locationTimeout = ReportService.defaultLocationTimeout,
 }) {
   return ReportService(
     repository,
@@ -171,6 +201,7 @@ ReportService _service(
     accessToken: () => accessToken,
     pushEvents: events,
     nowMillis: nowMillis,
+    locationTimeout: locationTimeout,
     // 空 token 的等待在单测里收敛掉，不真的等 500ms。
     delay: (duration) async {},
   );
@@ -195,6 +226,19 @@ class _SlowReportBridge extends ReportBridge {
   }
 }
 
+class _HangingLocationReportBridge extends ReportBridge {
+  final Completer<ReportLocationSnapshot?> _location =
+      Completer<ReportLocationSnapshot?>();
+
+  @override
+  Future<ReportDeviceSnapshot> getReportDeviceSnapshot() async {
+    return const ReportDeviceSnapshot(model: 'iPhone11,8');
+  }
+
+  @override
+  Future<ReportLocationSnapshot?> getReportLocation() => _location.future;
+}
+
 class _StubPushBridge extends PushBridge {
   _StubPushBridge(this._token);
 
@@ -213,6 +257,7 @@ class _RecordingRepository extends ReportRepository {
   final List<String> appleTokens = [];
   final List<String> deviceLookups = [];
   final List<String> riskEndTimes = [];
+  bool appleReportSucceeds = true;
 
   /// 非空时第一条上报会等它完成，用来构造并发场景。
   Completer<void>? releaseFirstCall;
@@ -247,7 +292,11 @@ class _RecordingRepository extends ReportRepository {
       await release.future;
     }
     appleTokens.add(token);
-    return const ApiResponse<void>(code: 200, message: '', data: null);
+    return ApiResponse<void>(
+      code: appleReportSucceeds ? 0 : 400,
+      message: '',
+      data: null,
+    );
   }
 
   @override

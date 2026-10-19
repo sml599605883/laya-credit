@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +28,7 @@ OrderListItem _item({
   String statusText = 'Outstanding',
   String actionText = 'Repay Now',
   String cardTarget = '/order/detail?orderId=4',
+  String legacyTarget = '/order/detail?orderId=4',
 }) {
   return OrderListItem(
     orderId: orderId,
@@ -39,7 +41,7 @@ OrderListItem _item({
     amountText: '₱20.000',
     amountLabel: 'Available up to',
     actionText: actionText,
-    legacyTarget: '/order/detail?orderId=4',
+    legacyTarget: legacyTarget,
     dateLabel: 'Due Date',
     dateValue: '29-11-2023',
     overdueDays: 0,
@@ -404,6 +406,58 @@ void main() {
 
       expect(find.byType(WebViewPage), findsNothing);
       expect(repository.requestedStatuses, ['4', '4']);
+    });
+
+    testWidgets('退出后再次进入订单列表会重新请求当前筛选', (tester) async {
+      final repository = _FakeOrderRepository([
+        [_item()],
+      ]);
+      final container = ProviderContainer(
+        overrides: [
+          orderRepositoryProvider.overrideWith((ref) async => repository),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      Widget page() => UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: OrderListPage()),
+      );
+
+      await tester.pumpWidget(page());
+      await tester.pumpAndSettle();
+      expect(repository.requestedStatuses, ['4']);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const SizedBox.shrink(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(page());
+      await tester.pumpAndSettle();
+
+      expect(repository.requestedStatuses, ['4', '4']);
+    });
+
+    testWidgets('卡片跳转地址为空时给出明确提示', (tester) async {
+      await _pumpWithRepository(
+        tester,
+        _FakeOrderRepository([
+          [_item(cardTarget: '', legacyTarget: '')],
+        ]),
+        child: MaterialApp(
+          builder: BotToastInit(),
+          home: const OrderListPage(),
+        ),
+      );
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('Order link is unavailable'), findsOneWidget);
     });
 
     testWidgets('卡片原生深链目标分发到等待授信页', (tester) async {

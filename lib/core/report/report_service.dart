@@ -35,6 +35,7 @@ class ReportService {
     Stream<PushEvent>? pushEvents,
     int Function()? nowMillis,
     Future<void> Function(Duration duration)? delay,
+    this.locationTimeout = defaultLocationTimeout,
     Future<void> Function(String token)? initializeAdjust,
   }) : store = store ?? ReportStore(),
        _pushBridge = pushBridge ?? PushBridge.shared,
@@ -56,6 +57,7 @@ class ReportService {
     required String? Function() accessToken,
     int Function()? nowMillis,
     Future<void> Function(Duration duration)? delay,
+    Duration locationTimeout = defaultLocationTimeout,
     Future<void> Function(String token)? initializeAdjust,
   }) {
     return current ??= ReportService(
@@ -68,6 +70,7 @@ class ReportService {
       accessToken: accessToken,
       nowMillis: nowMillis,
       delay: delay,
+      locationTimeout: locationTimeout,
       initializeAdjust: initializeAdjust,
     );
   }
@@ -86,21 +89,11 @@ class ReportService {
   final String? Function() accessToken;
   final int Function() _nowMillis;
   final Future<void> Function(Duration duration) _delay;
+  final Duration locationTimeout;
   final Future<void> Function(String token) _initializeAdjust;
 
   final PushBridge _pushBridge;
   final Stream<PushEvent>? _events;
-
-  /// 同一个推送 token 在这个时间窗内重复触发只上报一次（突发去抖）。
-  ///
-  /// 上报有三条路径：启动权限流程结束（[startupPermissionsResolved]）、原生
-  /// `push_token` 事件、登录成功。前两条几乎同时触发——原生在注册 APNs 后立刻
-  /// 推 `push_token` 事件，而启动权限流程紧接着（ATT 已决定时仅差 400ms）也会
-  /// 补报一次，于是同一 token 在极短时间内连发两次。
-  ///
-  /// 这里只做**秒级突发去抖**，不做长期去重：只要隔开这个窗口（正常登录都在
-  /// 窗口之外），同一 token 仍然会照常重新上报。
-  static const appleTokenBurstWindow = Duration(seconds: 3);
 
   /// 读到空 token 时的等待时长（见 [reportAppleToken]）。
   ///
@@ -108,6 +101,9 @@ class ReportService {
   /// （实测只差两三百毫秒）才推 `push_token` 事件。先等一小段再读一次，
   /// 能拿到真 token 就用真值上报，别让同一次突发既报空值又报真值。
   static const appleTokenEmptyTokenDelay = Duration(milliseconds: 500);
+
+  /// 读取定位的兜底时长，对齐 peso_shield。
+  static const defaultLocationTimeout = Duration(seconds: 3);
 
   bool _started = false;
   bool _starting = false;
@@ -118,7 +114,7 @@ class ReportService {
   Future<void>? _deviceInfoSync;
   StreamSubscription<PushEvent>? _pushSubscription;
   final Set<String> _reportingAppleTokens = <String>{};
-  final Map<String, int> _lastAppleTokenReportedAt = <String, int>{};
+  final Set<String> _reportedAppleTokens = <String>{};
 
   /// App 启动时调用一次：清理会话态、开始监听推送 token、执行首轮上报。
   ///
@@ -160,7 +156,7 @@ class ReportService {
     await store.saveLoginAt(_nowMillis());
     unawaited(reportGoogleMarket());
     unawaited(reportLocationAndDevice());
-    unawaited(reportAppleToken());
+    unawaited(reportAppleToken(force: true));
   }
 
   /// 读取当前定位（带单飞：并发调用只触发一次原生定位）。
@@ -175,7 +171,7 @@ class ReportService {
   Future<ReportLocationSnapshot?> _loadLocation() async {
     try {
       final location = await bridge.getReportLocation().timeout(
-        const Duration(seconds: 10),
+        locationTimeout,
       );
       if (location == null || !location.isValid) return null;
       await store.saveLocation(location);
@@ -189,7 +185,7 @@ class ReportService {
   /// 定位带兜底：优先用本次定位，超时 / 失败时退回上一次成功缓存。
   Future<ReportLocationSnapshot?> _locationWithFallback() async {
     try {
-      final location = await currentLocation();
+      final location = await currentLocation().timeout(locationTimeout);
       if (location != null && location.isValid) return location;
     } catch (_) {}
     return store.cachedLocation();
@@ -327,47 +323,35 @@ class ReportService {
 
   /// 上报 Apple 推送 token。
   ///
-  /// 不做长期去重：每次启动、每次登录都会重新上报。只做
-  /// [appleTokenBurstWindow] 的突发去抖，避免同一 token 在同一瞬间被两条上报
-  /// 路径连发两次；并发调用也只会真正发出一条请求。
+  /// 对齐 peso_shield：同一 token 在一个 App 进程内只成功上报一次；
+  /// 登录成功通过 [force] 再补报一次。原生事件、启动补报和并发调用共享去重状态。
   /// token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次），只是先等
   /// [appleTokenEmptyTokenDelay] 再读一次，别让「空值 + 真值」在一次突发里各报一次。
-  Future<void> reportAppleToken() async {
+  Future<void> reportAppleToken({bool force = false}) async {
     String? reserved;
     try {
       reserved = (await _pushBridge.getPushToken()).trim();
-      if (!_tryReserveAppleToken(reserved)) return;
 
       if (reserved.isEmpty) {
         await _delay(appleTokenEmptyTokenDelay);
         final latest = (await _pushBridge.getPushToken()).trim();
         if (latest.isNotEmpty && latest != reserved) {
-          // 真 token 到了：改报真值。真值若已被原生事件那条路报过，
-          // 下面的去重会拦住这一次，同一次突发仍然只有一条请求。
-          _reportingAppleTokens.remove(reserved);
-          if (!_tryReserveAppleToken(latest)) return;
           reserved = latest;
         }
       }
 
-      await repository.reportApplePushToken(token: reserved);
-      _lastAppleTokenReportedAt[reserved] = _nowMillis();
+      if ((!force && _reportedAppleTokens.contains(reserved)) ||
+          !_reportingAppleTokens.add(reserved)) {
+        return;
+      }
+
+      final response = await repository.reportApplePushToken(token: reserved);
+      if (response.isSuccess) _reportedAppleTokens.add(reserved);
     } catch (error) {
       _log(error);
     } finally {
       if (reserved != null) _reportingAppleTokens.remove(reserved);
     }
-  }
-
-  /// 抢占某个 token 的上报资格：突发窗口内报过的 token、以及正在上报中的
-  /// token（并发合并）都返回 false。
-  bool _tryReserveAppleToken(String token) {
-    final reportedAt = _lastAppleTokenReportedAt[token];
-    if (reportedAt != null &&
-        _nowMillis() - reportedAt < appleTokenBurstWindow.inMilliseconds) {
-      return false;
-    }
-    return _reportingAppleTokens.add(token);
   }
 
   /// 上报风控埋点。

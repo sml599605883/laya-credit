@@ -142,10 +142,13 @@ class _StubAuthRepository extends AuthRepository {
   int loginCalls = 0;
   int logoutCalls = 0;
   int deleteAccountCalls = 0;
+  final List<String> sendCodePhones = [];
+  final List<String> loginPhones = [];
 
   @override
   Future<ApiResponse<void>> sendSmsCode({required String phone}) async {
     sendCodeCalls++;
+    sendCodePhones.add(phone);
     if (delay case final wait?) await Future<void>.delayed(wait);
     if (failure case final error?) throw error;
     return const ApiResponse<void>(code: 0, message: 'success', data: null);
@@ -157,6 +160,7 @@ class _StubAuthRepository extends AuthRepository {
     required String code,
   }) async {
     loginCalls++;
+    loginPhones.add(phone);
     if (delay case final wait?) await Future<void>.delayed(wait);
     if (failure case final error?) throw error;
     return ApiResponse(
@@ -2529,6 +2533,9 @@ void main() {
     await tester.tap(find.byKey(const Key('tab-mine')));
     await tester.pumpAndSettle();
 
+    expect(find.text('Laya Credit'), findsNWidgets(2));
+    expect(find.text('Maya Agad'), findsNothing);
+
     final sendCode = tester.widget<TextButton>(
       find.byKey(const Key('login-send-code-button')),
     );
@@ -2553,7 +2560,7 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '91712345678',
+      '917123456',
     );
     // 差一位：按钮保持禁用，也不会触发自动登录。
     await tester.enterText(find.byKey(const Key('login-code-field')), '12345');
@@ -2568,7 +2575,7 @@ void main() {
     expect(auth.loginCalls, 0);
   });
 
-  testWidgets('登录手机号至少 12 位且最多 16 位纯数字', (tester) async {
+  testWidgets('登录手机号输入框排除国家码并保持完整号码 12~16 位', (tester) async {
     final auth = _StubAuthRepository();
     await _pumpApp(
       tester,
@@ -2579,7 +2586,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final phone = find.byKey(const Key('login-phone-field'));
-    await tester.enterText(phone, '91712345678');
+    await tester.enterText(phone, '917123456');
     await tester.pump();
     expect(
       tester
@@ -2588,7 +2595,7 @@ void main() {
       isNull,
     );
 
-    await tester.enterText(phone, '917123456789');
+    await tester.enterText(phone, '9171234567');
     await tester.pump();
     expect(
       tester
@@ -2597,9 +2604,16 @@ void main() {
       isNotNull,
     );
 
-    await tester.enterText(phone, '12345678901234567');
+    await tester.enterText(phone, '639171234567');
     await tester.pump();
-    expect(_loginFieldValue(tester, const Key('login-phone-field')).length, 16);
+    expect(
+      _loginFieldValue(tester, const Key('login-phone-field')),
+      '9171234567',
+    );
+
+    await tester.enterText(phone, '917123456789012345');
+    await tester.pump();
+    expect(_loginFieldValue(tester, const Key('login-phone-field')).length, 14);
   });
 
   testWidgets('登录页验证码填满 6 位自动提交，登录成功后关掉登录页', (tester) async {
@@ -2615,12 +2629,13 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '917123456789',
+      '639171234567',
     );
     await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
     await tester.pumpAndSettle();
 
     expect(auth.loginCalls, 1);
+    expect(auth.loginPhones, ['9171234567']);
     expect(find.byKey(const Key('login-phone-field')), findsNothing);
   });
 
@@ -2715,6 +2730,29 @@ void main() {
     expect(_loginFieldFocused(tester, const Key('login-code-field')), isTrue);
 
     await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('验证码已满六位后再次修改不会重复自动提交', (tester) async {
+    final auth = _StubAuthRepository(delay: const Duration(milliseconds: 300));
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '9171234567',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('login-code-field')), '223456');
+    await tester.pump();
+
+    expect(auth.loginCalls, 1);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('登录态失效不弹错误提示，交给全局登出流程', (tester) async {

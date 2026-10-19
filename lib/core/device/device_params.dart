@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../report/report_bridge.dart';
+
 /// 上报给后端的设备信息。一次启动内不会变化，加载一次后缓存使用。
 class DeviceParams {
   const DeviceParams({
@@ -29,6 +31,7 @@ class DeviceParamsLoader {
   DeviceParamsLoader({
     DeviceInfoPlugin? deviceInfo,
     SharedPreferencesAsync? prefs,
+    this.stableDeviceIdLoader,
   }) : _deviceInfo = deviceInfo ?? DeviceInfoPlugin(),
        _injectedPrefs = prefs;
 
@@ -40,6 +43,7 @@ class DeviceParamsLoader {
 
   final DeviceInfoPlugin _deviceInfo;
   final SharedPreferencesAsync? _injectedPrefs;
+  final Future<String> Function()? stableDeviceIdLoader;
 
   /// 同 [SessionStore]：平台实现缺失时退化为空操作，不能阻塞启动。
   SharedPreferencesAsync? get _prefs {
@@ -79,13 +83,18 @@ class DeviceParamsLoader {
 
     if (Platform.isIOS) {
       final info = await _deviceInfo.iosInfo;
+      // 公共参数与设备报文共用原生 Keychain 中的稳定标识。
+      final stableDeviceId = await _loadStableDeviceId();
+      final identifier = stableDeviceId.isNotEmpty
+          ? stableDeviceId
+          : info.identifierForVendor ?? '';
       return DeviceParams(
-        deviceId: await _resolveDeviceId(info.identifierForVendor),
+        deviceId: await _resolveDeviceId(identifier),
         appVersion: appVersion,
         modelName: info.modelName,
         systemVersion: info.systemVersion,
         // 文档要求 gps_adid 传 idfv。
-        advertisingId: info.identifierForVendor ?? '',
+        advertisingId: identifier,
       );
     }
 
@@ -107,6 +116,17 @@ class DeviceParamsLoader {
       systemVersion: Platform.operatingSystemVersion,
       advertisingId: '',
     );
+  }
+
+  Future<String> _loadStableDeviceId() async {
+    try {
+      final loader =
+          stableDeviceIdLoader ?? ReportBridge.shared.getStableDeviceId;
+      return (await loader()).trim();
+    } catch (error) {
+      debugPrint('[DeviceParams] 读取稳定设备 ID 失败，回退系统 IDFV: $error');
+      return '';
+    }
   }
 
   /// identifierForVendor 在极少数情况下为空，此时退回到本地持久化的随机 ID，

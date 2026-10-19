@@ -151,8 +151,10 @@ lib/
    登录页的品牌行按设计稿 v3 换成当前产品：Logo / banner 切图取自
    `01-02 - 登录-默认`（`assets/login/login_logo.png` 48pt 图标、
    `login_banner.png` 343x120，文案 `Welcome back! Continue your application in a
-   few easy steps.` 烘焙在 banner 里），产品名是 `Laya Credit`；顶部导航行仍是
-   设计稿的 `Maya Agad`（`_appName` 只留给导航行，品牌行用 `_brandName`）。
+   few easy steps.` 烘焙在 banner 里），产品名是 `Laya Credit`；顶部导航行与
+   品牌行统一使用 `Laya Credit`，不再保留设计稿中的旧产品名。手机号区号
+   `+63` 独立展示，输入框只接收除 `63` 外的本地号码；验证码首次填满六位时
+   自动提交，失败后清空并回焦，已满六位后的再次编辑不会重复自动提交。
 4. **其余接口未接入**：H5 相关接口尚未全部落地；**数据上报已接入**（见第 24 条）
    （订单列表接口已接入，见第 21 条）。
    「点击申请」链路已接通到准入接口，下游页面也已补齐：准入 / 详情返回的 H5 地址
@@ -909,20 +911,17 @@ lib/
     图片。人脸页则要求回调带回图片 + livenessId 就上传（不按返回码判定）。
     测试：`test/core/report/report_data_test.dart`（设备报文加解密 + 字段映射、
     定位快照解析、文本兜底）、`test/core/report/report_store_test.dart` 与
-    `test/core/report/report_service_test.dart`（Apple token 空值照报 / 突发去抖 / 并发合并 / 事件与补报重叠）；
+    `test/core/report/report_service_test.dart`（Apple token 空值照报 / 进程内去重 / 登录强制补报 / 并发合并 / 事件与补报重叠）；
     权限侧 `test/core/permissions/permission_coordinator_test.dart`（启动顺序 /
     恢复重试 / 定位决策与并发单飞）与 `test/core/permissions/ios_permission_config_test.dart`
     （Info.plist、Podfile 权限宏、原生注册路径）。
     **遗留风险 / 待确认**：
-    - Apple 推送 token 上报**不做长期去重**（业务要求）：每次启动、每次登录都会重新
-      上报；但加了 3 秒突发去抖（`ReportService.appleTokenBurstWindow`）——原生注册
-      APNs 后立刻推的 `push_token` 事件与启动权限流程结束时的补报只差几百毫秒，
-      同一 token 会连发两次，窗口内只放行一次。权限刚允许时 APNs 还没回 token，
-      启动那条会先读到空值，所以空 token 上报前再等
-      `ReportService.appleTokenEmptyTokenDelay`（500ms）重读一次：真 token 到了就
-      改报真值，真值已被事件那条报过时按突发去抖丢弃，同一次突发仍只有一条请求
-      （`test/core/report/report_service_test.dart` 有对应用例）。窗口外的重复上报仍会发生，
-      与 dali 的「单次启动内同 token 去重」不同，后端需能接受；
+    - Apple 推送 token 上报对齐 peso_shield：同一 token 在一个 App 进程内只成功
+      上报一次，原生 `push_token` 事件与启动补报共享去重状态；登录成功时通过
+      `force` 强制补报一次。接口业务失败不会写入去重状态，后续事件仍可重试。
+      权限刚允许时 APNs 可能还没返回 token，启动补报会先等
+      `ReportService.appleTokenEmptyTokenDelay`（500ms）重读一次，真 token 到了
+      就改报真值；
     - iOS 权限宏只放行本 App 真的会申请的项（相机 / 通知 / 定位），ATT 走原生
       `ATTrackingManager`，不依赖 permission_handler 的 ATT 实现；
     - 设备 ID（公参 `genuflection` / `shapely` 与设备报文的 `idfv` / `deviceId`）

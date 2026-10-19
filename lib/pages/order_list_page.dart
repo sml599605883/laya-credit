@@ -40,6 +40,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // 每次重新进入订单列表都以最新后端数据为准。Provider 没有 autoDispose，
+    // 仅保留上一次页面状态会导致再次从个人中心进入时不再请求列表接口。
+    ref.invalidate(orderListProvider(_status.value));
   }
 
   @override
@@ -180,7 +183,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   /// 重新授信等待页这类原生目标。
   Future<void> _openTarget(String target) async {
     final value = target.trim();
-    if (value.isEmpty) return;
+    if (value.isEmpty) {
+      ToastHelper.showError('Order link is unavailable');
+      return;
+    }
 
     final uri = AppNavigator.webViewUri(value);
     if (uri != null) {

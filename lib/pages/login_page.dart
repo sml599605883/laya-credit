@@ -92,13 +92,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   // ---------- 文案 ----------
 
-  static const _appName = 'Maya Agad';
-
-  /// 品牌行的产品名（设计稿 `label_1`）。
-  ///
-  /// 顶部导航行仍是设计稿的 `Maya Agad`，品牌行换成当前产品名 `Laya Credit`，
-  /// 与设计稿 v3 一致。
-  static const _brandName = 'Laya Credit';
+  static const _appName = 'Laya Credit';
   static const _phoneLabel = 'Please enter mobile number';
   static const _phonePrefix = '+63';
   static const _phoneHint = 'Mobile numbers starting with 9';
@@ -116,9 +110,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// 重发验证码倒计时（秒）。
   static const _resendSeconds = 60;
 
-  /// 手机号长度：产品要求最少 12 位、最多 16 位纯数字。
-  static const _minPhoneLength = 12;
-  static const _maxPhoneLength = 16;
+  /// `+63` 单独展示，输入框只接收本地号码。
+  ///
+  /// 完整号码（`63` + 本地号码）保持产品要求的 12~16 位。
+  static const _minLocalPhoneLength = 10;
+  static const _maxLocalPhoneLength = 14;
 
   /// 验证码位数上限。
   static const _codeMaxLength = 6;
@@ -136,6 +132,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Timer? _countdownTimer;
   Timer? _warningTimer;
   int _secondsLeft = 0;
+  int _previousCodeLength = 0;
 
   /// 设计稿默认态是已勾选（01-02 - 登录-默认）。
   bool _agreed = true;
@@ -166,17 +163,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   /// 回填上次登录的手机号（退出登录也会保留 session 里的手机号）。
   void _loadRememberedPhone() {
-    final phone = ref.read(userSessionProvider).phone;
-    if (phone == null || phone.isEmpty) return;
+    final phone = _normalizePhone(ref.read(userSessionProvider).phone ?? '');
+    if (phone.isEmpty) return;
     if (_phoneController.text.isNotEmpty) return;
     _phoneController.text = phone;
   }
 
+  String _normalizePhone(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    return digits.length > 2 && digits.startsWith('63')
+        ? digits.substring(2)
+        : digits;
+  }
+
+  String get _localPhone => _normalizePhone(_phoneController.text);
+
   bool get _phoneValid {
-    final phone = _phoneController.text.trim();
-    return phone.length >= _minPhoneLength &&
-        phone.length <= _maxPhoneLength &&
-        int.tryParse(phone) != null;
+    final phone = _localPhone;
+    return phone.length >= _minLocalPhoneLength &&
+        phone.length <= _maxLocalPhoneLength;
   }
 
   /// 验证码必须填满 6 位才算有效（对齐 peso_shield 的口径）。
@@ -206,7 +211,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     try {
       final sent = await ref
           .read(loginControllerProvider.notifier)
-          .sendCode(phone: _phoneController.text.trim());
+          .sendCode(phone: _localPhone);
       if (!mounted) return;
       ToastHelper.hideLoading();
       if (sent) {
@@ -223,7 +228,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// 验证码填满自动提交；失败时清空并回焦，用户直接重输即可。
   Future<void> _onCodeChanged() async {
     setState(() {});
-    if (_codeController.text.trim().length != _codeMaxLength) return;
+    final codeLength = _codeController.text.trim().length;
+    final wasComplete = _previousCodeLength == _codeMaxLength;
+    _previousCodeLength = codeLength;
+    if (codeLength != _codeMaxLength || wasComplete) return;
 
     final agreedBeforeSubmit = _agreed;
     final submitted = await _submit(showAgreementTip: false);
@@ -269,10 +277,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     try {
       final result = await ref
           .read(loginControllerProvider.notifier)
-          .login(
-            phone: _phoneController.text.trim(),
-            code: _codeController.text.trim(),
-          );
+          .login(phone: _localPhone, code: _codeController.text.trim());
       if (!mounted || result == null) return false;
 
       // 风控埋点场景 1：开始时间取进入登录页的时刻，结束时间是登录成功。
@@ -425,7 +430,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
         SizedBox(width: layout.px(_brandGap)),
         Text(
-          _brandName,
+          _appName,
           style: TextStyle(
             color: AppColors.white,
             fontSize: layout.px(_brandFontSize),
@@ -523,7 +528,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               keyboardType: TextInputType.phone,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(_maxPhoneLength),
+                _LocalPhoneInputFormatter(_normalizePhone),
+                LengthLimitingTextInputFormatter(_maxLocalPhoneLength),
               ],
               onChanged: (_) => setState(() {}),
               cursorColor: AppColors.primary,
@@ -720,6 +726,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     fontWeight: weight,
     color: color,
   );
+}
+
+/// `+63` 已在输入框外展示，粘贴完整号码时自动去掉重复的国家码。
+class _LocalPhoneInputFormatter extends TextInputFormatter {
+  const _LocalPhoneInputFormatter(this.normalize);
+
+  final String Function(String) normalize;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final normalized = normalize(newValue.text);
+    if (normalized == newValue.text) return newValue;
+    return TextEditingValue(
+      text: normalized,
+      selection: TextSelection.collapsed(offset: normalized.length),
+    );
+  }
 }
 
 /// 协议勾选行：勾选框 + `Privacy Policy` 链接。
