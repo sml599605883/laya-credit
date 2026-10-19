@@ -6,13 +6,6 @@
 abstract final class ApiProtocol {
   // ---------- 请求：公共参数（URL 参数方式传递）----------
 
-  /// 终端版本。文档标注「已弃用，不传此字段」，但仍出现在加签示例里，
-  /// 因此只在签名时以固定值 'ios' 参与运算，不作为请求参数下发。
-  static const clientType = 'gruelled';
-
-  /// 签名计算时 clientType 的固定取值。
-  static const clientTypeValue = 'ios';
-
   /// App 版本，例如 1.0.0。
   static const appVersion = 'plica';
 

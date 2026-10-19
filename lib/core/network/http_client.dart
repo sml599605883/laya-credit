@@ -13,6 +13,13 @@ import 'proxy_configurer.dart';
 import 'request_signer.dart';
 import 'response_protocol.dart';
 
+/// 登录态失效的兜底提示。
+///
+/// 后端通常会下发英文 `message`，客户端必须优先原样展示；只有为空时才使用
+/// 固定英文兜底，避免中文文案出现在菲律宾市场的 App 内。
+const String authExpiredFallbackMessage =
+    'Login has expired. Please log in again';
+
 /// 统一的 HTTP 客户端。
 ///
 /// 职责只有三件事：拼公共参数与签名、解析响应协议、把异常翻译成 [ApiException]。
@@ -230,9 +237,12 @@ class HttpClient {
     final protocol = ResponseProtocol.parse(response.data);
     if (protocol.isAuthError) {
       _onAuthExpired();
-      throw const ApiException(
+      throw ApiException(
         type: ApiFailureType.authentication,
-        message: '登录状态已失效',
+        message: protocol.message.trim().isEmpty
+            ? authExpiredFallbackMessage
+            : protocol.message.trim(),
+        code: protocol.code,
       );
     }
 
@@ -251,19 +261,19 @@ class HttpClient {
       case DioExceptionType.transformTimeout:
         return ApiException(
           type: ApiFailureType.timeout,
-          message: '请求超时，请稍后重试',
+          message: 'Request timed out. Please try again.',
           cause: error,
         );
       case DioExceptionType.connectionError:
         return ApiException(
           type: ApiFailureType.noConnection,
-          message: '网络连接失败，请检查网络设置',
+          message: 'No internet connection. Please check your network.',
           cause: error,
         );
       case DioExceptionType.cancel:
         return ApiException(
           type: ApiFailureType.cancelled,
-          message: '请求已取消',
+          message: 'Request cancelled.',
           cause: error,
         );
       case DioExceptionType.badResponse:
@@ -277,7 +287,7 @@ class HttpClient {
       case DioExceptionType.unknown:
         return ApiException(
           type: ApiFailureType.unexpected,
-          message: '请求失败，请稍后重试',
+          message: 'Request failed. Please try again.',
           cause: error,
         );
     }

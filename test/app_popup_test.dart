@@ -210,6 +210,7 @@ void main() {
       WidgetTester tester, {
       required AppDialog dialog,
       Future<bool> Function(Uri uri)? opener,
+      Future<void> Function(Uri uri)? internalOpener,
     }) async {
       tester.view.physicalSize = const Size(750, 1624);
       tester.view.devicePixelRatio = 2.0;
@@ -224,6 +225,7 @@ void main() {
                     context: context,
                     dialog: dialog,
                     externalOpener: opener,
+                    internalOpener: internalOpener,
                   ),
                   child: const Text('open'),
                 ),
@@ -257,13 +259,15 @@ void main() {
       expect(find.byKey(const Key('app-marketing-close')), findsNothing);
     });
 
-    testWidgets('点卡片进落地页并关闭弹窗', (tester) async {
+    testWidgets('点卡片在 App 内打开落地页，不走 Safari', (tester) async {
       final opened = <Uri>[];
+      final external = <Uri>[];
       await pumpPopup(
         tester,
         dialog: dialog,
+        internalOpener: (uri) async => opened.add(uri),
         opener: (uri) async {
-          opened.add(uri);
+          external.add(uri);
           return true;
         },
       );
@@ -276,6 +280,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(opened, [Uri.parse('https://h5.example/recommend')]);
+      expect(external, isEmpty);
       expect(find.byKey(const Key('app-marketing-image')), findsNothing);
     });
   });

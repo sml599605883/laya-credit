@@ -287,7 +287,10 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
             );
           },
       openWebView: (url) async {
-        await AppNavigator.toWebView<void>(url: url);
+        unawaited(AppNavigator.toWebView<void>(url: url));
+      },
+      openWebPath: (path) async {
+        unawaited(AppNavigator.toWebPath<void>(path: path));
       },
       navigateInternal: _navigateInternal,
       openExternal: _openExternal,
@@ -399,7 +402,16 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
     final link = const AppDeepLinkParser().parse(raw);
     await AppNavigator.openDeepLink(
       link,
-      onUnhandled: (target) {
+      onUnhandled: (target) async {
+        if (target.kind == AppDeepLinkKind.admission) {
+          unawaited(
+            AppNavigator.applyProduct(
+              productId: target.productId,
+              apiRemind: target.apiRemind,
+            ),
+          );
+          return;
+        }
         debugPrint('[WebView] 暂不支持的内部跳转: ${target.raw}');
       },
     );
@@ -630,6 +642,9 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
       },
       child: Scaffold(
         backgroundColor: AppColors.surfaceMint,
+        // 第三方还款页等 H5 的输入框依赖容器让出键盘高度；关闭后页面会收缩，
+        // WebView 内部聚焦的元素才能自动滚到键盘上方。
+        resizeToAvoidBottomInset: true,
         body: Column(
           children: [
             BackNavBar(layout: layout, title: _title, onBack: _handleBack),
@@ -678,7 +693,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
         javaScriptEnabled: true,
         useShouldOverrideUrlLoading: true,
         useHybridComposition: true,
-        isInspectable: kDebugMode,
+        isInspectable: true,
         disableContextMenu: shouldDisableWebViewContextMenu(
           defaultTargetPlatform,
         ),

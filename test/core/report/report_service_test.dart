@@ -53,6 +53,22 @@ void main() {
     expect(repository.appleTokens, ['token-1']);
   });
 
+  test('空 token 上报前拿到真 token 时只报真值', () async {
+    final repository = _RecordingRepository();
+    final pushBridge = _StubPushBridge('');
+    final service = _service(repository, pushToken: '', pushBridge: pushBridge);
+
+    // 启动权限流程先读到空 token（APNs 注册还没回来）。
+    final pending = service.reportAppleToken();
+    // 紧接着原生推出 `push_token` 事件，这时真 token 已经到了。
+    pushBridge.setToken('token-real');
+    await service.reportAppleToken();
+    await pending;
+
+    // 同一次突发只发一条请求，且带的是真 token。
+    expect(repository.appleTokens, ['token-real']);
+  });
+
   test('push_token 事件与启动补报重叠时只上报一次', () async {
     var now = DateTime.now().millisecondsSinceEpoch;
     final repository = _RecordingRepository();
@@ -97,7 +113,8 @@ void main() {
   });
 
   test('启动预热与设备上报并发时只查一次设备信息', () async {
-    final repository = _RecordingRepository()..releaseDeviceLookup = Completer();
+    final repository = _RecordingRepository()
+      ..releaseDeviceLookup = Completer();
     final service = _service(
       repository,
       pushToken: '',
@@ -112,6 +129,26 @@ void main() {
 
     expect(repository.deviceLookups, ['iPhone11,8']);
   });
+
+  test('埋点结束时间在调用时冻结，不受异步设备读取影响', () async {
+    var now = 1000000;
+    final repository = _RecordingRepository();
+    final service = _service(
+      repository,
+      pushToken: '',
+      bridge: _SlowReportBridge(() => now += 30000),
+      nowMillis: () => now,
+    );
+
+    await service.reportRisk(
+      productId: '1',
+      scene: '8',
+      orderNo: 'ORDER-1',
+      startedAtSeconds: 900000,
+    );
+
+    expect(repository.riskEndTimes, ['1000']);
+  });
 }
 
 ReportService _service(
@@ -122,17 +159,20 @@ ReportService _service(
   String accessToken = 'token',
   Stream<PushEvent>? events,
   int Function()? nowMillis,
+  PushBridge? pushBridge,
 }) {
   return ReportService(
     repository,
     bridge ?? ReportBridge(),
     store: store ?? ReportStore.memory(),
-    pushBridge: _StubPushBridge(pushToken),
+    pushBridge: pushBridge ?? _StubPushBridge(pushToken),
     encryptKey: '0123456789abcdef',
     encryptIv: '0123456789abcdef',
     accessToken: () => accessToken,
     pushEvents: events,
     nowMillis: nowMillis,
+    // 空 token 的等待在单测里收敛掉，不真的等 500ms。
+    delay: (duration) async {},
   );
 }
 
@@ -143,10 +183,25 @@ class _StubReportBridge extends ReportBridge {
   }
 }
 
+class _SlowReportBridge extends ReportBridge {
+  _SlowReportBridge(this.advanceClock);
+
+  final void Function() advanceClock;
+
+  @override
+  Future<ReportDeviceSnapshot> getReportDeviceSnapshot() async {
+    advanceClock();
+    return const ReportDeviceSnapshot(model: 'iPhone11,8');
+  }
+}
+
 class _StubPushBridge extends PushBridge {
   _StubPushBridge(this._token);
 
-  final String _token;
+  String _token;
+
+  /// 模拟原生 APNs 注册完成、真 token 到达。
+  void setToken(String token) => _token = token;
 
   @override
   Future<String> getPushToken() async => _token;
@@ -157,6 +212,7 @@ class _RecordingRepository extends ReportRepository {
 
   final List<String> appleTokens = [];
   final List<String> deviceLookups = [];
+  final List<String> riskEndTimes = [];
 
   /// 非空时第一条上报会等它完成，用来构造并发场景。
   Completer<void>? releaseFirstCall;
@@ -191,6 +247,22 @@ class _RecordingRepository extends ReportRepository {
       await release.future;
     }
     appleTokens.add(token);
+    return const ApiResponse<void>(code: 200, message: '', data: null);
+  }
+
+  @override
+  Future<ApiResponse<void>> reportRisk({
+    required String productId,
+    required String sceneType,
+    required String orderNo,
+    required String riskDeviceId,
+    required String idfa,
+    required String longitude,
+    required String latitude,
+    required String startTime,
+    required String endTime,
+  }) async {
+    riskEndTimes.add(endTime);
     return const ApiResponse<void>(code: 200, message: '', data: null);
   }
 }

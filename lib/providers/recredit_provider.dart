@@ -33,6 +33,10 @@ final recreditPollingCoordinatorProvider = Provider<RecreditPollingCoordinator>(
         final flow = await ref.read(productApplicationFlowProvider.future);
         await flow.applyProduct(productId: productId);
       },
+      ensureLocationAccess: () async {
+        final flow = await ref.read(productApplicationFlowProvider.future);
+        return flow.ensureLocationAccess();
+      },
       logger: debugPrint,
     );
   },

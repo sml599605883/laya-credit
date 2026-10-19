@@ -72,6 +72,7 @@ class AppDeepLink {
     this.route,
     this.orderStatus,
     this.productId = '',
+    this.apiRemind = 0,
     this.url = '',
     this.raw = '',
   });
@@ -86,6 +87,9 @@ class AppDeepLink {
 
   /// 地址里携带的产品 id（可能为空）。
   final String productId;
+
+  /// 准入来源标识（点击申请的 `dirdum`，文档值 `8` 为再来一单）。
+  final int apiRemind;
 
   /// H5 链接（仅 [AppDeepLinkKind.webView] 有值）。
   final String url;
@@ -111,8 +115,26 @@ class AppDeepLinkParser {
   /// 深链里携带产品 id 的参数名（文档值映射 `product_id` → `tartarizing`）。
   static const _productIdParam = 'tartarizing';
 
+  /// 准入来源标识：接口文档 `dirdum`，`8` 为再来一单。
+  static const _apiRemindParam = 'dirdum';
+
   AppDeepLink parse(String rawTarget) {
     final trimmed = rawTarget.trim();
+    // 产品卡 / 准入结果可能下发站点内相对地址。它没有 scheme，
+    // 但仍然是需要 WebView 打开的 H5 页面，不能归为 unsupported。
+    if (trimmed.startsWith('/')) {
+      final fragment = Uri.tryParse(trimmed)?.fragment ?? '';
+      final fragmentUri = Uri.tryParse(fragment);
+      return AppDeepLink(
+        kind: AppDeepLinkKind.webView,
+        url: trimmed,
+        productId:
+            fragmentUri?.queryParameters['productId'] ??
+            fragmentUri?.queryParameters[_productIdParam] ??
+            '',
+        raw: rawTarget,
+      );
+    }
     final uri = Uri.tryParse(trimmed);
     if (uri == null) {
       return AppDeepLink(kind: AppDeepLinkKind.unsupported, raw: rawTarget);
@@ -183,6 +205,8 @@ class AppDeepLinkParser {
       AppDeepLinkAlias.admission => AppDeepLink(
         kind: AppDeepLinkKind.admission,
         productId: productId,
+        apiRemind:
+            int.tryParse(uri.queryParameters[_apiRemindParam] ?? '') ?? 0,
         raw: rawTarget,
       ),
       _ => AppDeepLink(kind: AppDeepLinkKind.unsupported, raw: rawTarget),

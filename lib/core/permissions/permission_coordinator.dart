@@ -88,8 +88,22 @@ class PermissionCoordinator {
     );
   }
 
-  static final PermissionCoordinator instance =
+  static PermissionCoordinator _instance =
       PermissionCoordinator.defaultInstance();
+
+  static PermissionCoordinator get instance => _instance;
+
+  /// 仅供测试替换单例（与 `ReportService.current` / `reset` 同一套路）。
+  @visibleForTesting
+  static void overrideInstance(PermissionCoordinator coordinator) {
+    _instance = coordinator;
+  }
+
+  /// 仅供测试恢复默认单例。
+  @visibleForTesting
+  static void resetInstance() {
+    _instance = PermissionCoordinator.defaultInstance();
+  }
 
   final PermissionRequester requestNotificationPermission;
   final PermissionRequester requestTrackingPermission;
@@ -107,6 +121,14 @@ class PermissionCoordinator {
   Future<void>? _resumeRequest;
   Future<CertificationLocationDecision>? _locationRequest;
   bool _startupPermissionsRequested = false;
+  bool _requestingLocationPermission = false;
+
+  /// 「立即申请」的定位授权是否正在申请中（含系统弹窗期间）。
+  ///
+  /// 首页容器用它忽略「系统定位弹窗关闭」带来的生命周期恢复刷新（对齐 dali 的
+  /// `MainController._ignoreLocationPermissionResume`）：那一刻准入接口马上要
+  /// 自动发出，再刷一次首页 + 弹窗接口既重复请求，弹窗还可能顶进认证流程里。
+  bool get isRequestingLocationPermission => _requestingLocationPermission;
 
   /// 启动权限序列：通知 → 注册 APNs → ATT，整套只会真正跑一次。
   Future<void> requestStartupPermissions() {
@@ -167,8 +189,15 @@ class PermissionCoordinator {
         return CertificationLocationDecision.settingsRequired;
       }
 
-      final requestedStatus =
-          await _requestLocationPermissionUntilInterrupted();
+      // 系统定位弹窗只在这段里出现：期间标记「正在申请」，让首页容器忽略
+      // 弹窗关闭后的那次生命周期恢复刷新。
+      _requestingLocationPermission = true;
+      final PermissionStatus? requestedStatus;
+      try {
+        requestedStatus = await _requestLocationPermissionUntilInterrupted();
+      } finally {
+        _requestingLocationPermission = false;
+      }
       if (requestedStatus == null) return CertificationLocationDecision.denied;
       if (_isGranted(requestedStatus)) {
         return CertificationLocationDecision.granted;

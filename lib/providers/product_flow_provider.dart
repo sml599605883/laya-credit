@@ -16,3 +16,15 @@ final productApplicationFlowProvider = FutureProvider<ProductApplicationFlow>((
     sessionStore: ref.read(sessionStoreProvider),
   );
 });
+
+/// 深链准入执行器。单独建 provider，避免 `AppNavigator` 反向依赖页面层。
+final productDeepLinkAdmissionProvider =
+    FutureProvider<Future<void> Function(String productId, int apiRemind)>((
+      ref,
+    ) async {
+      final flow = await ref.watch(productApplicationFlowProvider.future);
+      return (productId, apiRemind) => flow.applyProductFromDeepLink(
+        productId: productId,
+        apiRemind: apiRemind,
+      );
+    });

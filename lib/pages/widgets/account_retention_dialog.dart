@@ -48,8 +48,8 @@ const _deleteAccountCopy = _RetentionCopy(
 
 /// 弹出挽留弹窗。
 ///
-/// [onExit] 是「仍然退出 / 注销」的真实动作，返回是否成功：
-/// 返回 `false` 时弹窗保持打开（错误提示由调用方负责），返回 `true` 时关闭。
+/// [onExit] 是「仍然退出 / 注销」的真实动作。请求结束后关闭弹窗；
+/// 失败提示由调用方负责，避免 toast 叠在挽留弹窗上。
 Future<void> showAccountRetentionDialog({
   required BuildContext context,
   required AccountRetentionAction action,
@@ -116,11 +116,11 @@ class _AccountRetentionDialogState extends State<_AccountRetentionDialog> {
     setState(() => _submitting = true);
     final succeeded = await widget.onExit();
     if (!mounted) return;
-    if (succeeded) {
-      Navigator.of(context).pop();
-    } else {
+    if (!succeeded) {
+      // 失败也先收起弹窗，再把错误 toast 显示在页面层。
       setState(() => _submitting = false);
     }
+    Navigator.of(context).pop();
   }
 
   @override

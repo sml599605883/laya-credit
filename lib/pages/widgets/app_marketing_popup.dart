@@ -15,6 +15,7 @@ Future<void> showAppMarketingPopup({
   required BuildContext context,
   required AppDialog dialog,
   ExternalUriOpener? externalOpener,
+  InternalUriOpener? internalOpener,
 }) {
   if (_showing) return Future<void>.value();
   _showing = true;
@@ -24,8 +25,11 @@ Future<void> showAppMarketingPopup({
     barrierLabel: 'Dismiss marketing popup',
     barrierColor: AppColors.dialogBarrier,
     transitionDuration: const Duration(milliseconds: 200),
-    pageBuilder: (context, animation, secondaryAnimation) =>
-        _AppMarketingPopup(dialog: dialog, externalOpener: externalOpener),
+    pageBuilder: (context, animation, secondaryAnimation) => _AppMarketingPopup(
+      dialog: dialog,
+      externalOpener: externalOpener,
+      internalOpener: internalOpener,
+    ),
     transitionBuilder: (context, animation, secondaryAnimation, child) =>
         FadeTransition(opacity: animation, child: child),
   ).whenComplete(() => _showing = false);
@@ -34,10 +38,15 @@ Future<void> showAppMarketingPopup({
 bool _showing = false;
 
 class _AppMarketingPopup extends StatelessWidget {
-  const _AppMarketingPopup({required this.dialog, this.externalOpener});
+  const _AppMarketingPopup({
+    required this.dialog,
+    this.externalOpener,
+    this.internalOpener,
+  });
 
   final AppDialog dialog;
   final ExternalUriOpener? externalOpener;
+  final InternalUriOpener? internalOpener;
 
   /// 卡片左右外边距合计（设计稿左右各 16）。
   static const _horizontalMargin = 32.0;
@@ -53,7 +62,12 @@ class _AppMarketingPopup extends StatelessWidget {
 
   void _onImage(BuildContext context) {
     Navigator.of(context).pop();
-    openPopupTarget(dialog.targetUrl, externalOpener: externalOpener);
+    openPopupTarget(
+      dialog.targetUrl,
+      externalOpener: externalOpener,
+      internalOpener: internalOpener,
+      preferInternal: true,
+    );
   }
 
   @override

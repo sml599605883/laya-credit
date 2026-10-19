@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/navigation/navigation.dart';
+import 'core/permissions/permission_coordinator.dart';
 import 'data/models/app_dialog.dart';
 import 'pages/home_page.dart';
 import 'pages/mine_page.dart';
@@ -43,6 +44,11 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   bool _wasInBackground = false;
   bool _inactiveResumeRefreshConsumed = false;
 
+  /// 定位授权弹窗刚关闭时的恢复事件要忽略：那一刻「立即申请」会自动继续，
+  /// 再刷一次首页 / 弹窗接口既重复请求，弹窗还可能顶进认证流程里
+  /// （对齐 dali_cash 的 `_ignoreLocationPermissionResume`）。
+  bool _ignoreLocationPermissionResume = false;
+
   /// 首页允许游客浏览，其余 Tab 需要登录。
   static bool _requiresLogin(int index) => index != 0;
 
@@ -79,6 +85,9 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive) {
       _wasInactive = true;
+      if (PermissionCoordinator.instance.isRequestingLocationPermission) {
+        _ignoreLocationPermissionResume = true;
+      }
       return;
     }
     if (state == AppLifecycleState.hidden ||
@@ -89,10 +98,16 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
     if (state != AppLifecycleState.resumed) return;
 
     final resumedFromBackground = _wasInBackground;
-    final firstInactiveResume =
-        _wasInactive && !_inactiveResumeRefreshConsumed;
+    final firstInactiveResume = _wasInactive && !_inactiveResumeRefreshConsumed;
     _wasInactive = false;
     _wasInBackground = false;
+    // 定位系统弹窗关闭：不刷新（真从后台回来时 resumedFromBackground 为 true，
+    // 那种恢复仍照常刷新）。
+    if (_ignoreLocationPermissionResume && !resumedFromBackground) {
+      _ignoreLocationPermissionResume = false;
+      return;
+    }
+    _ignoreLocationPermissionResume = false;
     if (!resumedFromBackground && !firstInactiveResume) return;
     if (!resumedFromBackground) _inactiveResumeRefreshConsumed = true;
     // 停在子页面（认证 / 活体等）时不刷，避免无谓请求。
@@ -177,14 +192,14 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   Future<void> _handleSessionExpired() async {
     if (!mounted) return;
     _returnToHome();
-    await _openLogin();
+    await _openLogin(clearSessionStack: true);
   }
 
-  Future<bool> _openLogin() async {
+  Future<bool> _openLogin({bool clearSessionStack = false}) async {
     if (_openingLogin) return false;
     _openingLogin = true;
     try {
-      return await AppNavigator.toLogin();
+      return await AppNavigator.toLogin(clearSessionStack: clearSessionStack);
     } finally {
       _openingLogin = false;
     }

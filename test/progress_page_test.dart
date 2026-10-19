@@ -6,11 +6,14 @@ import 'package:laya_credit/core/device/device_params.dart';
 import 'package:laya_credit/core/network/api_response.dart';
 import 'package:laya_credit/core/network/http_client.dart';
 import 'package:laya_credit/core/network/network_config.dart';
+import 'package:laya_credit/core/navigation/app_navigator.dart';
+import 'package:laya_credit/core/navigation/app_route_generator.dart';
 import 'package:laya_credit/data/models/home_data.dart';
 import 'package:laya_credit/data/repositories/app_repository.dart';
 import 'package:laya_credit/pages/progress_page.dart';
 import 'package:laya_credit/providers/home_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
+import 'package:laya_credit/pages/webview_page.dart';
 
 HomeOrderCard _order({
   HomeOrderCardStatus status = HomeOrderCardStatus.reviewed,
@@ -18,6 +21,8 @@ HomeOrderCard _order({
   String amountText = 'Loan Amount',
   String dateText = 'Loan Date',
   String jumpUrl = 'https://example.com/order/detail',
+  List<HomeOrderAction> actions = const [],
+  bool usesServerActions = false,
 }) {
   return HomeOrderCard(
     orderNo: '672024120400405591971039',
@@ -34,6 +39,8 @@ HomeOrderCard _order({
     progressText: '',
     steps: const [],
     jumpUrl: jumpUrl,
+    actions: actions,
+    usesServerActions: usesServerActions,
   );
 }
 
@@ -201,6 +208,97 @@ void main() {
       expect(find.text('Change'), findsOneWidget);
     });
 
+    testWidgets('后端只下发 Change 时不再补 Try again', (tester) async {
+      await _pumpProgress(
+        tester,
+        _FakeAppRepository([
+          _order(
+            status: HomeOrderCardStatus.failed1,
+            usesServerActions: true,
+            actions: const [
+              HomeOrderAction(
+                type: 'change',
+                label: 'Change Account',
+                badge: '',
+                target: '',
+              ),
+            ],
+          ),
+        ]),
+      );
+
+      expect(find.text('Change Account'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
+    });
+
+    testWidgets('后端动作文案和顺序原样展示，174/180 使用 Repay', (tester) async {
+      await _pumpProgress(
+        tester,
+        _FakeAppRepository([
+          _order(
+            status: HomeOrderCardStatus.overdue,
+            usesServerActions: true,
+            actions: const [
+              HomeOrderAction(
+                type: 'early_repay',
+                label: 'Early Repay',
+                badge: '16% Off',
+                target: '/repayment-detail?tab=2',
+              ),
+              HomeOrderAction(
+                type: 'repay',
+                label: 'Repay',
+                badge: '',
+                target: '/repayment-detail?tab=1',
+              ),
+            ],
+          ),
+        ]),
+      );
+
+      expect(find.text('Early Repay'), findsOneWidget);
+      expect(find.text('16% Off'), findsOneWidget);
+      expect(find.text('Repay'), findsOneWidget);
+      expect(find.text('Change'), findsNothing);
+    });
+
+    testWidgets('后端下发超过两个动作时全部展示，不越界崩溃', (tester) async {
+      await _pumpProgress(
+        tester,
+        _FakeAppRepository([
+          _order(
+            status: HomeOrderCardStatus.overdue,
+            usesServerActions: true,
+            actions: const [
+              HomeOrderAction(
+                type: 'early_repay',
+                label: 'Early Repay',
+                badge: '',
+                target: '/repayment-detail?tab=2',
+              ),
+              HomeOrderAction(
+                type: 'repay',
+                label: 'Repay',
+                badge: '',
+                target: '/repayment-detail?tab=1',
+              ),
+              HomeOrderAction(
+                type: 'change',
+                label: 'Change',
+                badge: '',
+                target: '',
+              ),
+            ],
+          ),
+        ]),
+      );
+
+      expect(find.text('Early Repay'), findsOneWidget);
+      expect(find.text('Repay'), findsOneWidget);
+      expect(find.text('Change'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('后端状态文案为空时回落到设计稿默认文案', (tester) async {
       await _pumpProgress(
         tester,
@@ -224,6 +322,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.homeCalls, 2);
+  });
+
+  testWidgets('后端下发 Repay 按钮时点击打开还款地址', (tester) async {
+    final repository = _FakeAppRepository([
+      _order(
+        status: HomeOrderCardStatus.overdue,
+        usesServerActions: true,
+        actions: const [
+          HomeOrderAction(
+            type: 'repay',
+            label: 'Repay',
+            badge: '',
+            target: 'https://h5.example.com/repay',
+          ),
+        ],
+      ),
+    ]);
+    _usePhoneSurface(tester);
+    final container = ProviderContainer(
+      overrides: [
+        appRepositoryProvider.overrideWith((ref) async => repository),
+        homeLoadingIndicatorProvider.overrideWithValue(
+          HomeLoadingIndicator(show: () {}, hide: () {}),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          navigatorKey: AppNavigator.navigatorKey,
+          onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+          home: const ProgressPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Repay'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(WebViewPage), findsOneWidget);
+    final page = tester.widget<WebViewPage>(find.byType(WebViewPage));
+    expect(page.initialUrl, 'https://h5.example.com/repay');
   });
 
   testWidgets('接口失败时展示错误态与重试入口', (tester) async {

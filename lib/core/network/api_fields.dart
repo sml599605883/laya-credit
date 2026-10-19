@@ -68,6 +68,15 @@ abstract final class ApiFields {
   static const termInfoDes = 'solomon';
   static const loanRate = 'antibilious';
   static const loanRateDes = 'mesometral';
+
+  /// 首页大卡按期限类型下发的借款期数数组（文档语义 `period_list`）。
+  static const periodList = 'begorry';
+
+  /// 期限类型数组中的期数（文档语义 `period`）。
+  static const period = 'unplug';
+
+  /// 期限类型数组中的单位 / 标签（文档语义 `periodDesc`）。
+  static const periodDesc = 'conditione';
   static const certifyFinished = 'kailua';
   static const account = 'tightens';
   static const accountText = 'lighthearted';
@@ -102,6 +111,24 @@ abstract final class ApiFields {
   static const cardStatus = 'satin';
   static const displayAmount = 'libertytown';
   static const orderStatusText = 'cuboid';
+
+  /// 借款进度卡按钮列表。
+  static const progressActions = 'universalness';
+
+  /// 按钮类型：`retry` / `change` / `repay` / `early_repay`。
+  static const progressActionType = 'liquidators';
+
+  /// 按钮是否展示：`1` 展示 / `0` 隐藏。
+  static const progressActionVisible = 'foolocracy';
+
+  /// 按钮文案。
+  static const progressActionLabel = 'fortunateness';
+
+  /// 按钮气泡文案（目前仅提前结清使用）。
+  static const progressActionBadge = 'incudes';
+
+  /// 按钮点击跳转地址（还款 / 提前结清使用）。
+  static const progressActionTarget = 'halichondriae';
 
   // ---------- 产品申请 / 准入（`/outsulk/weaken`）----------
   /// 来源标识（0 默认，1 首页 banner，2 首页弹窗 ...）。
@@ -569,6 +596,9 @@ abstract final class ApiFields {
   /// 账户状态（文档语义 `status`）：1 可用 / 0 维护中。
   /// 维护中的账户**仍可选中**，页面只补一行红字提示。
   static const loanAccountStatus = 'catchpenny';
+
+  /// 维护中提示文案（文档语义 `loader`）。只在维护中的账户上下发。
+  static const loanAccountMaintenanceHint = 'loader';
 
   /// 账户的银行 / 渠道名（文档语义 `bankName`），卡片上的主文案。
   static const loanAccountName = 'fallibleness';

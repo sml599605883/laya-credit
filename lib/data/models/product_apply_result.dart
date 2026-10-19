@@ -12,8 +12,8 @@ class ProductApplyResult {
   const ProductApplyResult({
     required this.statusCode,
     required this.jumpUrl,
-    required this.jumpType,
-    required this.message,
+    this.jumpType,
+    this.message = '',
     this.accessKey,
     this.secretKey,
   });
@@ -22,7 +22,7 @@ class ProductApplyResult {
     return ProductApplyResult(
       statusCode: _intOf(json[ApiFields.applyResultCode]),
       jumpUrl: json[ApiFields.jumpUrl]?.toString() ?? '',
-      jumpType: _intOf(json[ApiFields.applyJumpType]),
+      jumpType: _optionalIntOf(json[ApiFields.applyJumpType]),
       message: json[ApiFields.applyMessage]?.toString() ?? '',
       accessKey: json[ApiFields.applyAccessKey]?.toString(),
       secretKey: json[ApiFields.applySecretKey]?.toString(),
@@ -35,8 +35,8 @@ class ProductApplyResult {
   /// 需要跳转的地址（H5 链接或原生 Scheme），可能为空。
   final String jumpUrl;
 
-  /// 跳转类型：0 原生 / 1 H5。
-  final int jumpType;
+  /// 跳转类型：0 原生 / 1 H5；后端未下发时为 null。
+  final int? jumpType;
 
   /// 结果文案。
   final String message;
@@ -55,4 +55,10 @@ class ProductApplyResult {
 int _intOf(Object? value) {
   if (value is num) return value.toInt();
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+int? _optionalIntOf(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
 }

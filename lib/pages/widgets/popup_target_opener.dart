@@ -5,6 +5,7 @@ import '../../core/navigation/navigation.dart';
 
 /// 打开外部链接的方式，可注入以便测试。
 typedef ExternalUriOpener = Future<bool> Function(Uri uri);
+typedef InternalUriOpener = Future<void> Function(Uri uri);
 
 /// 打开弹窗里的跳转地址（升级下载链接 / 营销落地页）。
 ///
@@ -12,12 +13,23 @@ typedef ExternalUriOpener = Future<bool> Function(Uri uri);
 Future<void> openPopupTarget(
   String rawUrl, {
   ExternalUriOpener? externalOpener,
+  InternalUriOpener? internalOpener,
+  bool preferInternal = false,
 }) async {
   final uri = Uri.tryParse(rawUrl.trim());
   if (uri == null ||
       (uri.scheme != 'http' && uri.scheme != 'https') ||
       uri.host.isEmpty) {
     debugPrint('[Popup] 跳转地址非法: $rawUrl');
+    return;
+  }
+
+  if (preferInternal) {
+    if (internalOpener != null) {
+      await internalOpener(uri);
+    } else {
+      await AppNavigator.toWebView<void>(url: uri.toString());
+    }
     return;
   }
 

@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:laya_credit/core/navigation/app_navigator.dart';
+import 'package:laya_credit/core/navigation/app_deep_link.dart';
 import 'package:laya_credit/core/webview/webview.dart';
 import 'package:laya_credit/pages/webview_page.dart';
 
@@ -98,6 +101,42 @@ void main() {
         }),
       );
       expect(navigated, ['ph://laya-credit/ios/DrivepipeAlphyl']);
+    });
+
+    test('openUrl 的站点内相对路径按 H5 页面打开', () async {
+      final opened = <String>[];
+      final coordinator = WebViewActionCoordinator(
+        openWebPath: (path) async => opened.add(path),
+      );
+      final result = await coordinator.dispatch(
+        WebViewRequest.decode({
+          'action': WebViewActions.openUrl,
+          'data': '/#/AnapaestsManuri?podostemon=7',
+        }),
+      );
+
+      expect(result.code, 0);
+      expect(opened, ['/#/AnapaestsManuri?podostemon=7']);
+    });
+
+    test('站点内相对路径解析为 H5，不会落到 unsupported', () {
+      final link = const AppDeepLinkParser().parse(
+        '/#/FifinellaDestructions?productId=7',
+      );
+
+      expect(link.kind, AppDeepLinkKind.webView);
+      expect(link.url, '/#/FifinellaDestructions?productId=7');
+      expect(link.productId, '7');
+    });
+
+    test('Isaria 深链保留产品 ID 与 dirdum 来源', () {
+      final link = const AppDeepLinkParser().parse(
+        'ph://laya-credit/ios/Isaria?tartarizing=77&dirdum=8',
+      );
+
+      expect(link.kind, AppDeepLinkKind.admission);
+      expect(link.productId, '77');
+      expect(link.apiRemind, 8);
     });
 
     test('openGooglePlay 是完整链接时直接外跳', () async {
@@ -322,10 +361,7 @@ void main() {
         ),
         'p-1',
       );
-      expect(
-        webViewConfirmProductId('/AnapaestsManuri?podostemon=p-2'),
-        'p-2',
-      );
+      expect(webViewConfirmProductId('/AnapaestsManuri?podostemon=p-2'), 'p-2');
     });
   });
 
@@ -343,5 +379,26 @@ void main() {
       expect(AppNavigator.webViewUri('https://'), isNull);
       expect(AppNavigator.webViewUri(''), isNull);
     });
+  });
+
+  testWidgets('WebView 容器启用键盘避让，第三方还款输入框不会被遮挡', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: const WebViewPage(
+            initialUrl: 'https://h5.example.com/repayment',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(WebViewPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    expect(scaffold.resizeToAvoidBottomInset, isTrue);
   });
 }

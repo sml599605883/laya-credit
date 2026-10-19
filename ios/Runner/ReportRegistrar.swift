@@ -288,20 +288,21 @@ final class ReportRegistrar: NSObject, CLLocationManagerDelegate {
     return ["enabled": true, "host": host, "port": port]
   }
 
-  /// idfv 取不到时（极少数情况）用 keychain 兜底，保证同一安装包内稳定。
+  /// 设备 ID 取当前的 idfv，idfv 取不到时（极少数情况）才用 keychain 兜底。
+  ///
+  /// 不能优先读 keychain：keychain 在卸载重装后仍然保留上一个安装包的 idfv，
+  /// 而公参 `genuflection` / `shapely` 走 Flutter 侧实时读到的 idfv，两边会在
+  /// 「卸载重新安装」后对不上（设备报文里的 idfv / deviceId 另一个值）。
   private func stableVendorIdentifier() -> String {
     let service = "laya_credit.report"
     let account = "stable_idfv"
-    if let stored = keychainValue(service: service, account: account),
-       !stored.isEmpty {
-      return stored
-    }
-
     let identifier = UIDevice.current.identifierForVendor?.uuidString ?? ""
     if !identifier.isEmpty {
       saveKeychainValue(identifier, service: service, account: account)
+      return identifier
     }
-    return identifier
+
+    return keychainValue(service: service, account: account) ?? ""
   }
 
   private func deviceModelName() -> String {

@@ -71,6 +71,9 @@ class ProductApplicationFlow {
   static Future<CertificationLocationDecision> _defaultLocationChecker() =>
       PermissionCoordinator.instance.requestCertificationLocation();
 
+  /// 授信完成后的自动准入也复用同一套定位检查，避免系统权限弹窗和业务准入并发。
+  Future<bool> ensureLocationAccess() => _ensureLocationAccess();
+
   /// 执行产品申请流程。
   ///
   /// [apiRemind] 来源标识（0 默认，1 首页 banner，2 首页弹窗 ...）。
@@ -79,6 +82,36 @@ class ProductApplicationFlow {
     int apiRemind = 0,
   }) async {
     if (_isProcessing) return;
+    await _applyProduct(productId: productId, apiRemind: apiRemind);
+  }
+
+  /// 深链 / 推荐页再次准入时使用。
+  ///
+  /// 这类入口通常由上一次准入跳出的 H5 回调触发；外层 [applyProduct] 的防连点
+  /// 锁还等页面 pop 才释放，复用它会静默吞掉这次准入。
+  Future<void> applyProductFromDeepLink({
+    required String productId,
+    int apiRemind = 0,
+  }) async {
+    await _applyProduct(
+      productId: productId,
+      apiRemind: apiRemind,
+      bypassProcessingLock: true,
+    );
+  }
+
+  Future<void> _applyProduct({
+    required String productId,
+    required int apiRemind,
+    bool bypassProcessingLock = false,
+  }) async {
+    final normalizedProductId = productId.trim();
+    if (normalizedProductId.isEmpty) {
+      ToastHelper.showError('Product is unavailable');
+      return;
+    }
+
+    if (!bypassProcessingLock && _isProcessing) return;
 
     // 未登录先引导登录，登录成功后由用户再次点击（与 peso_shield 一致）。
     if (!isLoggedIn()) {
@@ -99,7 +132,7 @@ class ProductApplicationFlow {
             Future<void>.value(),
       );
       final response = await repository.applyProduct(
-        productId: productId,
+        productId: normalizedProductId,
         apiRemind: apiRemind,
       );
       ToastHelper.hideLoading();
@@ -109,7 +142,7 @@ class ProductApplicationFlow {
         return;
       }
 
-      await _handleAdmissionResult(response.data, productId);
+      await _handleAdmissionResult(response.data, normalizedProductId);
     } on ApiException catch (error) {
       ToastHelper.hideLoading();
       ToastHelper.showError(error.message);
@@ -130,10 +163,7 @@ class ProductApplicationFlow {
     if (decision == CertificationLocationDecision.granted) return true;
     if (decision == CertificationLocationDecision.denied) return false;
 
-    final openSettings = await _showLocationSettingsPrompt(
-      serviceDisabled:
-          decision == CertificationLocationDecision.serviceDisabled,
-    );
+    final openSettings = await _showLocationSettingsPrompt();
     if (openSettings) {
       await openAppSettings();
       return false;
@@ -141,29 +171,20 @@ class ProductApplicationFlow {
     return true;
   }
 
-  /// 定位不可用时的系统设置引导框（标题 / 文案对齐 dali）。
-  Future<bool> _showLocationSettingsPrompt({
-    required bool serviceDisabled,
-  }) async {
+  /// 定位不可用时的系统设置引导框（标题 / 按钮 / 文案取设计稿）。
+  Future<bool> _showLocationSettingsPrompt() async {
     final context = AppNavigator.navigatorKey.currentContext;
     if (context == null) return false;
     try {
       final result = await showCupertinoDialog<bool>(
         context: context,
         builder: (dialogContext) => CupertinoAlertDialog(
-          title: Text(
-            serviceDisabled
-                ? 'Turn On Location Services'
-                : 'Allow Location Access',
-          ),
-          content: Text(
-            serviceDisabled
-                ? 'To help us confirm your identity and safeguard your '
-                      'account against unauthorized access, please enable '
-                      'Location Services on your device to continue.'
-                : "We couldn't verify your location because permission is "
-                      'disabled. Please allow location access in your device '
-                      'settings to continue your application.',
+          // 定位服务关闭与授权被拒在设计稿里是同一个提示框：标题 / 按钮 / 文案
+          // 不分叉，两个分支都引导去系统设置。
+          title: const Text('Location Access Needed'),
+          content: const Text(
+            'Location access is currently unavailable. Enable it to continue '
+            'the credit review and related checks.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -171,13 +192,13 @@ class ProductApplicationFlow {
                 color: AppColors.actionSheetTextSecondary,
               ),
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: const Text('Later'),
             ),
             CupertinoDialogAction(
               textStyle: const TextStyle(color: AppColors.primary),
               isDefaultAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Settings'),
+              child: const Text('Allow Location'),
             ),
           ],
         ),
@@ -280,6 +301,12 @@ class ProductApplicationFlow {
     String productId,
   ) async {
     final step = detail.nextStep;
+    // 产品详情可以为下一步单独下发跳转地址；有地址时优先按地址跳转，
+    // 地址为空才按认证项类型进入原生页面。
+    if (step.url.isNotEmpty) {
+      await _openJump(step.url, step.type, productId);
+      return;
+    }
     if (step.taskType.isNotEmpty) {
       _openCertificationStep(step, productId, detail.basicInfo.orderNo);
       return;
@@ -435,10 +462,12 @@ class ProductApplicationFlow {
 
   /// 按准入结果里的跳转地址分发。
   ///
-  /// 文档：`liquidators=1` 走 H5，`=0` 走原生。原生目标交给
-  /// [AppNavigator.openDeepLink] 统一处理，它没有页面承载的目标在这里补后续动作。
-  Future<void> _openJump(String target, int jumpType, String productId) async {
-    if (jumpType == 1) {
+  /// 文档：`liquidators=1` 走 H5，`=0` 走原生。后端未下发类型时，
+  /// 相对地址和 http(s) 地址按 H5 处理，避免把成功结果误判成原生深链。
+  /// 原生目标交给 [AppNavigator.openDeepLink] 统一处理，它没有页面承载的目标
+  /// 在这里补后续动作。
+  Future<void> _openJump(String target, int? jumpType, String productId) async {
+    if (_isWebJump(target, jumpType)) {
       await _openWebPage(target);
       return;
     }
@@ -452,9 +481,10 @@ class ProductApplicationFlow {
               link.productId.isNotEmpty ? link.productId : productId,
             );
           case AppDeepLinkKind.admission:
-            // TODO(页面): 准入页（`Isaria`）本身就是本流程，正常不会作为跳转目标下发；
-            // 真出现时按新一次申请处理（当前会命中 _isProcessing 防连点，这里先提示）。
-            ToastHelper.showMessage('Admission link is not supported here');
+            await applyProductFromDeepLink(
+              productId: link.productId.isNotEmpty ? link.productId : productId,
+              apiRemind: link.apiRemind,
+            );
           case AppDeepLinkKind.settings:
             // TODO(页面): 设置页尚未搭建。
             ToastHelper.showMessage('Settings page is not available yet');
@@ -472,12 +502,39 @@ class ProductApplicationFlow {
     );
   }
 
+  /// 是否应按 H5 打开。
+  ///
+  /// `jumpType` 缺失时只看地址本身；明确 `0` 才保留原生深链语义。
+  bool _isWebJump(String target, int? jumpType) {
+    if (jumpType == 1) return true;
+    if (jumpType != null) return false;
+    final value = target.trim();
+    if (value.startsWith('/')) return true;
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
   /// H5 跳转。
   Future<void> _openWebPage(String url) async {
-    if (url.isEmpty) {
+    final target = url.trim();
+    if (target.isEmpty) {
       ToastHelper.showError('Invalid link');
       return;
     }
-    await AppNavigator.toWebView<void>(url: url);
+    if (target.startsWith('/')) {
+      await AppNavigator.toWebPath<void>(path: target);
+      return;
+    }
+    final uri = AppNavigator.webViewUri(target);
+    if (uri != null) {
+      await AppNavigator.toWebView<void>(url: uri.toString());
+      return;
+    }
+    await AppNavigator.openDeepLink(
+      const AppDeepLinkParser().parse(target),
+      onUnhandled: (link) => ToastHelper.showError('Invalid link'),
+    );
   }
 }

@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/product_flow_provider.dart';
 import '../config/api_environment.dart';
+import '../network/api_exception.dart';
+import '../ui/toast_helper.dart';
 import 'app_deep_link.dart';
 import 'app_route_generator.dart';
 import 'app_route_observer.dart';
@@ -21,6 +25,12 @@ class AppNavigator {
   static NavigatorState? get _navigator => navigatorKey.currentState;
 
   static BuildContext? get _context => navigatorKey.currentContext;
+
+  /// 导航层执行产品准入时使用 App 的根 ProviderContainer。
+  ///
+  /// 测试会替换成 UncontrolledProviderScope 里的容器，避免读到另一份仓库实例。
+  @visibleForTesting
+  static ProviderContainer? providerContainer;
 
   static void _warn(String route) {
     if (!AppRoutes.isValid(route)) {
@@ -113,11 +123,21 @@ class AppNavigator {
   // ==================== 便捷方法 ====================
 
   /// 打开登录页，返回是否登录成功。
-  static Future<bool> toLogin({Future<void> Function()? onLoginSuccess}) async {
-    final result = await push<bool>(
-      AppRoutes.login,
-      arguments: LoginPageArguments(onLoginSuccess: onLoginSuccess),
-    );
+  ///
+  /// [clearSessionStack] 用于登录态失效：清掉旧 WebView / 认证页，只保留根页，
+  /// 这样重新登录或从登录页返回都不会再落到已经失效的 H5。
+  static Future<bool> toLogin({
+    Future<void> Function()? onLoginSuccess,
+    bool clearSessionStack = false,
+  }) async {
+    final arguments = LoginPageArguments(onLoginSuccess: onLoginSuccess);
+    final result = clearSessionStack
+        ? await _navigator!.pushNamedAndRemoveUntil<bool>(
+            AppRoutes.login,
+            (route) => route.isFirst,
+            arguments: arguments,
+          )
+        : await push<bool>(AppRoutes.login, arguments: arguments);
     return result ?? false;
   }
 
@@ -176,6 +196,45 @@ class AppNavigator {
       case AppDeepLinkKind.settings:
       case AppDeepLinkKind.unsupported:
         await onUnhandled(link);
+    }
+  }
+
+  /// 按产品 ID 走统一准入流程（推荐列表 / `Isaria` 深链）。
+  ///
+  /// 找不到 App ProviderContainer 时显式提示，不能让点击静默无反应。
+  static Future<void> applyProduct({
+    required String productId,
+    int apiRemind = 0,
+  }) async {
+    final normalized = productId.trim();
+    if (normalized.isEmpty) {
+      ToastHelper.showError('Product is unavailable');
+      return;
+    }
+    final container = providerContainer ?? _rootProviderContainer();
+    if (container == null) {
+      ToastHelper.showError('Unable to start application');
+      return;
+    }
+    try {
+      final apply = await container.read(
+        productDeepLinkAdmissionProvider.future,
+      );
+      await apply(normalized, apiRemind);
+    } on ApiException catch (error) {
+      ToastHelper.showError(error.message);
+    } catch (_) {
+      ToastHelper.showError('Unable to start application');
+    }
+  }
+
+  static ProviderContainer? _rootProviderContainer() {
+    final context = _context;
+    if (context == null) return null;
+    try {
+      return ProviderScope.containerOf(context, listen: false);
+    } catch (_) {
+      return null;
     }
   }
 

@@ -28,12 +28,7 @@ class ProductRepository {
       },
       parse: (data) => data is Map
           ? ProductApplyResult.fromJson(data.cast<String, dynamic>())
-          : const ProductApplyResult(
-              statusCode: 0,
-              jumpUrl: '',
-              jumpType: 0,
-              message: '',
-            ),
+          : const ProductApplyResult(statusCode: 0, jumpUrl: '', message: ''),
     );
   }
 

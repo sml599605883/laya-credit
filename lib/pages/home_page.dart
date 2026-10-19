@@ -17,8 +17,16 @@ import '../widgets/remote_image.dart';
 import '../widgets/tab_bar/app_tab_bar.dart';
 import '../widgets/state_views.dart';
 
-/// 额度卡底部的橙色提示文案（蓝湖稿 `02-01 - 首页-默认` / `text-wrapper_4`）。
+/// 额度卡底部的橙色提示文案兜底（蓝湖稿 `02-01 - 首页-默认` / `text-wrapper_4`）。
+///
+/// 正常取后端大卡的 `vesperal`（[HomeProductCard.descriptionText]），
+/// 低版本 / 未灰度用户不下发时才用设计稿文案。
 const _applyHint = 'Confirm your loan\uFF0CCash hits fast.';
+
+/// 额度数字上方的提示文案兜底（设计稿 `text_8` 的 `Available up to`）。
+///
+/// 正常取后端大卡的 `octodentate`（[HomeProductCard.amountRangeDes]）。
+const _amountRangeDesFallback = 'Available up to';
 
 /// 推荐列表区块标题（蓝湖稿 `02-01` 的 `text_14`）。
 ///
@@ -165,7 +173,9 @@ class _Hero extends StatelessWidget {
                   _ProductTag(layout: layout, product: product),
                   SizedBox(height: layout.px(AppSpacing.xs)),
                   Text(
-                    'Available up to',
+                    product.amountRangeDes.isEmpty
+                        ? _amountRangeDesFallback
+                        : product.amountRangeDes,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppColors.heroLabel,
@@ -401,37 +411,43 @@ class _LimitCard extends ConsumerWidget {
                     top: _cardPadTop,
                     right: _cardPadRight,
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _CardMetric(
-                            layout: layout,
-                            value: product.termInfo,
-                            label: product.termInfoDes,
-                            gap: _textGroupGap,
-                          ),
+                  child: product.termRows.isEmpty
+                      ? Row(
+                          children: [
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: _CardMetric(
+                                  layout: layout,
+                                  value: product.termInfo,
+                                  label: product.termInfoDes,
+                                  gap: _textGroupGap,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: layout.px(1),
+                              height: layout.px(_dividerHeight),
+                              color: AppColors.cardDivider,
+                            ),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: _CardMetric(
+                                  layout: layout,
+                                  value: product.loanRate,
+                                  label: product.loanRateDes,
+                                  gap: _textGroupGap,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : _TermMetrics(
+                          layout: layout,
+                          rows: product.termRows,
+                          dividerHeight: _dividerHeight,
                         ),
-                      ),
-                      Container(
-                        width: layout.px(1),
-                        height: layout.px(_dividerHeight),
-                        color: AppColors.cardDivider,
-                      ),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: _CardMetric(
-                            layout: layout,
-                            value: product.loanRate,
-                            label: product.loanRateDes,
-                            gap: _textGroupGap,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
                 Padding(
                   padding: layout.edgeInsets(
@@ -454,7 +470,9 @@ class _LimitCard extends ConsumerWidget {
                     bottom: _cardPadBottom,
                   ),
                   child: Text(
-                    _applyHint,
+                    product.descriptionText.isEmpty
+                        ? _applyHint
+                        : product.descriptionText,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppColors.hintOrange,
@@ -522,6 +540,81 @@ class _CardMetric extends StatelessWidget {
   }
 }
 
+/// 期限类型展示：按接口下发顺序并排展示，单期自然居中。
+class _TermMetrics extends StatelessWidget {
+  const _TermMetrics({
+    required this.layout,
+    required this.rows,
+    required this.dividerHeight,
+  });
+
+  final AppLayout layout;
+  final List<HomeLoanTerm> rows;
+  final double dividerHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = rows;
+    return Row(
+      key: const Key('home-term-metrics'),
+      children: [
+        for (var index = 0; index < visible.length; index++) ...[
+          if (index > 0)
+            Container(
+              width: layout.px(1),
+              height: layout.px(dividerHeight),
+              color: AppColors.cardDivider,
+            ),
+          Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: _TermMetric(layout: layout, row: visible[index]),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TermMetric extends StatelessWidget {
+  const _TermMetric({required this.layout, required this.row});
+
+  final AppLayout layout;
+  final HomeLoanTerm row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          row.interestRate,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.cardValue,
+            fontSize: layout.px(16),
+            fontWeight: FontWeight.w700,
+            height: 19 / 16,
+          ),
+        ),
+        SizedBox(height: layout.px(4)),
+        Text(
+          row.periodText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.cardLabel,
+            fontSize: layout.px(10),
+            height: 12 / 10,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.layout,
@@ -552,14 +645,7 @@ class _HomeContent extends StatelessWidget {
         // 推荐列表（设计稿 02-01 的 `group_3`）：后端没下发时整块不渲染。
         if (home.productList.isNotEmpty)
           _Recommendation(layout: layout, cards: home.productList),
-        // 进行中的借款订单：设计稿没给位置，只在后端真的下发时追加在最下面。
-        if (home.hasOrders) ...[
-          SizedBox(height: layout.px(AppSpacing.sm)),
-          for (final order in home.orders) ...[
-            _OrderProgressCard(layout: layout, order: order),
-            SizedBox(height: layout.px(AppSpacing.sm)),
-          ],
-        ],
+        // 借款进度卡只在进度 Tab 展示；推荐列表下方不再重复渲染（QA 反馈）。
       ],
     );
   }
@@ -572,7 +658,7 @@ class _HomeContent extends StatelessWidget {
 /// 金额行 / 进度槽 / 阶段文案行；进度槽上的阶段金币用 [AppAssets.homeProgressCoin]。
 ///
 /// 阶段文案、金额、选中态都由后端下发，长度不可控，文本行按容器等比缩小。
-class _ProductProgress extends StatelessWidget {
+class _ProductProgress extends ConsumerWidget {
   const _ProductProgress({required this.layout, required this.product});
 
   final AppLayout layout;
@@ -618,69 +704,74 @@ class _ProductProgress extends StatelessWidget {
   ]);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final steps = product.steps;
     final currentIndex = _currentStepIndex(steps);
     final coinStride = _coinStrideFor(steps.length);
-    return AspectRatio(
+    // 整卡可点击：与额度大卡 / 推荐卡一样调准入接口并跳转。
+    return GestureDetector(
       key: const Key('home-progress-card'),
-      aspectRatio: _cardWidth / _cardHeight,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // 卡内坐标按卡片实际宽度等比换算（设计稿基准宽 343pt）。
-          final factor = constraints.maxWidth / _cardWidth;
-          double at(num value) => value * factor;
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: Image.asset(
-                  AppAssets.homeProgressCard,
-                  fit: BoxFit.fill,
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openApply(ref, product.id),
+      child: AspectRatio(
+        aspectRatio: _cardWidth / _cardHeight,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 卡内坐标按卡片实际宽度等比换算（设计稿基准宽 343pt）。
+            final factor = constraints.maxWidth / _cardWidth;
+            double at(num value) => value * factor;
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: Image.asset(
+                    AppAssets.homeProgressCard,
+                    fit: BoxFit.fill,
+                  ),
                 ),
-              ),
-              // 金额行 / 文案行都按等宽阶段列均分（每列居中），阶段中心也就是进度槽金币中心。
-              _stageRow(
-                factor: factor,
-                stride: coinStride,
-                total: steps.length,
-                top: _amountTop,
-                lineHeight: _amountLineHeight,
-                children: [
-                  for (final (index, step) in steps.indexed)
-                    Text(
-                      step.amount,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: _amountStyle(index, currentIndex),
-                    ),
-                ],
-              ),
-              Positioned(
-                left: at(_trackLeft),
-                top: at(_trackTop),
-                right: at(_trackRight),
-                height: at(_trackHeight),
-                child: _buildTrack(steps, currentIndex, factor, coinStride),
-              ),
-              _stageRow(
-                factor: factor,
-                stride: coinStride,
-                total: steps.length,
-                top: _labelTop,
-                lineHeight: _labelLineHeight,
-                children: [
-                  for (final step in steps)
-                    Text(
-                      step.title,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: _labelStyle(),
-                    ),
-                ],
-              ),
-            ],
-          );
-        },
+                // 金额行 / 文案行都按等宽阶段列均分（每列居中），阶段中心也就是进度槽金币中心。
+                _stageRow(
+                  factor: factor,
+                  stride: coinStride,
+                  total: steps.length,
+                  top: _amountTop,
+                  lineHeight: _amountLineHeight,
+                  children: [
+                    for (final (index, step) in steps.indexed)
+                      Text(
+                        step.amount,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: _amountStyle(index, currentIndex),
+                      ),
+                  ],
+                ),
+                Positioned(
+                  left: at(_trackLeft),
+                  top: at(_trackTop),
+                  right: at(_trackRight),
+                  height: at(_trackHeight),
+                  child: _buildTrack(steps, currentIndex, factor, coinStride),
+                ),
+                _stageRow(
+                  factor: factor,
+                  stride: coinStride,
+                  total: steps.length,
+                  top: _labelTop,
+                  lineHeight: _labelLineHeight,
+                  children: [
+                    for (final step in steps)
+                      Text(
+                        step.title,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: _labelStyle(),
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -845,14 +936,19 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
   static const _interval = Duration(seconds: 3);
   static const _scrollDuration = Duration(milliseconds: 300);
 
-  final _controller = PageController();
+  late final PageController _controller;
   Timer? _timer;
-  int _page = 0;
+  late int _page;
   bool _foreground = true;
+
+  int get _initialPage =>
+      widget.banners.length < 2 ? 0 : widget.banners.length * 5000;
 
   @override
   void initState() {
     super.initState();
+    _page = _initialPage;
+    _controller = PageController(initialPage: _page);
     WidgetsBinding.instance.addObserver(this);
     _foreground =
         WidgetsBinding.instance.lifecycleState == null ||
@@ -866,8 +962,8 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
     // 条数变化（下拉刷新）后回到第一条，避免停在一个已不存在的页码。
     if (oldWidget.banners.length != widget.banners.length &&
         _controller.hasClients) {
-      _page = 0;
-      _controller.jumpToPage(0);
+      _page = _initialPage;
+      _controller.jumpToPage(_page);
     }
     // 条数或前台状态变化都要重算：1 条 -> 多条要起定时器，反过来要停。
     _syncTimer();
@@ -891,7 +987,7 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
       }
       unawaited(
         _controller.animateToPage(
-          (_page + 1) % count,
+          _page + 1,
           duration: _scrollDuration,
           curve: Curves.easeOut,
         ),
@@ -922,9 +1018,9 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
             ? _item(banners.single)
             : PageView.builder(
                 controller: _controller,
-                itemCount: banners.length,
                 onPageChanged: (page) => _page = page,
-                itemBuilder: (_, index) => _item(banners[index]),
+                itemBuilder: (_, index) =>
+                    _item(banners[index % banners.length]),
               ),
       ),
     );
@@ -943,7 +1039,11 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
 
   Future<void> _openBanner(HomeBanner banner) async {
     // 文档场景：有登录态且跳转链接不为空时才上报点击记录。
-    if (banner.jumpUrl.isEmpty) return;
+    final target = banner.jumpUrl.trim();
+    if (target.isEmpty) {
+      ToastHelper.showMessage('Link is unavailable');
+      return;
+    }
 
     if (ref.read(userSessionProvider).isLoggedIn) {
       try {
@@ -956,100 +1056,13 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
     }
 
     // banner 跳转目标可能是 H5 或原生路由，统一走深链解析后再分发。
-    final link = const AppDeepLinkParser().parse(banner.jumpUrl);
+    final link = const AppDeepLinkParser().parse(target);
     await AppNavigator.openDeepLink(
       link,
-      onUnhandled: (target) {
-        // TODO(页面): 其余跳转目标页面尚未搭建。
-        ToastHelper.showMessage('Banner target: ${target.raw}');
+      onUnhandled: (unhandled) {
+        // 未识别的原生 Scheme 不能静默，否则 QA 看到的就是“点了没反应”。
+        ToastHelper.showError('Unable to open link');
       },
-    );
-  }
-}
-
-/// 借款进度卡（PROCESS_LIST），展示进行中的订单。
-class _OrderProgressCard extends StatelessWidget {
-  const _OrderProgressCard({required this.layout, required this.order});
-
-  final AppLayout layout;
-  final HomeOrderCard order;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: layout.edgeInsets(
-        left: AppSpacing.sm,
-        top: AppSpacing.sm,
-        right: AppSpacing.sm,
-        bottom: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.orderCardStart, AppColors.orderCardEnd],
-        ),
-        borderRadius: layout.radius(AppSpacing.radiusMd),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            order.title,
-            style: TextStyle(
-              color: AppColors.surfaceMint,
-              fontSize: layout.px(13),
-            ),
-          ),
-          SizedBox(height: layout.px(AppSpacing.xs)),
-          Text(
-            order.displayAmount,
-            style: TextStyle(
-              color: AppColors.surface,
-              fontSize: layout.px(28),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: layout.px(AppSpacing.xs)),
-          Row(
-            children: [
-              // 状态与日期文案都由后端下发，长度不可控，必须允许省略。
-              Flexible(
-                child: Text(
-                  order.orderStatusText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.surfaceMint,
-                    fontSize: layout.px(12),
-                  ),
-                ),
-              ),
-              SizedBox(width: layout.px(AppSpacing.sm)),
-              Expanded(
-                child: Text(
-                  '${order.dateText} ${order.date}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: AppColors.surfaceMint.withValues(alpha: 0.8),
-                    fontSize: layout.px(11),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (order.progressText.isNotEmpty) ...[
-            SizedBox(height: layout.px(AppSpacing.sm)),
-            Text(
-              order.progressText,
-              style: TextStyle(
-                color: AppColors.surfaceMint,
-                fontSize: layout.px(11),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }

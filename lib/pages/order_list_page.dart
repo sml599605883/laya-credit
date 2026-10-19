@@ -158,6 +158,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   void _selectStatus(OrderFilterStatus status) {
     setState(() => _status = status);
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    // 每次点击 tab 都以当前后端数据为准；family provider 会缓存已加载的
+    // 筛选结果，只切 watch 目标不会重新请求。
+    ref.invalidate(orderListProvider(status.value));
   }
 
   Future<void> _refresh() async {
@@ -182,10 +185,12 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     final uri = AppNavigator.webViewUri(value);
     if (uri != null) {
       await AppNavigator.toWebView<void>(url: uri.toString());
+      _refreshAfterTargetReturns();
       return;
     }
     if (value.startsWith('/')) {
       await AppNavigator.toWebPath<void>(path: value);
+      _refreshAfterTargetReturns();
       return;
     }
 
@@ -196,9 +201,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
         onUnhandled: (unhandled) =>
             ToastHelper.showMessage('Order target: ${unhandled.raw}'),
       );
+      _refreshAfterTargetReturns();
       return;
     }
     ToastHelper.showMessage('Order target: $value');
+  }
+
+  /// 订单详情 / 还款页返回列表时重新拉当前筛选，避免展示离开前的旧状态。
+  void _refreshAfterTargetReturns() {
+    if (!mounted) return;
+    ref.invalidate(orderListProvider(_status.value));
   }
 }
 

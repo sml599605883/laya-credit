@@ -11,6 +11,8 @@ import 'package:laya_credit/core/product/recredit_polling_coordinator.dart';
 import 'package:laya_credit/data/models/recredit_result.dart';
 import 'package:laya_credit/pages/recredit_page.dart';
 import 'package:laya_credit/providers/recredit_provider.dart';
+import 'package:laya_credit/theme/app_colors.dart';
+import 'package:laya_credit/theme/app_layout.dart';
 
 /// 一直不返回的授信请求：页面测试里只验证渲染，不让轮询真的跑起来。
 Future<bool> _neverResolves() => Completer<bool>().future;
@@ -69,6 +71,46 @@ void main() {
       expect(calls, ['admission:P-1']);
       expect(coordinator.isRunning, isFalse);
       expect(attempts, 2);
+    });
+
+    test('授信成功且仍在等待页时先检查位置权限，再重走准入', () async {
+      final calls = <String>[];
+      final coordinator = RecreditPollingCoordinator(
+        readStatus: () async => true,
+        currentRoute: () => AppRoutes.recredit,
+        refreshHome: () async => calls.add('home'),
+        ensureLocationAccess: () async {
+          calls.add('location');
+          return true;
+        },
+        runAdmission: (productId) async => calls.add('admission:$productId'),
+        interval: Duration.zero,
+      );
+
+      coordinator.start('P-1');
+      await _settleUntil(() => calls.isNotEmpty);
+
+      expect(calls, ['location', 'admission:P-1']);
+    });
+
+    test('位置权限检查不通过时不自动准入', () async {
+      final calls = <String>[];
+      final coordinator = RecreditPollingCoordinator(
+        readStatus: () async => true,
+        currentRoute: () => AppRoutes.recredit,
+        refreshHome: () async => calls.add('home'),
+        ensureLocationAccess: () async {
+          calls.add('location');
+          return false;
+        },
+        runAdmission: (productId) async => calls.add('admission:$productId'),
+        interval: Duration.zero,
+      );
+
+      coordinator.start('P-1');
+      await _settleUntil(() => !coordinator.isRunning);
+
+      expect(calls, ['location']);
     });
 
     test('授信完成时用户已回到容器页则刷新首页', () async {
@@ -193,6 +235,12 @@ void main() {
       await pumpPage(tester, 'P-1');
 
       expect(find.byKey(const Key('recredit-illustration')), findsOneWidget);
+      final scale = AppLayout.of(tester.element(find.byType(RecreditPage)))
+          .scale;
+      expect(
+        tester.getSize(find.byKey(const Key('recredit-illustration'))),
+        Size(138 * scale, 102 * scale),
+      );
       expect(
         find.text(
           'Calculating your credit limit, just 30 seconds',
@@ -202,6 +250,13 @@ void main() {
       );
       expect(find.text('Please wait patiently'), findsOneWidget);
       expect(find.byKey(const Key('recredit-progress-track')), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('recredit-progress-label')))
+            .style
+            ?.color,
+        AppColors.recreditProgressText,
+      );
       expect(find.text('0%'), findsOneWidget);
     });
 
@@ -270,6 +325,16 @@ void main() {
 
     expect(link.kind, AppDeepLinkKind.recredit);
     expect(link.productId, 'P-8');
+  });
+
+  test('准入深链保留再来一单来源标识 dirdum=8', () {
+    final link = const AppDeepLinkParser().parse(
+      'ph://laya-credit/ios/Isaria?tartarizing=P-8&dirdum=8',
+    );
+
+    expect(link.kind, AppDeepLinkKind.admission);
+    expect(link.productId, 'P-8');
+    expect(link.apiRemind, 8);
   });
 
   testWidgets('已在等待页时重复下发同目标不再压栈', (tester) async {

@@ -77,7 +77,9 @@ class _RecreditPageState extends ConsumerState<RecreditPage> {
             Image.asset(
               AppAssets.recreditIllustration,
               key: const Key('recredit-illustration'),
-              width: layout.px(120),
+              // 设计稿 `box_1` 为 138x102；提供的切图是 120x102，
+              // 按设计稿宽度铺开，避免整块内容比蓝稿窄 18pt。
+              width: layout.px(138),
               height: layout.px(102),
               fit: BoxFit.contain,
             ),
@@ -199,7 +201,7 @@ class _RecreditProgress extends StatelessWidget {
           '$progress%',
           key: const Key('recredit-progress-label'),
           style: TextStyle(
-            color: AppColors.recreditProgressFill,
+            color: AppColors.recreditProgressText,
             fontSize: layout.px(14),
             fontWeight: FontWeight.w500,
             // 设计稿 `text_5`：font-size 14px / line-height 20px。

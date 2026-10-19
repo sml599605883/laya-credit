@@ -93,6 +93,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   // ---------- 文案 ----------
 
   static const _appName = 'Maya Agad';
+
+  /// 品牌行的产品名（设计稿 `label_1`）。
+  ///
+  /// 顶部导航行仍是设计稿的 `Maya Agad`，品牌行换成当前产品名 `Laya Credit`，
+  /// 与设计稿 v3 一致。
+  static const _brandName = 'Laya Credit';
   static const _phoneLabel = 'Please enter mobile number';
   static const _phonePrefix = '+63';
   static const _phoneHint = 'Mobile numbers starting with 9';
@@ -110,10 +116,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// 重发验证码倒计时（秒）。
   static const _resendSeconds = 60;
 
-  /// 手机号长度。文档示例为 9~11 位纯数字，这里只做宽松校验，
-  /// 避免把合法号码挡在门外（各市场号段规则不同）。
-  static const _minPhoneLength = 9;
-  static const _maxPhoneLength = 11;
+  /// 手机号长度：产品要求最少 12 位、最多 16 位纯数字。
+  static const _minPhoneLength = 12;
+  static const _maxPhoneLength = 16;
 
   /// 验证码位数上限。
   static const _codeMaxLength = 6;
@@ -420,7 +425,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
         SizedBox(width: layout.px(_brandGap)),
         Text(
-          _appName,
+          _brandName,
           style: TextStyle(
             color: AppColors.white,
             fontSize: layout.px(_brandFontSize),

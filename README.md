@@ -123,8 +123,9 @@ lib/
 - 加签：公参 + 请求路径（`tarnhelm`），按参数名升序拼成 `key+value`，再用 `verifySecretKey` 做
   HMAC-SHA256（`RequestSigner`）。**公共混淆字段 `stith` 与签名本身不参与计算**；校验失败返回 `code 400`。
 - **签名覆盖的参数必须与实际下发的参数完全一致**（测试环境实测结论）：后端是拿收到的参数重算签名的，
-  多签一个没下发的字段会被判成 `code 400`。曾经 `gruelled` 只出现在签名里、不随请求下发，导致首页一直
-  400；现在按文档的加签示例「照发照签」。新增公共参数时务必同步两处，测试里已有对应的守门用例。
+  多签一个没下发的字段会被判成 `code 400`。文档已弃用的终端类型 `gruelled` 现在**请求不传、签名也不拼**
+  （以前「只签不发」会被判 400，后来临时照发照签；产品确认后彻底去掉）。新增公共参数时务必同步两处，
+  测试里已有对应的守门用例（`CommonParams` 不得再出现 `gruelled`）。
 - 响应固定三段：`crucians`(code) / `norseled`(message) / `connectedly`(data)；`0` 成功、`-2` 未登录。
 - 混淆字段每次请求随机生成，不参与签名，见 `lib/core/network/obfuscation_helper.dart`。
 - 后端字段名是混淆串，**写错不会报错、只会静默读到 `null`**：新增字段一律先查文档
@@ -147,6 +148,11 @@ lib/
    与 `kneeing` 里的 `BANNER` 模块不是同一个东西，需要设计确认它在首页的位置。
 3. **登录链路待真机验证**：短信验证码 / 登录接口已实现且签名被服务端接受，但发真实验证码需要测试手机号，
    尚未端到端跑过（登出 / 个人中心 / banner 上报已确认签名通过）。
+   登录页的品牌行按设计稿 v3 换成当前产品：Logo / banner 切图取自
+   `01-02 - 登录-默认`（`assets/login/login_logo.png` 48pt 图标、
+   `login_banner.png` 343x120，文案 `Welcome back! Continue your application in a
+   few easy steps.` 烘焙在 banner 里），产品名是 `Laya Credit`；顶部导航行仍是
+   设计稿的 `Maya Agad`（`_appName` 只留给导航行，品牌行用 `_brandName`）。
 4. **其余接口未接入**：H5 相关接口尚未全部落地；**数据上报已接入**（见第 24 条）
    （订单列表接口已接入，见第 21 条）。
    「点击申请」链路已接通到准入接口，下游页面也已补齐：准入 / 详情返回的 H5 地址
@@ -180,10 +186,12 @@ lib/
 7. **消息 / 客服 / 隐私政策等二级页面** 尚未搭建，当前点击只弹占位提示。
 8. **首页头图的问候语**：蓝湖稿 02-01 顶部是用户名（`Maya Agad`），接口当前没有下发昵称，
    先用品牌名 `Laya Credit` 顶位，等账号接口给出昵称字段再替换。
-   进度卡标题现在直接来自整卡底图（设计稿的 `Credit activation progress`），
-   后端 `vesperal`（如「Complete the authentication in just 3 minutes…」）**暂时不渲染**：
-   底图是整卡合并位图，标题文字已经烘焙进图片里。若标题要跟随后端动态显示，
-   需要设计另导一份不带标题文字的卡片底图，再叠到标题位置。
+   额度数字上方的「Available up to」现在取大卡的 `octodentate`（接口实测值是
+   `Maximum Loan Amount Upto`，**以接口为准**，不再照设计稿写死）；
+   额度卡 `Apply Now` 下面那行描述取大卡的 `vesperal`
+   （接口实测值是 `Quick & easy! Submit your basic details now for instant 24/7 review.`），
+   两者为空时才回落到设计稿文案。授信进度卡的标题仍然来自整卡底图
+   （设计稿的 `Credit activation progress` 烘焙在合并位图里），**不是** `vesperal`。
 9. **首页公告 `AD_LIST` 暂无展示位置**：设计稿 02-01 / 02-02 都没有公告条，
    头图里原来固定占位 16pt 的公告已按设计稿删掉（`HomeData.notices` 仍在解析、测试保留）。
    等设计给出公告的展示位置（或确认不做）后再接。
@@ -302,6 +310,10 @@ lib/
     - 页面三段与设计稿一一对应：通栏头图（`section_1`，375x213）、上传引导整块
       （`section_3` + `group_1` 合起来 343x420）、底部 `Upload` 主按钮
       （`text-wrapper_4`，343x48 柠檬绿胶囊）。
+      `Upload` **固定在页面底部不随内容滚动**（812 稿上的 y 714~762：按钮下沿距
+      屏幕底 50pt = 安全区 34pt + 16pt），走共用组件
+      `lib/widgets/certification_bottom_bar.dart`；小屏上内容比一屏高时
+      用户也不用先滚到底才能提交（`test/widget_test.dart` 有矮屏回归用例）。
     - 三个新素材都已按用途改名并登记到 `AppAssets`（`assets/id_verify/`）：
       `id_verify_header_blank.png`（用户提供的 `位图@3x.png`，和证件选择页的
       `id_verify_header.png` 是同一张渐变 + 吉祥物，**但没烘焙标题文字**，
@@ -344,7 +356,7 @@ lib/
     （认证流程第三步，`/id-confirm`，`IdConfirmPage`）。
     - 页面三段与设计稿一一对应：通栏头图（`section_1`，375x213，复用上传页那份
       没烘焙标题的 `id_verify_header_blank.png`）、白卡（`box_3`，343x396）、
-      底部 `Upload` 主按钮（`text-wrapper_3`，343x48）。
+      底部 `Upload` 主按钮（`text-wrapper_3`，343x48，固定不滚动，见第 13 条）。
     - 白卡里是证件照（`box_5`，319x200 + 12 圆角 + 2pt 白描边）与三行识别结果
       （`text-wrapper_4`，每行 48pt、`#F8F8F8` 底、4 圆角）：
       `Full Name` / `ID No.` / `Date of Birth`。**字段可编辑**（对齐 peso_shield
@@ -386,8 +398,9 @@ lib/
     （认证流程第四步，`/face-verification`，`FaceVerificationPage`）。
     - 页面结构与证件上传页一致：通栏头图（复用 `id_verify_header_blank.png`）、
       引导段落、示范整块切图（343x420）、底部 `Upload` 主按钮（343x48 柠檬绿胶囊）。
-      设计稿实测：示范图顶边 194（压在头图下 19pt）、示范图到按钮 100pt、
-      按钮下沿到页底 50pt，与上传页同口径。
+      设计稿实测：示范图顶边 194（压在头图下 19pt）；`Upload` 固定在页面底部
+      （812 稿上的 y 714~762），与上传页 / 确认页共用
+      `lib/widgets/certification_bottom_bar.dart`。
     - 新素材已按用途改名并登记到 `AppAssets`（`assets/id_verify/`）：
       `face_verify_demo.png`（用户提供的 `编组 12@3x.png`，343x420）——
       `Demonstration` 正确示范（绿色取景框 + 面部轮廓）与 `Wrong Demonstration`
@@ -417,8 +430,11 @@ lib/
          继续下一步认证（`Reargued` 之外的认证项）。
     - 相机权限在取 token 前预检（口径对齐 peso_shield）：复用
       `IdentityPhotoPermission.ensureCameraForLiveness`，先查当前状态，未授权再
-      `request`，被拒时弹「Enable Camera to Continue」引导去系统设置，
-      不浪费一次 token 请求；`Info.plist` 里的相机说明保持不变。
+      `request`，被拒时弹「Camera Access Needed」
+      （`Decide Later` / `Allow Access`）引导去系统设置，不浪费一次 token 请求；
+      `Info.plist` 里的相机说明保持不变。
+      证件拍摄页与活体页共用同一个相机权限引导框，文案取设计稿
+      「没有相机权限提示弹窗」（它的正文本身就同时覆盖证件与面部图像）。
     - 订单号由 `ProductApplicationFlow` 从产品详情 `basicInfo.orderNo` 带进页面
       （token 接口的 `resex`），页面不再自己拉一次产品详情。
     - 测试通过 `livenessGatewayProvider` 注入假网关，覆盖「通过 / 未通过 /
@@ -448,8 +464,9 @@ lib/
       未知类型退化成只读行，不渲染成不可用的输入框。
     - 交互（口径对齐 peso_shield）：枚举字段弹 `showPersonalInfoOptionSheet`
       （`Done` 回填展示文案，提交 `liquidators`；**面板每次打开都从第一项开始，
-      不回填当前值**）；地址字段先拉
-      `GET /outsulk/avern`（同页缓存一次）再弹 `showPersonalInfoAddressSheet`，
+      不回填当前值**）；地址层级 `GET /outsulk/avern` **进入本页就预取**
+      （同页只发一次，失败丢弃缓存、点字段时重试；工作信息页共用同一实现），
+      点地址字段时直接读缓存再弹 `showPersonalInfoAddressSheet`，
       逐层点选，返回 `省-市-区` 拼好的完整地址；`Upload` 把每个字段的 `crucians`
       当 key 回传 `POST /outsulk/marantas`（带 `rhus` / `downlie` 两个混淆字段），
       成功后交给 `ProductApplicationFlow.continueProductDetailFlow` 走下一步。
@@ -574,10 +591,14 @@ lib/
       返回 `crucians == 20000` 表示后端要求先做活体：先取 token（`type = 1`），
       拉起活体 SDK，再把 `bassein` / `gargantua` / `attach` / `musculopallial` 连同原字段
       **重提交一次**；成功后再交给 `ProductApplicationFlow.continueProductDetailFlow`
-      走下一步认证。提交前校验必填项 + 两次账号一致。
+      走下一步认证。**没填完也照发**：本地不再用必填项把请求拦下来，缺什么由
+      「提交绑卡」接口的返回判断（对齐 peso_shield 的 `_submit`）；只保留
+      「两次账号一致」这一条本地校验。
       Loading / Error（带 `Retry`）/ Empty（`No payment methods available`）三态齐全。
-    - 引导文案优先级：产品详情 `overwhelming.mobilization`（文档语义 `bind_card`，
-      见第 15 条同款缓存机制）→ 表单接口 `befleas` → 设计稿四行兜底；
+    - 引导文案优先级：**表单接口 `befleas` 优先**（绑卡页接口
+      `GET /outsulk/cussedly` 下发，对齐 peso_shield 用 `_data?.prompt` 的口径）
+      → 产品详情 `overwhelming.mobilization`（文档语义 `bind_card`，见第 15 条同款
+      缓存机制）→ 设计稿四行兜底；
       底部红字取表单接口 `revision`（产品详情 `overwhelming.revision` 作兜底）。
     - **改卡场景已接入**（`BindCardPageArguments.isAccountChange`，口径对齐 peso_shield
       的 `isAccountChange`）：订单详情里更换打款账户时，绑卡页照常拉表单 / 提交，
@@ -624,7 +645,7 @@ lib/
       可选收款账户走 `POST /outsulk/heartfelt`（`tartarizing` 产品 id + 两个随机混淆字段），
       按产品维度缓存在 `loanConfirmProvider`，失败时页面 `ref.invalidate` 重试；
       返回按打款方式分组（分组数组 `connectedly.kneeing[]`，组内账户 `stabiliment[]`），分节名、账号 / 姓名、
-      渠道 logo、维护状态（`catchpenny`）与默认选中（`cloaked` / `isMain`）**全部由后端下发**，
+      渠道 logo、维护状态（`catchpenny` / `loader`）与默认选中（`cloaked` / `isMain`）**全部由后端下发**，
       客户端不写死任何一条账户。页面按 `LoadingView` / `ErrorView` / 空态
       （`No payment methods available`）/ 列表四态渲染；**一笔账户都没下发时不等用户点**，
       这一帧画完就回「要新增账户」，由调用方接着压绑卡页（口径对齐 peso_shield 的
@@ -651,24 +672,25 @@ lib/
       `First / Middle / Last Name` 三列排版，`1` / `2` 按「`Receipt Account` + 账号」
       一行排版。字段缺失或值不在枚举内时才退回分节名（`cardTypeName`）判定
       （名字里含 `cash`，或分节名为空但有收款人姓名）。
-    - 维护中的账户提示文案（设计稿 `text_6`）**本项目文档没有对应字段**：账户列表
-      （`heartfelt`）只下发 `catchpenny` 状态位（`1` 可用 / `0` 维护中，且文档明确
-      维护中仍可选择），文案照设计稿写死在页面常量里。
+    - 维护中的账户提示文案取账户的 `loader`（实测接口下发，例如
+      `Under maintenance. Loans may be delayed.`）；`catchpenny` 只决定是否展示，
+      文案为空时不渲染提示行。
+    - 账户列表页返回直接退出，不再请求确认用款挽留；`type=5` 只由待确认用款
+      H5（`WebViewPage` 的保留确认路径）退出时触发。
     - **账户卡用到的字段全部来自本项目 `4.certify.html`**：「用户账户列表」
       （`/outsulk/heartfelt`）分组 `retzian`(cardTypeName) / `heterological`(cardType) /
       `mesocolons`(cardTypeIcon) / `stabiliment`(item)，账户 `moonshade`(bindId) /
       `salish`(logo) / `catchpenny`(status) / `fallibleness`(bankName) /
       `tightens`(account) / `telecomm`(option 三节姓名) / `cloaked`(isMain)；
       「提交绑卡（第五项）」给出 `heterological` 的 `cardType` 枚举（1 电子钱包 /
-      2 银行 / 3 便利店）。账户的文案 / 状态字段只认本节列出的这几个，
+      2 银行 / 3 便利店）。账户的维护文案另取 `loader`，其余字段只认本节列出的这几个，
       不要引入其它项目的字段口径。
     - **与参照项目 peso_shield 的行为差异**（字段口径一律以本项目文档为准）：
       1. **空列表**：参照项目在它的入口调用方里对空列表直接跳绑卡页；本项目文档
          没有「空列表」分支，且本项目确认用款接口（`unobtrusiveness`）在收款账户
          信息缺失时返回 `10086` 弹窗，提示用户走 `Change Account`，所以本页保留
          空态文案 + `Add other payment methods` 入口，不静默跳转；
-      2. **维护文案**：本项目账户列表只下发 `catchpenny` 状态位、**没有维护文案
-         字段**，文案按设计稿写死在页面常量里；
+      2. **维护文案**：本项目账户列表下发 `loader`，客户端不再写死设计稿文案；
       3. **状态缺省**：本项目文档的 `catchpenny` 只定义 `1 可用 / 0 维护中`，所以
          **只有 `0` 视为维护中**，字段缺失按可用，避免误报红字。
     - `Upload` 文案字号是 14pt（设计稿 `text_19`），与证件上传页的 16pt 不同，
@@ -729,7 +751,11 @@ lib/
       个人中心、WebView 桥、申请流程三个入口；本项目在三者的基础上多出首页 banner
       （`jumpUrl` 里的原生 `order` 目标）。四个来源全部收敛到 `AppNavigator.openOrderList`，
       深链分发统一走 `AppNavigator.openDeepLink`（见第 1 条），各入口不再各写一份 switch。
-      首页借款进度卡仍是纯展示、按钮回调未接（本任务明确不做），本页只承接筛选入口与深链。
+      首页「进行中借款订单卡」（`PROCESS_LIST`）仍是纯展示、卡片上的 `Change` /
+      `Try again` 回调未接（本任务明确不做），本页只承接筛选入口与深链；
+      额度头图下面那张**授信进度卡**（`Credit activation progress`，大卡的
+      `unobtrusiveness` 阶段）现在整卡可点，和额度大卡 / 推荐卡一样调准入接口并跳转
+      （见第 5 条与 `_ProductProgress`）。
     - 与参照项目 peso_shield / fund_nexus 的差异：状态分档只看 `polyphonist`（不额外引入
       对方的状态枚举）、筛选参数字段名用本项目文档的 `butterpaste`、统一入口命名为
       `openDeepLink` / `openOrderList` 而不照搬对方的 `navigateRawTarget` 结构；
@@ -751,6 +777,9 @@ lib/
       `POST /outsulk/gundy`。页面直接 `ref.watch(homeDataProvider)`，下拉刷新走同一个 notifier。
       进入进度 Tab 时 `RootTabPage._refreshHomeData()` 会重新拉一次（首页 / 进度共用数据源，
       个人中心不拉），否则进度页会一直显示上次进入时缓存的数据。
+      `HomeDataNotifier.refresh()` 是**单飞**的：登录成功、路由返回（`didPopNext`）、
+      切 Tab、生命周期恢复这些触发点前后脚重叠时只发一条请求
+      （回归：登录成功跳首页时首页接口曾被同时调用两次）；请求结束后下一次刷新照常发起。
     - **卡片三层结构**（尺寸全部取自设计稿 CSS）：底层深色衬底（343 宽、相对卡顶下沉 41pt、
       圆角 12，左右各露出 12pt）+ 白色卡身（319 宽、圆角 12，产品行 + 金额 / 日期小表）
       + 底部状态条（343 宽，有按钮 54 / 无按钮 26）。白卡有按钮 149pt、无按钮 121pt，
@@ -854,9 +883,14 @@ lib/
     - 启动：延迟 400ms → 申请通知权限 → 注册 APNs 换 deviceToken → 再延迟 400ms → 申请 ATT；
     - 回到前台：重试一次 ATT（首次的授权弹窗可能被用户留在后台没处理）；
     - 点击「立即申请」：先做定位检查，已授权直接放行；永久拒绝 / 定位服务关闭会弹
-      「Turn On Location Services」「Allow Location Access」引导框（文案与 Dali 一致），
+      「Location Access Needed」（`Later` / `Allow Location`）引导框，文案取设计稿
+      「没有定位权限提示弹窗」（服务关闭与授权被拒共用同一个框，不再分叉），
       选择设置或本次拒绝都中止申请，取消引导按 Dali 口径放行；通过后补一轮定位 / 设备
       上报，再走准入接口。
+      系统定位弹窗期间 `PermissionCoordinator.isRequestingLocationPermission` 为
+      true，首页容器据此忽略「弹窗关闭」带来的那次生命周期恢复刷新
+      （对齐 dali 的 `_ignoreLocationPermissionResume`）：那一刻准入接口马上要自动
+      发出，不再重复刷首页 / 请求弹窗，也避免弹窗顶进认证流程。
     `getReportLocation` 只读不弹窗：系统定位弹窗只在「立即申请」时出现（原生走
     `ReportBridge.requestLocationPermission`）；ATT 弹窗只由启动权限流程拉起，
     上报路径（`reportGoogleMarket`）只读状态、未决定就直接跳过。
@@ -869,6 +903,10 @@ lib/
     `getOrderPushUrl` / `POST /outsulk/octodentate` 时上报）、10 结束申贷
     （WebView `uploadRisk` 动作）。
     同盾活体结果在 `face_verification_page` 与人脸分支的 `bind_card_page` 上报。
+    绑卡分支的活体链路对齐 peso_shield：活体必须**通过且带回 livenessId**，随后先把
+    抓拍图传到「接口上传(face,身份证正面)」（`POST /outsulk/fashioned`，`liquidators=10`、
+    来源 1、`bassein=7`），上传成功才带 `livenessId` / 授权码补交绑卡；补交不再塞 base64
+    图片。人脸页则要求回调带回图片 + livenessId 就上传（不按返回码判定）。
     测试：`test/core/report/report_data_test.dart`（设备报文加解密 + 字段映射、
     定位快照解析、文本兜底）、`test/core/report/report_store_test.dart` 与
     `test/core/report/report_service_test.dart`（Apple token 空值照报 / 突发去抖 / 并发合并 / 事件与补报重叠）；
@@ -879,10 +917,20 @@ lib/
     - Apple 推送 token 上报**不做长期去重**（业务要求）：每次启动、每次登录都会重新
       上报；但加了 3 秒突发去抖（`ReportService.appleTokenBurstWindow`）——原生注册
       APNs 后立刻推的 `push_token` 事件与启动权限流程结束时的补报只差几百毫秒，
-      同一 token 会连发两次，窗口内只放行一次。窗口外的重复上报仍会发生，
+      同一 token 会连发两次，窗口内只放行一次。权限刚允许时 APNs 还没回 token，
+      启动那条会先读到空值，所以空 token 上报前再等
+      `ReportService.appleTokenEmptyTokenDelay`（500ms）重读一次：真 token 到了就
+      改报真值，真值已被事件那条报过时按突发去抖丢弃，同一次突发仍只有一条请求
+      （`test/core/report/report_service_test.dart` 有对应用例）。窗口外的重复上报仍会发生，
       与 dali 的「单次启动内同 token 去重」不同，后端需能接受；
     - iOS 权限宏只放行本 App 真的会申请的项（相机 / 通知 / 定位），ATT 走原生
       `ATTrackingManager`，不依赖 permission_handler 的 ATT 实现；
+    - 设备 ID（公参 `genuflection` / `shapely` 与设备报文的 `idfv` / `deviceId`）
+      取**当前** idfv：原生 `stableVendorIdentifier()` 先读 `UIDevice.identifierForVendor`，
+      keychain 只在 idfv 拿不到时兜底。卸载重装后 idfv 会变，keychain 优先会让两端
+      对不上（QA 反馈过）；
+    - 设备报文 `amativeness`（`board`）固定传占位串 `QC_Reference_Phone`，
+      不再回传真机板号 `hw.model`；
     - 定位 / 设备 / ATT 采集与各场景埋点尚未在真机上端到端联调。
 
 ## 常用命令

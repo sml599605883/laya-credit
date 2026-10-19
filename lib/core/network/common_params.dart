@@ -7,8 +7,7 @@ import 'api_protocol.dart';
 ///
 /// ⚠️ 签名覆盖的参数必须与实际下发的参数**完全一致**：后端是拿收到的参数重算
 /// 签名的，多签一个没下发的字段就会被判成 `code 400`（联调时已实测）。
-/// 因此 `gruelled` 虽然文档标注「已弃用，不传此字段」，但加签示例里有它，
-/// 就照发照签——少了它同样会 400。
+/// 已弃用的 `gruelled`（终端类型）既不放进请求、也不参与签名，两者必须同步删。
 abstract final class CommonParams {
   static Map<String, Object?> create({
     required String deviceId,
@@ -20,7 +19,6 @@ abstract final class CommonParams {
     String? sessionId,
   }) {
     return {
-      ApiProtocol.clientType: ApiProtocol.clientTypeValue,
       ApiProtocol.appVersion: appVersion,
       ApiProtocol.deviceName: deviceName,
       ApiProtocol.deviceId: deviceId,

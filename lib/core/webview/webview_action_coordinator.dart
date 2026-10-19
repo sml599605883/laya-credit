@@ -6,6 +6,7 @@ typedef WebViewRiskReporter = Future<void> Function({
   required int startedAtSeconds,
 });
 typedef WebViewUrlAction = Future<void> Function(String url);
+typedef WebViewPathAction = Future<void> Function(String path);
 typedef WebViewExternalAction = Future<bool> Function(Uri uri);
 typedef WebViewParamsBuilder = Future<Map<String, dynamic>> Function(
   String path,
@@ -54,6 +55,7 @@ class WebViewActionCoordinator {
   const WebViewActionCoordinator({
     this.reportRisk,
     this.openWebView,
+    this.openWebPath,
     this.navigateInternal,
     this.openExternal,
     this.closePage,
@@ -72,6 +74,7 @@ class WebViewActionCoordinator {
 
   final WebViewRiskReporter? reportRisk;
   final WebViewUrlAction? openWebView;
+  final WebViewPathAction? openWebPath;
   final WebViewUrlAction? navigateInternal;
   final WebViewExternalAction? openExternal;
   final WebViewAsyncAction? closePage;
@@ -142,6 +145,12 @@ class WebViewActionCoordinator {
   Future<WebViewResult> _openUrl(WebViewRequest request) async {
     // H5 直接把链接（裸串）作为 data 下发。
     final rawUrl = request.rawDataString;
+    // 准入接口文档的跳转地址常是 H5 站点内相对路径（如 `/#/AnapaestsManuri`）。
+    // H5 桥会原样转交，不能因为缺少 scheme 就丢弃已成功的准入结果。
+    if (rawUrl.startsWith('/')) {
+      await openWebPath?.call(rawUrl);
+      return const WebViewResult.success();
+    }
     final uri = Uri.tryParse(rawUrl);
     if (rawUrl.isEmpty || uri == null || uri.scheme.isEmpty) {
       return const WebViewResult.failure('Invalid url');

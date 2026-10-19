@@ -9,6 +9,9 @@ enum OrderStatusTone { overdue, active, neutral }
 
 /// 订单状态码（`polyphonist`）。
 abstract final class OrderStatusCode {
+  /// 还款中：与逾期一样展示后端下发的主按钮。
+  static const repaying = 174;
+
   /// 待还款：设计稿 `Outstanding`，柠檬绿，展示主按钮。
   static const pendingRepay = 179;
 
@@ -92,6 +95,7 @@ class OrderListItem {
   /// 是否展示主按钮：只有待还款 / 逾期两个进行中的状态有
   /// （设计稿的终态卡没有按钮）。
   bool get hasAction =>
+      statusCode == OrderStatusCode.repaying ||
       statusCode == OrderStatusCode.pendingRepay ||
       statusCode == OrderStatusCode.overdue;
 
@@ -100,6 +104,7 @@ class OrderListItem {
 
   /// 状态文案配色分档，见 [OrderStatusTone]。
   OrderStatusTone get statusTone => switch (statusCode) {
+    OrderStatusCode.repaying => OrderStatusTone.overdue,
     OrderStatusCode.pendingRepay => OrderStatusTone.active,
     OrderStatusCode.overdue => OrderStatusTone.overdue,
     _ => OrderStatusTone.neutral,

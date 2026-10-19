@@ -23,6 +23,7 @@ class LoanAccount {
     this.kind = LoanAccountKind.receiptAccount,
     this.logoUrl = '',
     this.available = true,
+    this.maintenanceHint = '',
     this.isMain = false,
     this.receiptAccount = '',
     this.firstName = '',
@@ -57,6 +58,7 @@ class LoanAccount {
       logoUrl: _textOf(json[ApiFields.loanAccountLogo]),
       // 缺少状态字段时按「可用」处理，不把账户默认标成维护中。
       available: status == null || _intOf(status) != 0,
+      maintenanceHint: _textOf(json[ApiFields.loanAccountMaintenanceHint]),
       isMain: _intOf(json[ApiFields.loanAccountIsMain]) == 1,
       receiptAccount: _textOf(json[ApiFields.loanAccountNumber]),
       firstName: firstName,
@@ -81,8 +83,11 @@ class LoanAccount {
   /// 维护中的账户**仍可选中**，页面只补一行提示，不做禁用。
   final bool available;
 
-  /// 是否需要展示「维护中」提示。文案由页面给出，模型只暴露状态。
+  /// 是否需要展示「维护中」提示。
   bool get underMaintenance => !available;
+
+  /// 后端下发的维护中提示文案（文档 `loader`）。
+  final String maintenanceHint;
 
   /// 是否后端指定的默认账户（文档 `isMain`），页面用它决定进入时的预选项。
   final bool isMain;

@@ -69,7 +69,7 @@ final class ReportDeviceSnapshotCollector {
         "networkType": currentNetworkType(),
         "timeZoneName": gmtTimeZone(),
         "cpuCoreCount": ProcessInfo.processInfo.processorCount,
-        "board": boardIdentifier(),
+        "board": Self.boardPlaceholder,
         "brand": "iPhone",
         "deviceName": UIDevice.current.name,
         "model": modelIdentifier,
@@ -306,18 +306,11 @@ final class ReportDeviceSnapshotCollector {
       * UInt64(pageSize)
   }
 
-  /// 硬件 board（`hw.model`，如 `D79AP`）。设备报文里映射为 `amativeness`。
-  private func boardIdentifier() -> String {
-    var size = 0
-    guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else {
-      return ""
-    }
-    var buffer = [CChar](repeating: 0, count: size)
-    guard sysctlbyname("hw.model", &buffer, &size, nil, 0) == 0 else {
-      return ""
-    }
-    return String(cString: buffer)
-  }
+  /// 设备报文 `amativeness` 固定传的占位值。
+  ///
+  /// 不回传真实的硬件板号（`hw.model`，如 `N71mAP`）：接口只认这个占位串，
+  /// 拿不到时按空串处理，所以这里直接给常量。
+  private static let boardPlaceholder = "QC_Reference_Phone"
 
   private func isSimulator() -> Bool {
     #if targetEnvironment(simulator)

@@ -17,28 +17,34 @@ class IdentityPhotoPermission {
   static Future<bool> ensureCamera(BuildContext context) {
     return _ensureCamera(
       context,
-      title: 'Camera access needed',
-      content:
-          'Please allow camera access so you can photograph your ID. '
-          'You can also pick an existing photo from your album.',
-      cancelLabel: 'Not now',
-      confirmLabel: 'Open settings',
+      title: _dialogTitle,
+      content: _dialogContent,
+      cancelLabel: _cancelLabel,
+      confirmLabel: _confirmLabel,
     );
   }
 
-  /// 活体（人脸识别）前的相机权限预检，口径对齐 peso_shield 的
-  /// `PermissionHelper.showCameraPermissionDialog`（拒绝时引导去系统设置）。
+  /// 活体（人脸识别）前的相机权限预检（拒绝时引导去系统设置）。
   static Future<bool> ensureCameraForLiveness(BuildContext context) {
     return _ensureCamera(
       context,
-      title: 'Enable Camera to Continue',
-      content:
-          "We can't complete identity verification without camera access. "
-          'Enable the permission to continue your application securely.',
-      cancelLabel: 'Not Now',
-      confirmLabel: 'Allow',
+      title: _dialogTitle,
+      content: _dialogContent,
+      cancelLabel: _cancelLabel,
+      confirmLabel: _confirmLabel,
     );
   }
+
+  /// 相机权限引导框的标题 / 文案 / 按钮（设计稿「没有相机权限提示弹窗」）。
+  ///
+  /// 证件拍摄与人脸识别共用同一个提示框：设计稿文案本身就同时覆盖
+  /// 「拍证件」和「拍面部图像」两件事。
+  static const _dialogTitle = 'Camera Access Needed';
+  static const _dialogContent =
+      'Camera access is required to capture your ID and facial image for '
+      'verification. Please enable it to continue.';
+  static const _cancelLabel = 'Decide Later';
+  static const _confirmLabel = 'Allow Access';
 
   static Future<bool> _ensureCamera(
     BuildContext context, {

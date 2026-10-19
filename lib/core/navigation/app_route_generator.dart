@@ -94,10 +94,7 @@ class LoginPageArguments {
 ///
 /// 字段、选项与当前值都由页面自己按 [productId] 拉取，这里只带产品 id。
 class PersonalInfoPageArguments {
-  const PersonalInfoPageArguments({
-    required this.productId,
-    this.orderNo = '',
-  });
+  const PersonalInfoPageArguments({required this.productId, this.orderNo = ''});
 
   final String productId;
   final String orderNo;
@@ -107,10 +104,7 @@ class PersonalInfoPageArguments {
 ///
 /// 字段、选项与当前值都由页面自己按 [productId] 拉取，这里只带产品 id。
 class WorkInfoPageArguments {
-  const WorkInfoPageArguments({
-    required this.productId,
-    this.orderNo = '',
-  });
+  const WorkInfoPageArguments({required this.productId, this.orderNo = ''});
 
   final String productId;
   final String orderNo;
@@ -138,6 +132,7 @@ class BindCardPageArguments {
     required this.productId,
     this.orderNo = '',
     this.isAccountChange = false,
+    this.reportScene8 = true,
   });
 
   final String productId;
@@ -145,6 +140,11 @@ class BindCardPageArguments {
 
   /// 改卡场景：提交成功后不发下一步认证，而是换绑并 pop 订单详情页地址。
   final bool isAccountChange;
+
+  /// 提交成功时是否上报风控场景 8。
+  ///
+  /// 认证项绑卡和确认用款页换卡会上报；放款失败后从进度卡改卡不上报。
+  final bool reportScene8;
 }
 
 /// 借款确认页入参（蓝湖稿 `04-01 - 确认借款-选择其它方式`）。
@@ -293,6 +293,7 @@ class AppRouteGenerator {
             productId: bindArgs?.productId ?? '',
             orderNo: bindArgs?.orderNo ?? '',
             isAccountChange: bindArgs?.isAccountChange ?? false,
+            reportScene8: bindArgs?.reportScene8 ?? true,
           ),
         );
 

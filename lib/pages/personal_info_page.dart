@@ -241,6 +241,9 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   void initState() {
     super.initState();
     _sceneStartSeconds = ReportService.nowSeconds();
+    // 进入认证项就预取地址初始化数据，用户点地址选择时不用再等接口
+    // （对齐 peso_shield 的 `_prefetchAddressChoices`）。
+    _prefetchAddressNodes();
   }
 
   /// 已经把哪一份接口数据铺到表单上，避免 build 里重复初始化。
@@ -252,8 +255,10 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
   /// 每个字段的输入框；选项 / 地址字段只借它存展示文案。
   final _controllers = <String, TextEditingController>{};
 
-  /// 地址层级缓存（`GET /outsulk/avern`），同一页面只拉一次。
-  List<AddressNode>? _addressNodes;
+  /// 地址层级请求（`GET /outsulk/avern`），同一页面只发一次。
+  ///
+  /// 进入认证项时预取，点地址字段时直接读同一份结果。
+  Future<List<AddressNode>>? _addressRequest;
 
   @override
   void dispose() {
@@ -662,16 +667,30 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
     });
   }
 
+  /// 预取地址层级数据。
+  ///
+  /// 预取失败时消费掉异常并丢弃缓存，用户真正点地址字段时再重试一次，
+  /// 不让后台失败把页面顶成未捕获异常。
+  void _prefetchAddressNodes() {
+    final request = _addressRequest ??= _loadAddressNodes();
+    unawaited(
+      request.catchError((Object _) {
+        if (identical(_addressRequest, request)) _addressRequest = null;
+        return const <AddressNode>[];
+      }),
+    );
+  }
+
   /// 地址字段：先拉层级数据（同页缓存），再弹地址面板。
   Future<void> _pickAddress(PersonalInfoField field) async {
     final cancel = ToastHelper.showLoading();
     try {
-      _addressNodes ??= await _loadAddressNodes();
+      final nodes = await (_addressRequest ??= _loadAddressNodes());
       cancel();
       if (!mounted) return;
       final address = await showPersonalInfoAddressSheet(
         context: context,
-        nodes: _addressNodes!,
+        nodes: nodes,
       );
       if (address == null || !mounted) return;
       setState(() {
@@ -679,6 +698,8 @@ class _PersonalInfoPageState extends ConsumerState<PersonalInfoPage> {
         _controllers[field.key]?.text = address;
       });
     } catch (_) {
+      // 拉取失败：清掉缓存，下次点击重试。
+      _addressRequest = null;
       cancel();
       if (mounted) ToastHelper.showError('Unable to load address options');
     }

@@ -11,6 +11,7 @@ import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
+import '../widgets/certification_bottom_bar.dart';
 import '../widgets/certification_scaffold.dart';
 import '../widgets/remote_image.dart';
 import '../widgets/upload_button.dart';
@@ -66,12 +67,6 @@ const _rowGap = 8.0;
 
 /// 信息行圆角（设计稿 `text-wrapper_4 { border-radius: 4 }`）。
 const _rowRadius = 4.0;
-
-/// 白卡与 `Upload` 按钮之间的间距（设计稿 590 -> 714）。
-const _cardToButtonGap = 124.0;
-
-/// 按钮下沿到页面底边的留白（设计稿 762 -> 812，比手势条高，不用再补安全区）。
-const _buttonBottom = 50.0;
 
 /// 识别信息行的字段名（设计稿 `text_6`，与后端字段一一对应）。
 const _nameLabel = 'Full Name';
@@ -170,6 +165,14 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
       prompt: prompt,
       promptGap: _promptGap,
       promptWidth: _promptWidth,
+      // `Upload` 固定在页面底部（设计稿 y 714~762），小屏不用先滚到底才能提交。
+      bottomNavigationBar: CertificationBottomBar(
+        child: UploadButton(
+          layout: layout,
+          enabled: !_isSubmitting,
+          onTap: _save,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -188,19 +191,7 @@ class _IdConfirmPageState extends ConsumerState<IdConfirmPage> {
               onPickBirthDate: _pickBirthDate,
             ),
           ),
-          SizedBox(height: layout.px(_cardToButtonGap)),
-          Padding(
-            padding: layout.edgeInsets(
-              left: AppSpacing.pageHorizontal,
-              right: AppSpacing.pageHorizontal,
-            ),
-            child: UploadButton(
-              layout: layout,
-              enabled: !_isSubmitting,
-              onTap: _save,
-            ),
-          ),
-          SizedBox(height: layout.px(_buttonBottom)),
+          SizedBox(height: layout.px(AppSpacing.md)),
         ],
       ),
     );

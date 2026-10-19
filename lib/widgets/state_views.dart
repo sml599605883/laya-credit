@@ -38,7 +38,7 @@ class ErrorView extends StatelessWidget {
     final titleColor = onDark ? AppColors.surfaceMint : AppColors.textPrimary;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: layout.edgeInsets(left: 24, right: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,

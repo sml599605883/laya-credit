@@ -205,7 +205,8 @@ class HomeProductCard {
     required this.certifyFinished,
     required this.account,
     required this.accountText,
-    required this.progressText,
+    required this.descriptionText,
+    this.termRows = const [],
     required this.steps,
   });
 
@@ -224,7 +225,8 @@ class HomeProductCard {
       certifyFinished: json[ApiFields.certifyFinished]?.toString() == '1',
       account: json[ApiFields.account]?.toString() ?? '',
       accountText: json[ApiFields.accountText]?.toString() ?? '',
-      progressText: json[ApiFields.loanProcessText]?.toString() ?? '',
+      descriptionText: json[ApiFields.loanProcessText]?.toString() ?? '',
+      termRows: _termRows(json[ApiFields.periodList]),
       steps: _steps(json[ApiFields.loanProcessList]),
     );
   }
@@ -247,8 +249,41 @@ class HomeProductCard {
   /// 收款账号及文案，部分包认证完成后展示。
   final String account;
   final String accountText;
-  final String progressText;
+
+  /// 额度卡底部的描述文案（混淆字段 `vesperal`，如
+  /// `Quick & easy! Submit your basic details now for instant 24/7 review.`）。
+  ///
+  /// 页面在 `Apply Now` 下方渲染它；低版本 / 未灰度用户不下发时回落到设计稿文案。
+  /// 授信进度卡的标题烘焙在整卡底图里，**不是**这一条。
+  final String descriptionText;
+
+  /// 按期限类型下发的利率 / 期数组合；为空时沿用旧版 `gundy` / `antibilious`。
+  final List<HomeLoanTerm> termRows;
   final List<HomeProgressStep> steps;
+}
+
+/// 首页大卡的期限类型行（`begorry[]`）。
+class HomeLoanTerm {
+  const HomeLoanTerm({
+    required this.period,
+    required this.label,
+    required this.interestRate,
+  });
+
+  factory HomeLoanTerm.fromJson(Map<String, dynamic> json) {
+    return HomeLoanTerm(
+      period: json[ApiFields.period]?.toString().trim() ?? '',
+      label: json[ApiFields.periodDesc]?.toString().trim() ?? '',
+      interestRate: json[ApiFields.loanRate]?.toString().trim() ?? '',
+    );
+  }
+
+  final String period;
+  final String label;
+  final String interestRate;
+
+  /// 例如 `2 Period`。
+  String get periodText => '$period $label'.trim();
 }
 
 /// 首页借款进度卡（PROCESS_LIST）。
@@ -268,6 +303,8 @@ class HomeOrderCard {
     required this.progressText,
     required this.steps,
     required this.jumpUrl,
+    this.actions = const [],
+    this.usesServerActions = false,
   });
 
   factory HomeOrderCard.fromJson(Map<String, dynamic> json) {
@@ -291,6 +328,8 @@ class HomeOrderCard {
       progressText: json[ApiFields.loanProcessText]?.toString() ?? '',
       steps: _steps(json[ApiFields.loanProcessList]),
       jumpUrl: json[ApiFields.jumpUrl]?.toString() ?? '',
+      actions: _orderActions(json[ApiFields.progressActions]),
+      usesServerActions: json[ApiFields.progressActions] is List,
     );
   }
 
@@ -312,6 +351,36 @@ class HomeOrderCard {
   final String progressText;
   final List<HomeProgressStep> steps;
   final String jumpUrl;
+
+  /// 后端下发的进度卡按钮。顺序和可见性以接口为准。
+  final List<HomeOrderAction> actions;
+
+  /// 接口是否下发了按钮列表；区分「没下发」与「明确下发空数组」。
+  final bool usesServerActions;
+}
+
+/// 借款进度卡上的一个按钮（`universalness[]`）。
+class HomeOrderAction {
+  const HomeOrderAction({
+    required this.type,
+    required this.label,
+    required this.badge,
+    required this.target,
+  });
+
+  factory HomeOrderAction.fromJson(Map<String, dynamic> json) {
+    return HomeOrderAction(
+      type: json[ApiFields.progressActionType]?.toString().trim() ?? '',
+      label: json[ApiFields.progressActionLabel]?.toString().trim() ?? '',
+      badge: json[ApiFields.progressActionBadge]?.toString().trim() ?? '',
+      target: json[ApiFields.progressActionTarget]?.toString().trim() ?? '',
+    );
+  }
+
+  final String type;
+  final String label;
+  final String badge;
+  final String target;
 }
 
 List<HomeProgressStep> _steps(Object? raw) {
@@ -320,6 +389,28 @@ List<HomeProgressStep> _steps(Object? raw) {
       .whereType<Map>()
       .map((item) => HomeProgressStep.fromJson(item.cast<String, dynamic>()))
       .toList();
+}
+
+List<HomeOrderAction> _orderActions(Object? raw) {
+  if (raw is! List) return const [];
+  return raw
+      .whereType<Map>()
+      .where(
+        (item) =>
+            item[ApiFields.progressActionVisible]?.toString().trim() == '1',
+      )
+      .map((item) => HomeOrderAction.fromJson(item.cast<String, dynamic>()))
+      .where((action) => action.type.isNotEmpty)
+      .toList(growable: false);
+}
+
+List<HomeLoanTerm> _termRows(Object? raw) {
+  if (raw is! List) return const [];
+  return raw
+      .whereType<Map>()
+      .map((item) => HomeLoanTerm.fromJson(item.cast<String, dynamic>()))
+      .where((row) => row.periodText.isNotEmpty || row.interestRate.isNotEmpty)
+      .toList(growable: false);
 }
 
 /// 推荐卡的按钮配色（文档 `holts`）。

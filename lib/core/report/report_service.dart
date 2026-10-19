@@ -34,11 +34,13 @@ class ReportService {
     required this.accessToken,
     Stream<PushEvent>? pushEvents,
     int Function()? nowMillis,
+    Future<void> Function(Duration duration)? delay,
     Future<void> Function(String token)? initializeAdjust,
   }) : store = store ?? ReportStore(),
        _pushBridge = pushBridge ?? PushBridge.shared,
        _events = pushEvents,
        _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
+       _delay = delay ?? Future<void>.delayed,
        _initializeAdjust = initializeAdjust ?? _startAdjust;
 
   static ReportService? current;
@@ -53,6 +55,7 @@ class ReportService {
     required String encryptIv,
     required String? Function() accessToken,
     int Function()? nowMillis,
+    Future<void> Function(Duration duration)? delay,
     Future<void> Function(String token)? initializeAdjust,
   }) {
     return current ??= ReportService(
@@ -64,6 +67,7 @@ class ReportService {
       encryptIv: encryptIv,
       accessToken: accessToken,
       nowMillis: nowMillis,
+      delay: delay,
       initializeAdjust: initializeAdjust,
     );
   }
@@ -81,6 +85,7 @@ class ReportService {
   final String encryptIv;
   final String? Function() accessToken;
   final int Function() _nowMillis;
+  final Future<void> Function(Duration duration) _delay;
   final Future<void> Function(String token) _initializeAdjust;
 
   final PushBridge _pushBridge;
@@ -96,6 +101,13 @@ class ReportService {
   /// 这里只做**秒级突发去抖**，不做长期去重：只要隔开这个窗口（正常登录都在
   /// 窗口之外），同一 token 仍然会照常重新上报。
   static const appleTokenBurstWindow = Duration(seconds: 3);
+
+  /// 读到空 token 时的等待时长（见 [reportAppleToken]）。
+  ///
+  /// 权限刚允许时 APNs 注册还没回来，启动权限流程先读到空值；原生随后
+  /// （实测只差两三百毫秒）才推 `push_token` 事件。先等一小段再读一次，
+  /// 能拿到真 token 就用真值上报，别让同一次突发既报空值又报真值。
+  static const appleTokenEmptyTokenDelay = Duration(milliseconds: 500);
 
   bool _started = false;
   bool _starting = false;
@@ -318,24 +330,44 @@ class ReportService {
   /// 不做长期去重：每次启动、每次登录都会重新上报。只做
   /// [appleTokenBurstWindow] 的突发去抖，避免同一 token 在同一瞬间被两条上报
   /// 路径连发两次；并发调用也只会真正发出一条请求。
-  /// token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次）。
+  /// token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次），只是先等
+  /// [appleTokenEmptyTokenDelay] 再读一次，别让「空值 + 真值」在一次突发里各报一次。
   Future<void> reportAppleToken() async {
-    String? token;
+    String? reserved;
     try {
-      token = (await _pushBridge.getPushToken()).trim();
-      final reportedAt = _lastAppleTokenReportedAt[token];
-      if (reportedAt != null &&
-          _nowMillis() - reportedAt < appleTokenBurstWindow.inMilliseconds) {
-        return;
+      reserved = (await _pushBridge.getPushToken()).trim();
+      if (!_tryReserveAppleToken(reserved)) return;
+
+      if (reserved.isEmpty) {
+        await _delay(appleTokenEmptyTokenDelay);
+        final latest = (await _pushBridge.getPushToken()).trim();
+        if (latest.isNotEmpty && latest != reserved) {
+          // 真 token 到了：改报真值。真值若已被原生事件那条路报过，
+          // 下面的去重会拦住这一次，同一次突发仍然只有一条请求。
+          _reportingAppleTokens.remove(reserved);
+          if (!_tryReserveAppleToken(latest)) return;
+          reserved = latest;
+        }
       }
-      if (!_reportingAppleTokens.add(token)) return;
-      await repository.reportApplePushToken(token: token);
-      _lastAppleTokenReportedAt[token] = _nowMillis();
+
+      await repository.reportApplePushToken(token: reserved);
+      _lastAppleTokenReportedAt[reserved] = _nowMillis();
     } catch (error) {
       _log(error);
     } finally {
-      if (token != null) _reportingAppleTokens.remove(token);
+      if (reserved != null) _reportingAppleTokens.remove(reserved);
     }
+  }
+
+  /// 抢占某个 token 的上报资格：突发窗口内报过的 token、以及正在上报中的
+  /// token（并发合并）都返回 false。
+  bool _tryReserveAppleToken(String token) {
+    final reportedAt = _lastAppleTokenReportedAt[token];
+    if (reportedAt != null &&
+        _nowMillis() - reportedAt < appleTokenBurstWindow.inMilliseconds) {
+      return false;
+    }
+    return _reportingAppleTokens.add(token);
   }
 
   /// 上报风控埋点。
@@ -349,6 +381,9 @@ class ReportService {
     String orderNo = '',
     required int startedAtSeconds,
   }) async {
+    // 场景耗时在调用埋点时立即封口。设备快照和定位都是异步的，
+    // 等它们返回再取 now 会把相邻的 8 / 9 压到同一秒。
+    final endedAtSeconds = _nowMillis() ~/ 1000;
     try {
       final snapshot = await bridge.getReportDeviceSnapshot();
       final location = await _locationWithFallback();
@@ -361,7 +396,7 @@ class ReportService {
         longitude: reportText(location?.longitude),
         latitude: reportText(location?.latitude),
         startTime: '$startedAtSeconds',
-        endTime: '${_nowMillis() ~/ 1000}',
+        endTime: '$endedAtSeconds',
       );
     } catch (error) {
       _log(error);

@@ -11,6 +11,7 @@ import '../providers/media_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
+import '../widgets/certification_bottom_bar.dart';
 import '../widgets/certification_scaffold.dart';
 import '../widgets/upload_button.dart';
 
@@ -40,12 +41,6 @@ const _demoTop = 194.0;
 
 /// 引导块宽高比（切图 343x420，等于设计稿里两张卡片的等比尺寸）。
 const _demoAspectRatio = 343 / 420;
-
-/// 引导块与 `Upload` 按钮之间的间距（设计稿 614 -> 714）。
-const _demoToButtonGap = 100.0;
-
-/// 按钮下沿到页面底边的留白（设计稿 762 -> 812，比手势条高，不用再补安全区）。
-const _buttonBottom = 50.0;
 
 /// 证件上传页（蓝湖稿 `03-01 - 身份认证-上传身份证`），认证流程第二步。
 ///
@@ -102,6 +97,14 @@ class _IdUploadPageState extends ConsumerState<IdUploadPage> {
       prompt: prompt,
       promptGap: _promptGap,
       promptWidth: _promptWidth,
+      // `Upload` 固定在页面底部，小屏不用先滚到底才能提交（设计稿 y 714~762）。
+      bottomNavigationBar: CertificationBottomBar(
+        child: UploadButton(
+          layout: layout,
+          enabled: !_isUploading,
+          onTap: () => _showUploadMethods(context, layout),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -120,19 +123,7 @@ class _IdUploadPageState extends ConsumerState<IdUploadPage> {
               ),
             ),
           ),
-          SizedBox(height: layout.px(_demoToButtonGap)),
-          Padding(
-            padding: layout.edgeInsets(
-              left: AppSpacing.pageHorizontal,
-              right: AppSpacing.pageHorizontal,
-            ),
-            child: UploadButton(
-              layout: layout,
-              enabled: !_isUploading,
-              onTap: () => _showUploadMethods(context, layout),
-            ),
-          ),
-          SizedBox(height: layout.px(_buttonBottom)),
+          SizedBox(height: layout.px(AppSpacing.md)),
         ],
       ),
     );

@@ -35,6 +35,13 @@ class HomeDataNotifier extends AsyncNotifier<HomeData> {
   /// 先发出的慢请求会覆盖后发出的新数据（对齐 dali_cash 的 last-wins 策略）。
   int _refreshRequestId = 0;
 
+  /// 在途的刷新请求（单飞）。
+  ///
+  /// 登录成功 → 路由返回 → Tab 切换、生命周期恢复 + 路由返回这些触发点会
+  /// 前后脚重叠，全部合并到同一次请求里，避免同一瞬间重复打首页接口
+  /// （QA 反馈：登录成功跳转首页时首页接口同时调用两次）。
+  Future<void>? _pendingRefresh;
+
   @override
   Future<HomeData> build() => _fetch();
 
@@ -44,6 +51,20 @@ class HomeDataNotifier extends AsyncNotifier<HomeData> {
   /// 再跳回来）；改为在最上层盖一层全局 Loading 遮罩（对齐 dali_cash 的
   /// `showLoading`），遮罩期间拦截交互，避免刷新没完成就重复点申请 / 推荐卡。
   Future<void> refresh() async {
+    final pending = _pendingRefresh;
+    if (pending != null) return pending;
+
+    final request = _performRefresh();
+    _pendingRefresh = request;
+    try {
+      await request;
+    } finally {
+      // 请求结束（成功或失败）后释放单飞锁，下一次刷新照常发起。
+      if (identical(_pendingRefresh, request)) _pendingRefresh = null;
+    }
+  }
+
+  Future<void> _performRefresh() async {
     final requestId = ++_refreshRequestId;
     final loading = ref.read(homeLoadingIndicatorProvider);
     loading.show();

@@ -14,9 +14,11 @@ import 'package:laya_credit/data/models/order_list_data.dart';
 import 'package:laya_credit/data/repositories/order_repository.dart';
 import 'package:laya_credit/pages/order_list_page.dart';
 import 'package:laya_credit/pages/recredit_page.dart';
+import 'package:laya_credit/pages/webview_page.dart';
 import 'package:laya_credit/providers/order_list_provider.dart';
 import 'package:laya_credit/providers/recredit_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
+import 'package:laya_credit/theme/app_colors.dart';
 
 OrderListItem _item({
   int orderId = 4,
@@ -57,6 +59,7 @@ class _FakeOrderRepository implements OrderRepository {
   final Set<int> failPages;
 
   final List<int> requestedPages = [];
+  final List<String> requestedStatuses = [];
 
   @override
   Future<ApiResponse<OrderListResult>> getOrderList({
@@ -65,6 +68,7 @@ class _FakeOrderRepository implements OrderRepository {
     int pageSize = 50,
   }) async {
     requestedPages.add(page);
+    requestedStatuses.add(status);
     if (failPages.contains(page)) {
       return const ApiResponse(
         code: 500,
@@ -185,6 +189,17 @@ void main() {
       expect(item.hasAction, isTrue);
     });
 
+    test('174 还款中展示后端下发的主按钮文案', () {
+      final item = _item(
+        statusCode: 174,
+        statusText: 'Repaying',
+        actionText: 'Repay',
+      );
+
+      expect(item.hasAction, isTrue);
+      expect(item.actionText, 'Repay');
+    });
+
     test('其余状态码判为终态且不展示主按钮', () {
       final item = _item(statusCode: 21, statusText: 'Settled');
       expect(item.statusTone, OrderStatusTone.neutral);
@@ -228,6 +243,13 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
+      final previousProviderContainer = AppNavigator.providerContainer;
+      AppNavigator.providerContainer = container;
+      addTearDown(() {
+        if (identical(AppNavigator.providerContainer, container)) {
+          AppNavigator.providerContainer = previousProviderContainer;
+        }
+      });
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -321,12 +343,67 @@ void main() {
       expect(find.byKey(const Key('order-list-empty-image')), findsNothing);
     });
 
+    testWidgets('订单状态 174 使用红色还款中文案并展示后端按钮', (tester) async {
+      await pumpPage(tester, [
+        _item(
+          statusCode: 174,
+          statusText: 'Repayment Due',
+          actionText: 'Repay',
+        ),
+      ]);
+
+      final label = tester.widget<Text>(find.text('Repayment Due'));
+      expect(label.style?.color, AppColors.orderStatusOverdue);
+      expect(find.text('Repay'), findsOneWidget);
+    });
+
     testWidgets('终态订单不展示主按钮', (tester) async {
       await pumpPage(tester, [
         _item(statusCode: 21, statusText: 'Settled', actionText: ''),
       ]);
 
       expect(find.text('Repay Now'), findsNothing);
+    });
+
+    testWidgets('重复点击当前 tab 会重新请求当前筛选', (tester) async {
+      final repository = _FakeOrderRepository([
+        [_item()],
+      ]);
+      await _pumpWithRepository(tester, repository);
+      expect(repository.requestedStatuses, ['4']);
+
+      await tester.tap(find.byKey(const ValueKey('order-tab-4')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.requestedStatuses, ['4', '4']);
+    });
+
+    testWidgets('从订单详情返回列表时重新请求当前筛选', (tester) async {
+      final repository = _FakeOrderRepository([
+        [_item(cardTarget: 'https://h5.example.com/order/detail')],
+      ]);
+      await _pumpWithRepository(
+        tester,
+        repository,
+        child: MaterialApp(
+          navigatorKey: AppNavigator.navigatorKey,
+          onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+          home: const OrderListPage(),
+        ),
+      );
+      expect(repository.requestedStatuses, ['4']);
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(WebViewPage), findsOneWidget);
+
+      AppNavigator.pop<void>();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WebViewPage), findsNothing);
+      expect(repository.requestedStatuses, ['4', '4']);
     });
 
     testWidgets('卡片原生深链目标分发到等待授信页', (tester) async {

@@ -3,12 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/certification/certification_retention_guard.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/loan_confirm_data.dart';
-import '../providers/certification_retention_provider.dart';
 import '../providers/loan_confirm_provider.dart';
 import '../providers/repository_provider.dart';
 import '../theme/theme.dart';
@@ -74,19 +72,6 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
   /// 提交换绑进行中：挡住 `Upload`，避免同一笔订单提交两次。
   bool _isSubmitting = false;
 
-  /// 返回走挽留弹窗（蓝湖稿 `04-01 - 确认借款-挽留弹窗`，接口 `type=5`）：
-  /// 只有用户在弹窗里选 `Exit` 才真正退出；素材缺失时直接返回。
-  Future<void> _handleBack() async {
-    final guard = await ref.read(certificationRetentionGuardProvider.future);
-    if (!mounted) return;
-    await guard.handleBack(
-      context: context,
-      productId: widget.productId,
-      type: CertificationRetentionType.loanConfirm,
-      onExit: AppNavigator.pop,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final layout = AppLayout.of(context);
@@ -97,26 +82,19 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
       _scheduleAutoBindCard(data);
     });
 
-    return PopScope(
-      // 借款确认页也有返回挽留：系统返回手势与顶部返回按钮走同一个入口。
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) _handleBack();
-      },
-      child: Scaffold(
-        backgroundColor: AppColors.surfaceMint,
-        body: Column(
-          children: [
-            BackNavBar(
-              layout: layout,
-              title: _navTitle,
-              onBack: _handleBack,
-            ),
-            Expanded(child: _buildBody(layout, info)),
-          ],
-        ),
-        bottomNavigationBar: _buildBottomBar(layout, info),
+    return Scaffold(
+      backgroundColor: AppColors.surfaceMint,
+      body: Column(
+        children: [
+          BackNavBar(
+            layout: layout,
+            title: _navTitle,
+            onBack: AppNavigator.pop,
+          ),
+          Expanded(child: _buildBody(layout, info)),
+        ],
       ),
+      bottomNavigationBar: _buildBottomBar(layout, info),
     );
   }
 
@@ -258,10 +236,11 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildAccountHeader(layout, account, selected),
-                if (account.underMaintenance) ...[
+                if (account.underMaintenance &&
+                    account.maintenanceHint.isNotEmpty) ...[
                   SizedBox(height: layout.px(_warningGap)),
                   Text(
-                    _maintenanceWarning,
+                    account.maintenanceHint,
                     // 设计稿 `text_6`：宽 319、固定两行高。
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -302,8 +281,10 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
   ) {
     return Row(
       children: [
-        _buildLogo(layout, account.logoUrl),
-        SizedBox(width: layout.px(_logoGap)),
+        if (account.logoUrl.isNotEmpty) ...[
+          _buildLogo(layout, account),
+          SizedBox(width: layout.px(_logoGap)),
+        ],
         Expanded(
           child: Text(
             account.name,
@@ -325,10 +306,9 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
   }
 
   /// 渠道 logo（设计稿「蒙版」24x24、4 圆角、`rgba(216,216,216)` 底 + 1pt 描边）。
-  ///
-  /// 接口还没给 logo 时留底色兜底，不留破图。
-  Widget _buildLogo(AppLayout layout, String url) {
+  Widget _buildLogo(AppLayout layout, LoanAccount account) {
     return Container(
+      key: Key('loan-confirm-logo-${account.id}'),
       width: layout.px(_logoSize),
       height: layout.px(_logoSize),
       decoration: BoxDecoration(
@@ -340,7 +320,7 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
         ),
       ),
       clipBehavior: Clip.antiAlias,
-      child: RemoteImage(url: url, fit: BoxFit.contain),
+      child: RemoteImage(url: account.logoUrl, fit: BoxFit.contain),
     );
   }
 
@@ -500,12 +480,10 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
               right: AppSpacing.pageHorizontal,
             ),
             child: UploadButton(
+              key: const Key('loan-confirm-upload'),
               layout: layout,
               // 没选到账户、列表还没回来或正在提交时按钮置灰。
-              enabled:
-                  !_isSubmitting &&
-                  _selectedId.isNotEmpty &&
-                  (info.value?.isEmpty == false),
+              enabled: !_isSubmitting && (info.value?.isEmpty == false),
               fontSize: _uploadFontSize,
               lineHeight: _uploadLineHeight,
               onTap: _upload,
@@ -518,7 +496,11 @@ class _LoanConfirmPageState extends ConsumerState<LoanConfirmPage> {
 
   /// 提交选中的收款账户：换绑成功后把订单详情页地址回给调用方。
   Future<void> _upload() async {
-    if (_selectedId.isEmpty || _isSubmitting) return;
+    if (_isSubmitting) return;
+    if (_selectedId.isEmpty) {
+      ToastHelper.showError('Please select a payment method');
+      return;
+    }
     // TODO(埋点): 点击 Upload 提交换绑需要在 Firebase Analytics 上报事件。
 
     final orderNo = widget.orderNo.trim();
@@ -576,13 +558,6 @@ const _navTitle = 'Loan Confirmation';
 
 /// 设计稿 `text_7` / `text_10` 的字段名。
 const _receiptAccountLabel = 'Receipt Account';
-
-/// 账户维护中的提示文案（设计稿 `text_6`）。
-///
-/// 接口只下发 `catchpenny` 状态位、没有下发文案，所以照设计稿写死。
-const _maintenanceWarning =
-    'The bank is under maintenance. Loans may be delayed. '
-    'Please wait or choose another option';
 
 /// 第一个分节标题到导航行的间距（设计稿 `text_4` 的 `margin-top: 26`）。
 ///

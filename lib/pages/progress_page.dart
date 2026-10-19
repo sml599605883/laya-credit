@@ -129,11 +129,22 @@ class ProgressPage extends ConsumerWidget {
     HomeOrderCard order,
     _ProgressAction action,
   ) async {
-    switch (action.type) {
-      case _ProgressActionType.tryAgain:
+    switch (action.type.trim().toLowerCase()) {
+      case 'retry':
         await _retryOrder(ref, order);
-      case _ProgressActionType.change:
+      case 'change':
         await _changeAccount(ref, order);
+      case 'repay':
+      case 'early_repay':
+        final target = action.target.trim();
+        if (target.isEmpty) {
+          ToastHelper.showMessage('Repayment link is unavailable');
+          return;
+        }
+        await _openOrderDetail(target);
+      default:
+        // 未识别的动作不猜测跳转，避免金融场景误触发。
+        ToastHelper.showMessage('Action is unavailable');
     }
   }
 
@@ -204,6 +215,8 @@ class ProgressPage extends ConsumerWidget {
           productId: productId.toString(),
           orderNo: order.orderNo,
           isAccountChange: true,
+          // 放款失败后的改卡不属于埋点 8 的合法入口。
+          reportScene8: false,
         ),
       );
       if (url != null && url.isNotEmpty) await _openOrderDetail(url);
@@ -316,7 +329,18 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presentation = _ProgressPresentation.from(order.status);
-    final actions = presentation.actions;
+    final actions = order.usesServerActions
+        ? [
+            for (final action in order.actions)
+              if (action.label.isNotEmpty)
+                _ProgressAction(
+                  type: action.type,
+                  label: action.label,
+                  badge: action.badge,
+                  target: action.target,
+                ),
+          ]
+        : presentation.actions;
     final height = actions.isEmpty ? _compactHeight : _tallHeight;
 
     return SizedBox(
@@ -572,32 +596,31 @@ class _ProgressActionBar extends StatelessWidget {
                 ? _ProgressPill(
                     layout: layout,
                     label: actions.single.label,
+                    badge: actions.single.badge,
                     fill: pillFill,
                     textColor: pillText,
                     onTap: () => onAction(actions.single),
                   )
                 : Row(
                     children: [
-                      Expanded(
-                        child: _ProgressPill(
-                          layout: layout,
-                          label: actions[0].label,
-                          fill: Colors.transparent,
-                          textColor: AppColors.progressCardBase,
-                          borderColor: AppColors.progressCardBase,
-                          onTap: () => onAction(actions[0]),
+                      for (var index = 0; index < actions.length; index++) ...[
+                        if (index > 0) SizedBox(width: layout.px(15)),
+                        Expanded(
+                          child: _ProgressPill(
+                            layout: layout,
+                            label: actions[index].label,
+                            badge: actions[index].badge,
+                            fill: index == 0 ? Colors.transparent : pillFill,
+                            textColor: index == 0
+                                ? AppColors.progressCardBase
+                                : pillText,
+                            borderColor: index == 0
+                                ? AppColors.progressCardBase
+                                : null,
+                            onTap: () => onAction(actions[index]),
+                          ),
                         ),
-                      ),
-                      SizedBox(width: layout.px(15)),
-                      Expanded(
-                        child: _ProgressPill(
-                          layout: layout,
-                          label: actions[1].label,
-                          fill: pillFill,
-                          textColor: pillText,
-                          onTap: () => onAction(actions[1]),
-                        ),
-                      ),
+                      ],
                     ],
                   ),
           ),
@@ -617,6 +640,7 @@ class _ProgressPill extends StatelessWidget {
     required this.textColor,
     required this.onTap,
     this.borderColor,
+    this.badge = '',
   });
 
   final AppLayout layout;
@@ -624,6 +648,7 @@ class _ProgressPill extends StatelessWidget {
   final Color fill;
   final Color textColor;
   final Color? borderColor;
+  final String badge;
   final VoidCallback onTap;
 
   @override
@@ -641,32 +666,56 @@ class _ProgressPill extends StatelessWidget {
       child: InkWell(
         key: Key('progress-action-$label'),
         onTap: onTap,
-        child: Center(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontSize: layout.px(12),
-              fontWeight: FontWeight.w700,
-              // 设计稿 `text_31`：`font-size: 12px; line-height: 14px`。
-              height: 14 / 12,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: layout.px(12),
+                  fontWeight: FontWeight.w700,
+                  // 设计稿 `text_31`：`font-size: 12px; line-height: 14px`。
+                  height: 14 / 12,
+                ),
+              ),
             ),
-          ),
+            if (badge.isNotEmpty)
+              Positioned(
+                right: layout.px(4),
+                top: layout.px(-8),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.progressStatusPink,
+                    borderRadius: layout.radius(8),
+                  ),
+                  child: Padding(
+                    padding: layout.edgeInsets(
+                      left: 5,
+                      top: 1,
+                      right: 5,
+                      bottom: 1,
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        color: AppColors.surface,
+                        fontSize: layout.px(8),
+                        fontWeight: FontWeight.w600,
+                        height: 10 / 8,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
-}
-
-/// 状态条上的动作类型。
-enum _ProgressActionType {
-  /// 重新放款（原卡重试确认订单）。
-  tryAgain,
-
-  /// 更换收款账户（原生账户列表页）。
-  change,
 }
 
 /// `Try again` 失败且后端没给文案时的兜底提示。
@@ -674,10 +723,17 @@ const _retryFailedMessage = 'Unable to retry this order';
 
 /// 状态条上的一个动作。
 class _ProgressAction {
-  const _ProgressAction(this.type, this.label);
+  const _ProgressAction({
+    required this.type,
+    required this.label,
+    this.badge = '',
+    this.target = '',
+  });
 
-  final _ProgressActionType type;
+  final String type;
   final String label;
+  final String badge;
+  final String target;
 }
 
 /// 进度卡的配色 / 文案 / 按钮分档。
@@ -763,11 +819,11 @@ class _ProgressPresentation {
   }
 
   static const _changeAction = [
-    _ProgressAction(_ProgressActionType.change, 'Change'),
+    _ProgressAction(type: 'change', label: 'Change'),
   ];
 
   static const _failedActions = [
-    _ProgressAction(_ProgressActionType.tryAgain, 'Try again'),
-    _ProgressAction(_ProgressActionType.change, 'Change'),
+    _ProgressAction(type: 'retry', label: 'Try again'),
+    _ProgressAction(type: 'change', label: 'Change'),
   ];
 }

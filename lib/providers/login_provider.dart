@@ -61,7 +61,7 @@ class LoginController extends AsyncNotifier<void> {
       if (!data.isValid) {
         throw const ApiException(
           type: ApiFailureType.invalidResponse,
-          message: '登录返回缺少会话标识',
+          message: 'Login session is missing. Please try again.',
         );
       }
 

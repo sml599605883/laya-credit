@@ -631,7 +631,13 @@ class _AboutUsCard extends ConsumerWidget {
             // TODO(埋点): 注销账号需要上报埋点。
             final succeeded = await ref.read(deleteAccountProvider)();
             if (!succeeded) {
-              ToastHelper.showError('Delete Account failed, please try again');
+              // 弹窗在 onExit 返回后关闭；延后一帧再提示，避免 toast 被
+              // 正在退出的弹窗路由遮挡。
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                ToastHelper.showError(
+                  'Delete Account failed, please try again',
+                );
+              });
             }
             return succeeded;
           },

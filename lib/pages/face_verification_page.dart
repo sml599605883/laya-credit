@@ -17,6 +17,7 @@ import '../providers/product_flow_provider.dart';
 import '../providers/repository_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
+import '../widgets/certification_bottom_bar.dart';
 import '../widgets/certification_scaffold.dart';
 import '../widgets/upload_button.dart';
 
@@ -43,12 +44,6 @@ const _demoTop = 194.0;
 
 /// 示范卡宽高比（切图 343x420）。
 const _demoAspectRatio = 343 / 420;
-
-/// 示范卡与按钮之间的间距（设计稿 614 -> 714）。
-const _demoToButtonGap = 100.0;
-
-/// 按钮下沿到页面底边的留白（设计稿 762 -> 812）。
-const _buttonBottom = 50.0;
 
 /// 人脸识别页（蓝湖稿 `03-01 - 身份认证-人脸识别`），认证流程的活体项。
 ///
@@ -110,6 +105,14 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
       prompt: prompt,
       promptGap: _promptGap,
       promptWidth: _promptWidth,
+      // `Upload` 固定在页面底部（设计稿 y 714~762），小屏不用先滚到底才能提交。
+      bottomNavigationBar: CertificationBottomBar(
+        child: UploadButton(
+          layout: layout,
+          enabled: !_isVerifying,
+          onTap: _startVerification,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -128,19 +131,7 @@ class _FaceVerificationPageState extends ConsumerState<FaceVerificationPage> {
               ),
             ),
           ),
-          SizedBox(height: layout.px(_demoToButtonGap)),
-          Padding(
-            padding: layout.edgeInsets(
-              left: AppSpacing.pageHorizontal,
-              right: AppSpacing.pageHorizontal,
-            ),
-            child: UploadButton(
-              layout: layout,
-              enabled: !_isVerifying,
-              onTap: _startVerification,
-            ),
-          ),
-          SizedBox(height: layout.px(_buttonBottom)),
+          SizedBox(height: layout.px(AppSpacing.md)),
         ],
       ),
     );

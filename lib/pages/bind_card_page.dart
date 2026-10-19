@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/media/identity_photo_permission.dart';
+import '../core/face/liveness_gateway.dart';
 import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/network/api_fields.dart';
@@ -12,6 +15,7 @@ import '../core/network/api_response.dart';
 import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/bind_card_data.dart';
+import '../data/repositories/certification_repository.dart';
 import '../providers/bind_card_provider.dart';
 import '../providers/liveness_provider.dart';
 import '../providers/product_flow_provider.dart';
@@ -29,8 +33,8 @@ const _navTitle = 'Account management';
 
 /// 接口没下发引导文案时的兜底（设计稿 `text_4`）。
 ///
-/// 正常情况走产品详情下发的 `overwhelming.mobilization`，其次走获取绑卡信息接口的
-/// `befleas`，都没有（低版本 / 未灰度用户）时才落到这里。
+/// 正常情况走获取绑卡信息接口的 `befleas`，其次走产品详情下发的
+/// `overwhelming.mobilization`，都没有（低版本 / 未灰度用户）时才落到这里。
 const _fallbackPrompt =
     'Check that your receiving\n'
     'account is active, belongs\n'
@@ -127,6 +131,7 @@ class BindCardPage extends ConsumerStatefulWidget {
     super.key,
     this.orderNo = '',
     this.isAccountChange = false,
+    this.reportScene8 = true,
   });
 
   /// 产品 id，分组 / 字段与提交都按它取值。
@@ -141,6 +146,9 @@ class BindCardPage extends ConsumerStatefulWidget {
   /// 绑卡 id 调更换银行卡接口，再把订单详情页地址 pop 给调用方
   /// （口径对齐 peso_shield 的 `isAccountChange`）。
   final bool isAccountChange;
+
+  /// 提交成功时是否上报风控场景 8。
+  final bool reportScene8;
 
   @override
   ConsumerState<BindCardPage> createState() => _BindCardPageState();
@@ -191,15 +199,16 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
     final layout = AppLayout.of(context);
     final info = ref.watch(bindCardProvider(widget.productId));
 
-    // 引导文案：产品详情下发的优先，其次接口的 `befleas`，都没有时用设计稿兜底。
+    // 引导文案：绑卡页接口下发的 `befleas` 优先，其次产品详情下发的，
+    // 都没有（低版本 / 未灰度用户）时用设计稿兜底。
     final cachedPrompt = ref
         .watch(sessionStoreProvider)
         .productDetailBindCardPrompt
         .trim();
     final apiPrompt = info.value?.prompt.trim() ?? '';
-    final prompt = cachedPrompt.isNotEmpty
-        ? cachedPrompt
-        : (apiPrompt.isNotEmpty ? apiPrompt : _fallbackPrompt);
+    final prompt = apiPrompt.isNotEmpty
+        ? apiPrompt
+        : (cachedPrompt.isNotEmpty ? cachedPrompt : _fallbackPrompt);
 
     info.whenData(_ensureForm);
 
@@ -779,14 +788,11 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
     final group = data == null ? null : _currentGroup(data);
     if (group == null) return;
 
+    // 没填完也照常提交：由「提交绑卡」接口的返回判断是否完成认证、还缺哪一项
+    // （对齐 peso_shield 的 `_submit`，本地不再用必填项把请求拦下来）。
     final fields = <String, String>{};
     for (final field in group.fields) {
-      final value = (_values[_fieldKey(field)] ?? '').trim();
-      if (!field.isOptional && value.isEmpty) {
-        ToastHelper.showError('${field.title} is required');
-        return;
-      }
-      fields[field.key] = value;
+      fields[field.key] = (_values[_fieldKey(field)] ?? '').trim();
     }
     final account = fields['cardNo'];
     final confirmation = fields['confirmCardNo'];
@@ -826,15 +832,17 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
       }
 
       // 风控埋点场景 8：结束时间是银行卡信息提交成功这一刻。
-      unawaited(
-        ReportService.current?.reportRisk(
-              productId: widget.productId,
-              scene: '8',
-              orderNo: widget.orderNo,
-              startedAtSeconds: _sceneStartSeconds,
-            ) ??
-            Future<void>.value(),
-      );
+      if (widget.reportScene8) {
+        unawaited(
+          ReportService.current?.reportRisk(
+                productId: widget.productId,
+                scene: '8',
+                orderNo: widget.orderNo,
+                startedAtSeconds: _sceneStartSeconds,
+              ) ??
+              Future<void>.value(),
+        );
+      }
 
       // 改卡场景：刚绑上的账户直接拿去换绑，成功把订单详情页地址回给调用方。
       if (widget.isAccountChange) {
@@ -900,7 +908,8 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
     }
   }
 
-  /// 相机权限 -> face++ token（绑卡用 `type = 1`）-> 活体 SDK -> 补交绑卡。
+  /// 相机权限 -> face++ token（绑卡用 `type = 1`）-> 活体 SDK
+  /// -> 上传人脸图（`/outsulk/fashioned`，type=10）-> 补交绑卡。
   ///
   /// 任何一步失败都返回 null（已经弹过提示），调用方直接结束本次提交。
   Future<ApiResponse<Map<String, dynamic>>?> _runLiveness(
@@ -962,9 +971,9 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
             Future<void>.value(),
       );
 
-      // 同盾回调只要带回 liveness_id 就视为识别成功并补交绑卡，不再依据
-      // 返回码推导的 [LivenessOutcome.passed] 判定；绑卡这一步不依赖人脸图。
-      if (outcome.livenessId.trim().isEmpty) {
+      // 对齐 peso_shield 的 `_completeLiveness`：绑卡补交要求活体通过
+      // （`success`）且带回 liveness_id，缺一条就中止，不再补交。
+      if (!outcome.passed || outcome.livenessId.trim().isEmpty) {
         ToastHelper.showError(
           outcome.message.isNotEmpty
               ? outcome.message
@@ -973,17 +982,24 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
         return null;
       }
 
+      // 对齐 peso_shield：活体通过后先把抓拍图传到「接口上传(face,身份证正面)」，
+      // 上传成功再补交绑卡；补交只带 livenessId / 授权码，不再塞 base64 图片。
+      final uploaded = await _uploadLivenessImage(
+        repository: repository,
+        outcome: outcome,
+        token: token.token,
+      );
+      if (!uploaded) return null;
+
       ToastHelper.showLoading();
-      final result = await repository.submitBindCard(
+      return await repository.submitBindCard(
         productId: widget.productId,
         cardType: cardType,
         fields: fields,
         faceType: '${token.livenessType}',
         livenessId: outcome.livenessId,
-        image: outcome.imageBase64,
         license: token.token,
       );
-      return result;
     } on ApiException catch (error) {
       if (mounted) ToastHelper.showError(error.message);
       return null;
@@ -992,6 +1008,54 @@ class _BindCardPageState extends ConsumerState<BindCardPage> {
       return null;
     } finally {
       loading();
+    }
+  }
+
+  /// 把同盾抓拍图上传到 `/outsulk/fashioned`（`liquidators=10`）。
+  ///
+  /// 与证件页共用 [CertificationRepository.uploadFaceImage]；临时文件无论成败
+  /// 都删掉。上传失败不补交绑卡，避免后端拿到一份没有照片的活体结果。
+  Future<bool> _uploadLivenessImage({
+    required CertificationRepository repository,
+    required LivenessOutcome outcome,
+    required String token,
+  }) async {
+    final normalized = outcome.imageBase64.contains(',')
+        ? outcome.imageBase64.split(',').last
+        : outcome.imageBase64;
+    final file = File(
+      '${Directory.systemTemp.path}/laya_credit_bind_card_face_'
+      '${DateTime.now().microsecondsSinceEpoch}.jpg',
+    );
+    try {
+      // 同步写：人脸图不大，且这段流程不能依赖事件循环（与证件人脸页一致）。
+      file.writeAsBytesSync(base64Decode(normalized), flush: true);
+      final response = await repository.uploadFaceImage(
+        filePath: file.path,
+        livenessId: outcome.livenessId,
+        license: token,
+        livenessType: 7,
+      );
+      if (!response.isSuccess) {
+        if (mounted) {
+          ToastHelper.showError(
+            response.message.isNotEmpty
+                ? response.message
+                : 'Face upload failed, please try again',
+          );
+        }
+        return false;
+      }
+      return true;
+    } on FileSystemException {
+      if (mounted) ToastHelper.showError('Face verification was not completed');
+      return false;
+    } finally {
+      try {
+        if (file.existsSync()) file.deleteSync();
+      } on FileSystemException {
+        // 删临时文件失败不影响业务，忽略。
+      }
     }
   }
 }

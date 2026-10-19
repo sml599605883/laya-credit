@@ -43,6 +43,7 @@ import 'package:laya_credit/theme/app_spacing.dart';
 import 'package:laya_credit/core/report/report.dart';
 import 'package:laya_credit/main.dart';
 import 'package:laya_credit/core/media/identity_photo.dart';
+import 'package:laya_credit/core/navigation/app_deep_link.dart';
 import 'package:laya_credit/core/navigation/navigation.dart';
 import 'package:laya_credit/pages/face_verification_page.dart';
 import 'package:laya_credit/pages/bind_card_page.dart';
@@ -61,9 +62,11 @@ import 'package:laya_credit/providers/home_provider.dart';
 import 'package:laya_credit/providers/liveness_provider.dart';
 import 'package:laya_credit/providers/media_provider.dart';
 import 'package:laya_credit/providers/network_provider.dart';
+import 'package:laya_credit/providers/product_flow_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/providers/session_provider.dart';
 import 'package:laya_credit/widgets/back_nav_bar.dart';
+import 'package:laya_credit/widgets/upload_button.dart';
 import 'package:laya_credit/widgets/remote_image.dart';
 import 'package:laya_credit/widgets/state_views.dart';
 import 'package:laya_credit/widgets/tab_bar/app_tab_bar.dart';
@@ -925,6 +928,7 @@ class _StubCertificationRepository extends CertificationRepository {
             id: '555',
             name: 'BDO',
             available: false,
+            maintenanceHint: 'Bank temporarily unavailable from server',
             isMain: true,
             receiptAccount: '5490163575561234',
             logoUrl: 'https://x/bdo.png',
@@ -1050,6 +1054,21 @@ class _StubLivenessGateway extends LivenessGateway {
   }
 }
 
+/// 权限协调器桩：只用来构造「系统定位授权正在申请中」这个状态，
+/// 不真的碰 permission_handler 的原生通道。
+class _StubPermissionCoordinator extends PermissionCoordinator {
+  _StubPermissionCoordinator()
+    : super(
+        requestNotificationPermission: () async => 'denied',
+        requestTrackingPermission: () async => 'denied',
+      );
+
+  bool requestingLocation = false;
+
+  @override
+  bool get isRequestingLocationPermission => requestingLocation;
+}
+
 /// 产品申请仓库桩：记录准入调用，返回可配的准入 / 详情结果。
 class _StubProductRepository extends ProductRepository {
   _StubProductRepository({
@@ -1064,10 +1083,15 @@ class _StubProductRepository extends ProductRepository {
       basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
       nextStep: ProductNextStep(taskType: 'Kegful', title: 'Identity'),
     ),
+    this.applyFailure,
+    this.applyResults,
   }) : super(_placeholderClient());
 
   final ProductApplyResult applyResult;
+  final List<ProductApplyResult>? applyResults;
   final ProductDetail detail;
+  final Object? applyFailure;
+  int _applyIndex = 0;
 
   /// 认证全部完成后 `getOrderPushUrl` 换回的确认用款 H5 地址。
   String pushUrl = 'https://h5.example.com/confirm/1';
@@ -1083,7 +1107,13 @@ class _StubProductRepository extends ProductRepository {
     int apiRemind = 0,
   }) async {
     applyCalls.add((productId, apiRemind));
-    return ApiResponse(code: 0, message: 'success', data: applyResult);
+    if (applyFailure case final error?) throw error;
+    final results = applyResults;
+    final result = results == null || results.isEmpty
+        ? applyResult
+        : results[_applyIndex.clamp(0, results.length - 1)];
+    _applyIndex++;
+    return ApiResponse(code: 0, message: 'success', data: result);
   }
 
   @override
@@ -1214,7 +1244,8 @@ const _productCard = HomeProductCard(
   certifyFinished: false,
   account: '',
   accountText: '',
-  progressText: 'Credit activation progress',
+  descriptionText:
+      'Quick & easy! Submit your basic details now for instant 24/7 review.',
   steps: [
     HomeProgressStep(
       title: 'Identity',
@@ -1250,7 +1281,8 @@ const _productCardTwoUnlocked = HomeProductCard(
   certifyFinished: false,
   account: '',
   accountText: '',
-  progressText: 'Credit activation progress',
+  descriptionText:
+      'Quick & easy! Submit your basic details now for instant 24/7 review.',
   steps: [
     HomeProgressStep(
       title: 'Identity',
@@ -1367,6 +1399,13 @@ void _mockPickedContact({required String name, required String phone}) {
 /// （测试机宽 402pt，`AppLayout` 上限 1.2 倍还没触顶）。
 const _designScale = 402 / 375;
 
+/// 认证二级页固定底部操作条：按钮下沿距安全区 16pt（设计稿 762 -> 778）。
+const _bottomBarGap = 16.0;
+
+/// 测试窗口的逻辑高度；测试里不设安全区，所以这就是按钮下方留白的基准。
+double _screenBottom(WidgetTester tester) =>
+    tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
 /// 直接打开证件上传页（走和证件选择页一样的路由与入参）。
 void _openIdUploadPage(
   WidgetTester tester, {
@@ -1418,6 +1457,16 @@ void _openFaceVerificationPage(
       orderNo: orderNo,
     ),
   );
+}
+
+/// 推进若干帧。
+///
+/// 准入 / 提交 / 登录这些路径会压一层全局 loading 遮罩与转圈动画，
+/// `pumpAndSettle` 不会收敛，按帧推进到流程跑完即可。
+Future<void> _pumpFrames(WidgetTester tester, {int frames = 12}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 /// 直接打开个人信息认证页（走和产品申请流程一样的路由与入参）。
@@ -1633,6 +1682,13 @@ Future<void> _pumpApp(
     ],
   );
   addTearDown(container.dispose);
+  final previousProviderContainer = AppNavigator.providerContainer;
+  AppNavigator.providerContainer = container;
+  addTearDown(() {
+    if (identical(AppNavigator.providerContainer, container)) {
+      AppNavigator.providerContainer = previousProviderContainer;
+    }
+  });
 
   if (setUp != null) await setUp(container);
 
@@ -1649,6 +1705,14 @@ Future<void> _pumpApp(
     UncontrolledProviderScope(container: container, child: app),
   );
   await tester.pumpAndSettle();
+}
+
+Future<ProductApplicationFlow> containerFlow(WidgetTester tester) async {
+  final context = tester.element(find.byType(HomePage).first);
+  return ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(productApplicationFlowProvider.future);
 }
 
 /// 假装弹出的键盘高度（pt）。
@@ -1721,7 +1785,8 @@ void main() {
     );
     expect(listRect.bottom, moreOrLessEquals(screenHeight));
 
-    // 滚到底后最后一条内容停在胶囊上方，不会被永久遮住。
+    // 订单卡已从首页移到进度 Tab；首页内容不足一屏时无需滚动，
+    // 但底部避让仍要保留，避免以后内容变长后压到悬浮导航。
     final position = tester
         .state<ScrollableState>(
           find.descendant(
@@ -1730,12 +1795,15 @@ void main() {
           ),
         )
         .position;
-    expect(position.maxScrollExtent, greaterThan(0));
+    expect(position.maxScrollExtent, greaterThanOrEqualTo(0));
     position.jumpTo(position.maxScrollExtent);
     await tester.pumpAndSettle();
 
-    final lastCard = find.text('Already in default, please repay').last;
-    expect(tester.getRect(lastCard).bottom, lessThanOrEqualTo(pillRect.top));
+    expect(find.text('Already in default, please repay'), findsNothing);
+    expect(
+      AppTabBar.overlapHeight(tester.element(bar)),
+      greaterThan(pillRect.height + safeBottom),
+    );
   });
 
   testWidgets('首页没有产品大卡时只渲染运营位，不出现设计稿以外的空态卡', (tester) async {
@@ -1763,7 +1831,13 @@ void main() {
 
     // 卡片视觉是设计稿导出的整卡底图（标题文字烘焙在底图里），页面只叠三行内容。
     expect(find.byKey(const Key('home-progress-card')), findsOneWidget);
-    expect(find.text('Credit activation progress'), findsNothing);
+    // `vesperal` 是额度卡底部的描述文案，不是进度卡标题（标题在底图里）。
+    expect(
+      find.text(
+        'Quick & easy! Submit your basic details now for instant 24/7 review.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('\u20b1 30,000'), findsOneWidget);
     // \u20b160,000 在额度头图里也有一份，进度卡里是第 4 个阶段。
     expect(find.text('\u20b150,000'), findsOneWidget);
@@ -1795,6 +1869,185 @@ void main() {
     }
     // 申请入口在额度卡里，只此一处。
     expect(find.byKey(const Key('home-apply-button')), findsOneWidget);
+  });
+
+  testWidgets('首页额度说明与卡位描述取后端下发的 octodentate / vesperal', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: HomeProductCard(
+            id: '1',
+            productName: 'Pera Cash',
+            productLogo: '',
+            buttonText: 'Apply Now',
+            amountRange: '\u20b150,000',
+            amountRangeDes: 'Maximum Loan Amount Upto',
+            termInfo: '121 days',
+            termInfoDes: 'Loan Term',
+            loanRate: '0.05% day',
+            loanRateDes: 'Interest Rate',
+            certifyFinished: false,
+            account: '',
+            accountText: '',
+            descriptionText:
+                'Quick & easy! Submit your basic details now for instant '
+                '24/7 review.',
+            steps: [],
+          ),
+          orders: [],
+          notices: [],
+        ),
+      ),
+    );
+
+    // 金额说明取 `octodentate`（额度数字上方那一行），
+    // 不再照设计稿写死 `Available up to`。
+    expect(find.text('Maximum Loan Amount Upto'), findsOneWidget);
+    expect(find.text('Available up to'), findsNothing);
+    // 卡位描述取 `vesperal`，覆盖设计稿写死的 `Confirm your loan，Cash hits fast.`。
+    expect(
+      find.text(
+        'Quick & easy! Submit your basic details now for instant 24/7 review.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Confirm your loan\uFF0CCash hits fast.'), findsNothing);
+  });
+
+  testWidgets('首页大卡下发期限类型时按行展示利率与期数', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: HomeProductCard(
+            id: '1',
+            productName: 'Pera Cash',
+            productLogo: '',
+            buttonText: 'Apply Now',
+            amountRange: '\u20b160,000',
+            amountRangeDes: 'Available up to',
+            termInfo: '121 days',
+            termInfoDes: 'Loan Term',
+            loanRate: '0.05% day',
+            loanRateDes: 'Interest Rate',
+            certifyFinished: false,
+            account: '',
+            accountText: '',
+            descriptionText: '',
+            termRows: [
+              HomeLoanTerm(
+                period: '2',
+                label: 'Period',
+                interestRate: '\u2264 0.5% / Day',
+              ),
+              HomeLoanTerm(
+                period: '3',
+                label: 'Period',
+                interestRate: '\u2264 0.4% / Day',
+              ),
+            ],
+            steps: [],
+          ),
+          orders: [],
+          notices: [],
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('home-term-metrics')), findsOneWidget);
+    expect(find.text('2 Period'), findsOneWidget);
+    expect(find.text('3 Period'), findsOneWidget);
+    expect(find.text('\u2264 0.5% / Day'), findsOneWidget);
+    expect(find.text('\u2264 0.4% / Day'), findsOneWidget);
+    expect(find.text('121 days'), findsNothing);
+    expect(find.text('Loan Term'), findsNothing);
+    expect(find.text('Interest Rate'), findsNothing);
+  });
+
+  testWidgets('首页授信进度卡与额度卡一样走准入流程', (tester) async {
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: _productCard,
+          orders: [],
+          notices: [],
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+
+    // 进度卡整卡可点击：与额度大卡 / 推荐卡走同一个准入入口。
+    await tester.tap(find.byKey(const Key('home-progress-card')));
+    await _pumpFrames(tester);
+
+    expect(productRepository.applyCalls, [('1', 0)]);
+  });
+
+  testWidgets('定位不可用时的引导框文案与按钮取设计稿', (tester) async {
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: _productCard,
+          orders: [],
+          notices: [],
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+    // `_pumpApp` 默认按「已授权」放行；这里模拟永久拒绝 / 需要去系统设置。
+    ProductApplicationFlow.locationChecker = () async =>
+        CertificationLocationDecision.settingsRequired;
+
+    await tester.tap(find.byKey(const Key('home-apply-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Location Access Needed'), findsOneWidget);
+    expect(find.text('Later'), findsOneWidget);
+    expect(find.text('Allow Location'), findsOneWidget);
+    expect(
+      find.text(
+        'Location access is currently unavailable. Enable it to continue '
+        'the credit review and related checks.',
+      ),
+      findsOneWidget,
+    );
+    // 引导框还没处理完，准入接口不能先发出去。
+    expect(productRepository.applyCalls, isEmpty);
+  });
+
+  testWidgets('定位授权弹窗关闭时的恢复不刷新首页', (tester) async {
+    final repository = _StubAppRepository();
+    final coordinator = _StubPermissionCoordinator()..requestingLocation = true;
+    PermissionCoordinator.overrideInstance(coordinator);
+    addTearDown(PermissionCoordinator.resetInstance);
+
+    await _pumpApp(tester, repository: repository);
+    expect(repository.homeCalls, 1);
+
+    // 系统定位授权弹窗：App 先 inactive，用户点允许后 resumed。
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    // 这一次恢复由权限弹窗引起，准入流程马上自动继续：不再刷新首页 / 弹窗，
+    // 避免和准入接口一起重复请求（回归：权限允许后首页接口被多调一次）。
+    expect(repository.homeCalls, 1);
   });
 
   testWidgets('首页进度卡按 estamp 点亮所有已解锁阶段', (tester) async {
@@ -1866,8 +2119,9 @@ void main() {
       ),
     );
 
-    expect(find.text('Already in default, please repay'), findsOneWidget);
-    expect(find.text('\u20b150,000'), findsOneWidget);
+    // PROCESS_LIST 只属于进度 Tab；首页推荐区下方不再重复展示订单卡。
+    expect(find.text('Already in default, please repay'), findsNothing);
+    expect(find.text('To repay'), findsNothing);
   });
 
   testWidgets('首页按设计稿 02-01 渲染推荐列表，标题右侧不出现 More 与箭头', (tester) async {
@@ -1995,7 +2249,8 @@ void main() {
             certifyFinished: false,
             account: '',
             accountText: '',
-            progressText: '',
+            // 接口没下发 `vesperal`：卡位文案回落到设计稿那条。
+            descriptionText: '',
             steps: [],
           ),
         ),
@@ -2062,12 +2317,16 @@ void main() {
         .widget<PageView>(find.byType(PageView))
         .controller!;
     final start = controller.page!;
+    expect(start, greaterThan(0));
 
-    // 每 3 秒切到下一条：等一拍定时器 + 300ms 切换动画。
+    // 连续切两拍：每次都向前 +1，第二拍从末页回到首图也不会倒序跳过中间项。
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 350));
+    expect(controller.page, closeTo(start + 1, 0.01));
 
-    expect(controller.page, closeTo(start == 0 ? 1 : 0, 0.01));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(controller.page, closeTo(start + 2, 0.01));
 
     // 卸载页面，取消轮播定时器，避免测试结束时留下 pending timer。
     await tester.pumpWidget(const SizedBox());
@@ -2079,16 +2338,19 @@ void main() {
       repository: _StubAppRepository(
         failure: const ApiException(
           type: ApiFailureType.noConnection,
-          message: '网络连接失败，请检查网络设置',
+          message: 'No internet connection. Please check your network.',
         ),
       ),
     );
 
     expect(find.byType(ErrorView), findsOneWidget);
-    expect(find.text('网络连接失败，请检查网络设置'), findsOneWidget);
+    expect(
+      find.text('No internet connection. Please check your network.'),
+      findsOneWidget,
+    );
   });
 
-  test('首页并发刷新时只采纳最后一次请求的结果', () async {
+  test('并发刷新合并成一次请求，不再重复打首页接口', () async {
     final repository = _ControllableHomeRepository();
     final container = ProviderContainer(
       overrides: [
@@ -2107,18 +2369,24 @@ void main() {
     await container.read(homeDataProvider.future);
     expect(container.read(homeDataProvider).value?.notices, ['initial']);
 
-    // 两次刷新前后脚发出：后发起的先返回，先发起的慢一拍才返回。
-    final stale = notifier.refresh();
-    final latest = notifier.refresh();
+    // 登录成功 → 路由返回 → Tab 切换这几个触发点会前后脚重叠：
+    // 单飞之后同一瞬间只应该有一条在途请求（回归：登录成功跳首页时
+    // 首页接口同时被调用两次）。
+    final first = notifier.refresh();
+    final second = notifier.refresh();
+    await pumpEventQueue();
+    expect(repository.requests, hasLength(2));
+    repository.requests[1].complete(_homeResponse(['latest']));
+    await Future.wait([first, second]);
+    expect(container.read(homeDataProvider).value?.notices, ['latest']);
+
+    // 上一次结束后下一次刷新照常发起：单飞锁不会把后续刷新吃掉。
+    final third = notifier.refresh();
     await pumpEventQueue();
     expect(repository.requests, hasLength(3));
-    repository.requests[2].complete(_homeResponse(['latest']));
-    await latest;
-    repository.requests[1].complete(_homeResponse(['stale']));
-    await stale;
-
-    // 慢的旧请求回来后不能覆盖新数据。
-    expect(container.read(homeDataProvider).value?.notices, ['latest']);
+    repository.requests[2].complete(_homeResponse(['again']));
+    await third;
+    expect(container.read(homeDataProvider).value?.notices, ['again']);
   });
 
   testWidgets('未登录时点击受保护的 Tab 会跳转登录页', (tester) async {
@@ -2138,6 +2406,48 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Please enter mobile number'), findsOneWidget);
+  });
+
+  testWidgets('H5 会话失效会清掉旧页面，登录后直接回到首页', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 302,
+        jumpUrl: 'https://h5.example.com/expired',
+        jumpType: 1,
+        message: '',
+      ),
+    );
+    late ProviderContainer container;
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (value) async {
+        container = value;
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+    expect(find.byType(WebViewPage), findsOneWidget);
+
+    // 模拟 H5 内接口返回登录态失效：网络层清 session 后发出全局信号。
+    await container.read(userSessionProvider.notifier).clearSession();
+    container.read(sessionExpirySignalProvider).notifyExpired();
+    await tester.pumpAndSettle();
+    expect(find.byType(WebViewPage), findsNothing);
+    expect(find.byType(LoginPage), findsOneWidget);
+
+    // 从登录页返回：旧 H5 已被清掉，用户停在首页。
+    Navigator.of(tester.element(find.byType(LoginPage))).pop(false);
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginPage), findsNothing);
+    expect(find.byType(WebViewPage), findsNothing);
+    expect(find.byType(HomePage), findsOneWidget);
   });
 
   testWidgets('切到进度 Tab 会刷新首页数据源', (tester) async {
@@ -2243,7 +2553,7 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '91712345678',
     );
     // 差一位：按钮保持禁用，也不会触发自动登录。
     await tester.enterText(find.byKey(const Key('login-code-field')), '12345');
@@ -2256,6 +2566,40 @@ void main() {
       isNull,
     );
     expect(auth.loginCalls, 0);
+  });
+
+  testWidgets('登录手机号至少 12 位且最多 16 位纯数字', (tester) async {
+    final auth = _StubAuthRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+    );
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+
+    final phone = find.byKey(const Key('login-phone-field'));
+    await tester.enterText(phone, '91712345678');
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('login-send-code-button')))
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(phone, '917123456789');
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('login-send-code-button')))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.enterText(phone, '12345678901234567');
+    await tester.pump();
+    expect(_loginFieldValue(tester, const Key('login-phone-field')).length, 16);
   });
 
   testWidgets('登录页验证码填满 6 位自动提交，登录成功后关掉登录页', (tester) async {
@@ -2271,13 +2615,43 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
     await tester.pumpAndSettle();
 
     expect(auth.loginCalls, 1);
     expect(find.byKey(const Key('login-phone-field')), findsNothing);
+  });
+
+  testWidgets('登录成功回到首页时首页接口只刷新一次', (tester) async {
+    final auth = _StubAuthRepository();
+    final repository = _StubAppRepository(
+      home: const HomeData(
+        banners: [],
+        product: _productCard,
+        orders: [],
+        notices: [],
+      ),
+    );
+    await _pumpApp(tester, repository: repository, authRepository: auth);
+    // 首屏已经拉过一次首页。
+    expect(repository.homeCalls, 1);
+
+    // 未登录点「Apply Now」→ 弹登录页 → 登录成功回到首页。
+    await tester.tap(find.byKey(const Key('home-apply-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '917123456789',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await _pumpFrames(tester);
+
+    expect(auth.loginCalls, 1);
+    expect(find.byKey(const Key('login-phone-field')), findsNothing);
+    // 登录页自身补刷 + 路由返回（`didPopNext`）会前后脚重叠：只多打一次接口。
+    expect(repository.homeCalls, 2);
   });
 
   testWidgets('提交登录时收起键盘并显示全屏 loading', (tester) async {
@@ -2293,7 +2667,7 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     // 填满 6 位触发自动提交。
     await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
@@ -2314,7 +2688,7 @@ void main() {
     final auth = _StubAuthRepository(
       failure: const ApiException(
         type: ApiFailureType.noConnection,
-        message: '网络连接失败，请检查网络设置',
+        message: 'No internet connection. Please check your network.',
       ),
     );
     await _pumpApp(
@@ -2328,12 +2702,15 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
     await tester.pumpAndSettle();
 
-    expect(find.text('网络连接失败，请检查网络设置'), findsOneWidget);
+    expect(
+      find.text('No internet connection. Please check your network.'),
+      findsOneWidget,
+    );
     expect(_loginFieldValue(tester, const Key('login-code-field')), isEmpty);
     expect(_loginFieldFocused(tester, const Key('login-code-field')), isTrue);
 
@@ -2358,13 +2735,38 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
     await tester.pumpAndSettle();
 
     expect(find.text('登录已过期'), findsNothing);
     expect(find.text('Unable to complete the request.'), findsNothing);
+  });
+
+  testWidgets('原生会话失效使用后端英文文案，不展示中文', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyFailure: const ApiException(
+        type: ApiFailureType.authentication,
+        message: 'Login has expired. Please log in again',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+
+    expect(find.text('Login has expired. Please log in again'), findsOneWidget);
+    expect(find.text('登录状态已失效'), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('发码成功后进入倒计时并聚焦验证码框', (tester) async {
@@ -2380,7 +2782,7 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     await tester.pump();
     await tester.tap(find.byKey(const Key('login-send-code-button')));
@@ -2405,7 +2807,7 @@ void main() {
         await session.setSession(
           token: 'test-session',
           userId: '1',
-          phone: '9171234567',
+          phone: '917123456789',
         );
         // 退出登录只清 token，手机号留着给下次登录回填。
         await session.clearSession();
@@ -2417,7 +2819,7 @@ void main() {
 
     expect(
       _loginFieldValue(tester, const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     // 手机号回填后「Get it」直接可用。
     expect(
@@ -2449,7 +2851,7 @@ void main() {
 
     await tester.enterText(
       find.byKey(const Key('login-phone-field')),
-      '9171234567',
+      '917123456789',
     );
     await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
     await tester.pumpAndSettle();
@@ -2757,7 +3159,7 @@ void main() {
     expect(container.read(userSessionProvider).isLoggedIn, isFalse);
   });
 
-  testWidgets('注销接口失败时保留登录态，弹窗不关闭', (tester) async {
+  testWidgets('注销接口失败时关闭挽留弹窗、保留登录态并提示', (tester) async {
     late ProviderContainer container;
     final authRepository = _StubAuthRepository(deleteAccountFailure: true);
     await _pumpApp(
@@ -2786,9 +3188,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(authRepository.deleteAccountCalls, 1);
-    // 后端没删成功：弹窗留着、登录态不能清，避免用户以为账号已注销。
-    expect(_assetImage(AppAssets.mineDeleteAccountRetention), findsOneWidget);
+    // 后端没删成功：先收起挽留弹窗再提示，登录态不能清。
+    expect(_assetImage(AppAssets.mineDeleteAccountRetention), findsNothing);
+    expect(
+      find.text('Delete Account failed, please try again'),
+      findsOneWidget,
+    );
     expect(container.read(userSessionProvider).isLoggedIn, isTrue);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   test('注销账号接口走 /outsulk/norseled 并带 sickee 混淆字段', () async {
@@ -2833,6 +3240,44 @@ void main() {
     expect(order.productLogo, 'https://cdn.example.com/logo.png');
     expect(order.displayAmount, '\u20b150,000');
     expect(order.status, HomeOrderCardStatus.toRepay);
+  });
+
+  test('首页 PROCESS_LIST 按 universalness 解析可见按钮与文案', () {
+    final home = HomeData.fromJson(const {
+      'kneeing': [
+        {
+          'liquidators': 'PROCESS_LIST',
+          'stabiliment': [
+            {
+              'resex': 'ORDER-1',
+              'satin': 5,
+              'universalness': [
+                {
+                  'liquidators': 'retry',
+                  'foolocracy': 0,
+                  'fortunateness': 'Try again',
+                  'incudes': '',
+                  'halichondriae': '',
+                },
+                {
+                  'liquidators': 'change',
+                  'foolocracy': 1,
+                  'fortunateness': 'Change Account',
+                  'incudes': '',
+                  'halichondriae': '',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    final order = home.orders.single;
+    expect(order.usesServerActions, isTrue);
+    expect(order.actions, hasLength(1));
+    expect(order.actions.single.type, 'change');
+    expect(order.actions.single.label, 'Change Account');
   });
 
   test('首页 PRODUCT_LIST 用 Sixcylinder 混淆值解析推荐列表', () {
@@ -3003,12 +3448,13 @@ void main() {
     );
     final signInput = CommonParams.signable(common, '/outsulk/connectedly');
 
-    // 后端是拿收到的参数重算签名的：多签一个没下发的字段（曾经 gruelled
-    // 只在签名里出现）会被判成 code 400。
+    // 后端是拿收到的参数重算签名的：多签一个没下发的字段会被判成 code 400。
     final signedKeys = signInput.keys.toSet()
       ..remove(ApiProtocol.signaturePath);
     expect(signedKeys, common.keys.toSet());
-    expect(common.containsKey(ApiProtocol.clientType), isTrue);
+    // 已弃用的 `gruelled`（终端类型）不签也不发。
+    expect(common.containsKey('gruelled'), isFalse);
+    expect(signInput.containsKey('gruelled'), isFalse);
     // stith 与签名本身不参与签名。
     expect(signInput.containsKey(ApiProtocol.obfuscation), isFalse);
     expect(signInput.containsKey(ApiProtocol.signature), isFalse);
@@ -3094,6 +3540,17 @@ void main() {
     expect(result.hasJump, isTrue);
     expect(result.isAdmitted, isFalse);
     expect(result.jumpType, 0);
+  });
+
+  test('准入结果未下发 liquidators 时保留空跳转类型', () {
+    final result = ProductApplyResult.fromJson({
+      ApiFields.applyResultCode: 200,
+      ApiFields.jumpUrl: 'https://h5.example.com/loan/details',
+      ApiFields.applyMessage: 'success',
+    });
+
+    expect(result.jumpType, isNull);
+    expect(result.hasJump, isTrue);
   });
 
   testWidgets('已登录用户点额度大卡会发起点击申请', (tester) async {
@@ -3226,6 +3683,209 @@ void main() {
     expect(find.text('Please complete Informasi bank'), findsOneWidget);
   });
 
+  testWidgets('产品下发跳转地址为空时准入入口给明确反馈', (tester) async {
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    await flow.applyProduct(productId: '  ');
+    await tester.pump();
+
+    expect(productRepository.applyCalls, isEmpty);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 300));
+  });
+
+  testWidgets('准入成功但下发 H5 地址时优先跳转，不再进入认证详情', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 200,
+        jumpUrl: 'https://h5.example.com/loan/details',
+        jumpType: 1,
+        message: '',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+
+    expect(productRepository.detailCalls, 0);
+    expect(find.byType(WebViewPage), findsOneWidget);
+  });
+
+  testWidgets('准入成功下发相对 URL 且未给跳转类型时仍打开 H5', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 200,
+        jumpUrl: '/#/FifinellaDestructions',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+
+    expect(productRepository.detailCalls, 0);
+    expect(find.byType(WebViewPage), findsOneWidget);
+  });
+
+  testWidgets('产品详情下发相对 URL 时优先跳 H5，不再进入原生认证项', (tester) async {
+    final productRepository = _StubProductRepository(
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
+        nextStep: ProductNextStep(
+          taskType: 'Kegful',
+          title: 'Identity',
+          url: '/#/recommendList',
+          type: 1,
+        ),
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+
+    expect(find.byType(WebViewPage), findsOneWidget);
+    expect(find.byType(IdVerificationPage), findsNothing);
+  });
+
+  testWidgets('推荐列表准入深链带产品 ID 时重新走准入并保留来源', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 302,
+        jumpUrl: 'https://h5.example.com/error',
+        jumpType: 1,
+        message: '',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    unawaited(AppNavigator.applyProduct(productId: '77', apiRemind: 6));
+    await _pumpFrames(tester);
+
+    expect(productRepository.applyCalls, [('77', 6)]);
+    expect(find.byType(WebViewPage), findsOneWidget);
+  });
+
+  testWidgets('再来一单 Isaria 深链重新准入并保留来源 8', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResults: const [
+        ProductApplyResult(
+          statusCode: 302,
+          jumpUrl: '/#/FifinellaDestructions',
+          jumpType: 1,
+        ),
+        ProductApplyResult(
+          statusCode: 302,
+          jumpUrl: '/#/AnapaestsManuri?podostemon=77',
+          jumpType: 1,
+        ),
+      ],
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+    expect(productRepository.applyCalls, [('7', 0)]);
+
+    // H5 产品卡下发 ph 深链；准入流程仍停在上一个 H5 上，不能被防连点吞掉。
+    final link = const AppDeepLinkParser().parse(
+      'ph://laya-credit/ios/Isaria?tartarizing=77&dirdum=8',
+    );
+    unawaited(
+      AppNavigator.openDeepLink(
+        link,
+        onUnhandled: (target) => AppNavigator.applyProduct(
+          productId: target.productId,
+          apiRemind: target.apiRemind,
+        ),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    expect(productRepository.applyCalls, [('7', 0), ('77', 8)]);
+  });
+
+  testWidgets('上一次准入停在 H5 时推荐页深链仍可发起新准入', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 302,
+        jumpUrl: 'https://h5.example.com/recommend',
+        jumpType: 1,
+        message: '',
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    // 第一次准入跳进 H5 后会一直等页面返回，外层防连点锁保持占用。
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+    expect(productRepository.applyCalls, [('7', 0)]);
+
+    unawaited(AppNavigator.applyProduct(productId: '77', apiRemind: 6));
+    await _pumpFrames(tester);
+
+    expect(productRepository.applyCalls, [('7', 0), ('77', 6)]);
+  });
+
   testWidgets('证件选择页展示接口下发的证件类型', (tester) async {
     final certificationRepository = _StubCertificationRepository();
     await _pumpApp(
@@ -3340,11 +4000,31 @@ void main() {
     final demoRect = tester.getRect(_assetImage(AppAssets.idVerifyUploadDemo));
 
     expect(headerRect.bottom - demoRect.top, closeTo(19 * _designScale, 0.5));
-    // 引导块与按钮之间的间距（设计稿 614 -> 714）。
+    // `Upload` 固定在页面底部（设计稿 y 714~762）：下沿距安全区 16pt，
+    // 内容比一屏高时也不用先滚到底才能提交。
     expect(
-      tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).top -
-          demoRect.bottom,
-      closeTo(100 * _designScale, 0.5),
+      _screenBottom(tester) -
+          tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).bottom,
+      closeTo(_bottomBarGap * _designScale, 0.5),
+    );
+  });
+
+  testWidgets('证件上传页矮屏上 Upload 按钮依然完整可见', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+    // 压到 iPhone 8 那类矮屏（375x667）：设计稿内容放不下，按钮也要露在底部。
+    tester.view.physicalSize = const Size(750, 1334);
+    tester.view.devicePixelRatio = 2;
+    _openIdUploadPage(tester);
+    await tester.pumpAndSettle();
+
+    final buttonRect = tester.getRect(
+      _assetImage(AppAssets.idVerifyUploadButton),
+    );
+    expect(buttonRect.top, greaterThan(0));
+    expect(buttonRect.bottom, lessThanOrEqualTo(_screenBottom(tester)));
+    expect(
+      _screenBottom(tester) - buttonRect.bottom,
+      closeTo(_bottomBarGap, 0.5),
     );
   });
 
@@ -3505,10 +4185,7 @@ void main() {
 
     // 「留下」只是关掉弹窗，页面不动。
     expect(find.byType(IdVerificationPage), findsOneWidget);
-    expect(
-      find.byKey(const Key('certification-retention-card')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('certification-retention-card')), findsNothing);
   });
 
   testWidgets('证件选择页挽留弹窗点 Exit 才真正返回', (tester) async {
@@ -3551,10 +4228,7 @@ void main() {
     expect(certificationRepository.retentionCalls, [('7', '2')]);
     // 没有素材时直接返回，不弹空壳弹窗。
     expect(certificationRepository.personalInfoCalls, isNotEmpty);
-    expect(
-      find.byKey(const Key('certification-retention-card')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('certification-retention-card')), findsNothing);
   });
 
   testWidgets('工作信息页返回用挽留类型 3', (tester) async {
@@ -3574,7 +4248,7 @@ void main() {
     expect(certificationRepository.retentionCalls, [('7', '3')]);
   });
 
-  testWidgets('借款确认页返回用挽留类型 5', (tester) async {
+  testWidgets('账户列表页返回不请求确认用款挽留', (tester) async {
     final certificationRepository = _StubCertificationRepository();
     await _pumpApp(
       tester,
@@ -3584,14 +4258,18 @@ void main() {
     );
     AppNavigator.push(
       AppRoutes.loanConfirm,
-      arguments: const LoanConfirmPageArguments(productId: '7', orderNo: 'ORD-1'),
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
     );
     await tester.pumpAndSettle();
 
     await _tapNavBarBack(tester);
     await tester.pumpAndSettle();
 
-    expect(certificationRepository.retentionCalls, [('7', '5')]);
+    expect(certificationRepository.retentionCalls, isEmpty);
+    expect(find.byType(LoanConfirmPage), findsNothing);
   });
 
   testWidgets('证件信息确认页按蓝湖稿 03-01 渲染证件照、三行识别结果与 Upload 按钮', (tester) async {
@@ -3657,11 +4335,11 @@ void main() {
       closeTo(56 * _designScale, 0.5),
     );
 
-    // 白卡与按钮之间的间距（设计稿 590 -> 714）。
+    // `Upload` 固定在页面底部（设计稿 y 714~762），不随白卡高度滚动。
     expect(
-      tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).top -
-          idCardRect.bottom,
-      closeTo(308 * _designScale, 0.5),
+      _screenBottom(tester) -
+          tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).bottom,
+      closeTo(_bottomBarGap * _designScale, 0.5),
     );
   });
 
@@ -3930,11 +4608,11 @@ void main() {
     expect(demoRect.width, closeTo(343 * _designScale, 0.5));
     expect(demoRect.height, closeTo(420 * _designScale, 0.5));
 
-    // 示范图与按钮之间的间距（设计稿 614 -> 714）。
+    // `Upload` 固定在页面底部（设计稿 y 714~762），不随示范图滚动。
     expect(
-      tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).top -
-          demoRect.bottom,
-      closeTo(100 * _designScale, 0.5),
+      _screenBottom(tester) -
+          tester.getRect(_assetImage(AppAssets.idVerifyUploadButton)).bottom,
+      closeTo(_bottomBarGap * _designScale, 0.5),
     );
   });
 
@@ -4065,15 +4743,16 @@ void main() {
     await tester.tap(find.text('Upload'));
     await tester.pumpAndSettle();
 
-    // 权限没过：先弹引导弹窗，token 与 SDK 都不能动。
-    expect(find.text('Enable Camera to Continue'), findsOneWidget);
+    // 权限没过：先弹引导弹窗（文案取设计稿），token 与 SDK 都不能动。
+    expect(find.text('Camera Access Needed'), findsOneWidget);
+    expect(find.text('Decide Later'), findsOneWidget);
     expect(certificationRepository.faceTokenCalls, isEmpty);
     expect(livenessGateway.licenses, isEmpty);
 
-    await tester.tap(find.text('Allow'));
+    await tester.tap(find.text('Allow Access'));
     await tester.pumpAndSettle();
     expect(_cameraSettingsOpened, 1);
-    expect(find.text('Enable Camera to Continue'), findsNothing);
+    expect(find.text('Camera Access Needed'), findsNothing);
   });
 
   testWidgets('人脸识别页 token 返回 400 时引导重新上传身份证', (tester) async {
@@ -4507,6 +5186,10 @@ void main() {
     );
     _openPersonalInfoPage(tester);
     await tester.pumpAndSettle();
+
+    // 进入认证项就预取过地址初始化数据，点地址字段时不再等接口
+    // （回归：曾经只在点字段时才拉，用户要站在原地等一次网络）。
+    expect(certificationRepository.addressInitCalls, 1);
 
     await tester.tap(
       find.byKey(const Key('personal-info-field-residential_address')),
@@ -5756,8 +6439,36 @@ void main() {
     expect(headerRect.bottom - ribbonRect.top, closeTo(28 * _designScale, 1));
   });
 
-  testWidgets('绑卡页引导文案优先用产品详情下发的 overwhelming.mobilization', (tester) async {
-    const apiPrompt =
+  testWidgets('绑卡页引导文案优先用绑卡页接口下发的 befeas', (tester) async {
+    const apiPrompt = 'Check your payout account status before you continue.';
+    const detailPrompt =
+        'Confirm the account status and ensure the smooth arrival of cash.';
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: _StubCertificationRepository()
+        ..bindCard = BindCardData(
+          prompt: apiPrompt,
+          bottomPrompt: '',
+          groups: _StubCertificationRepository.bindCardData.groups,
+        ),
+      setUp: (container) async {
+        container
+            .read(sessionStoreProvider)
+            .saveProductDetailBindCardPrompt(detailPrompt);
+      },
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    // 绑卡页接口的 `befleas` 优先于产品详情下发的那条。
+    expect(find.text(apiPrompt), findsOneWidget);
+    expect(find.text(detailPrompt), findsNothing);
+    expect(find.textContaining('Check that your receiving'), findsNothing);
+  });
+
+  testWidgets('绑卡页接口没下发 befeas 时用产品详情下发的文案兜底', (tester) async {
+    const detailPrompt =
         'Confirm the account status and ensure the smooth arrival of cash.';
     await _pumpApp(
       tester,
@@ -5766,14 +6477,13 @@ void main() {
       setUp: (container) async {
         container
             .read(sessionStoreProvider)
-            .saveProductDetailBindCardPrompt(apiPrompt);
+            .saveProductDetailBindCardPrompt(detailPrompt);
       },
     );
     _openBindCardPage(tester);
     await tester.pumpAndSettle();
 
-    expect(find.text(apiPrompt), findsOneWidget);
-    expect(find.textContaining('Check that your receiving'), findsNothing);
+    expect(find.text(detailPrompt), findsOneWidget);
   });
 
   testWidgets('绑卡页后端不下发引导文案时用设计稿兜底引导段', (tester) async {
@@ -5894,6 +6604,28 @@ void main() {
     expect(certificationRepository.submitBindCardCalls, isEmpty);
   });
 
+  testWidgets('绑卡页信息没填完也提交，由接口返回判断是否完成认证', (tester) async {
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    _openBindCardPage(tester);
+    await tester.pumpAndSettle();
+
+    // 一个字段都不填，直接点 Upload。
+    await tester.tap(find.text('Upload'));
+    await _pumpFrames(tester);
+
+    // 本地不再用必填项把请求拦下来：空字段按空串回传，缺什么由接口说了算。
+    final submission = certificationRepository.submitBindCardCalls.single;
+    expect(submission.cardType, '1');
+    expect(submission.fields['channelCode'], '');
+    expect(submission.fields['firstName'], '');
+    expect(submission.fields['cardNo'], '');
+  });
+
   testWidgets('绑卡页提交按下发 key 回传字段并继续下一步', (tester) async {
     final certificationRepository = _StubCertificationRepository();
     final productRepository = _StubProductRepository();
@@ -5956,19 +6688,66 @@ void main() {
     expect(retry.faceType, '7');
     expect(retry.livenessId, 'LIVE-1');
     expect(retry.license, 'LICENSE-1');
-    expect(retry.image, isNotEmpty);
+    // 绑卡补交不传人脸图（对齐 peso_shield：图片走 /outsulk/fashioned）。
+    expect(retry.image, '');
+    // 抓拍图先传到「接口上传(face,身份证正面)」（type=10），再补交绑卡。
+    expect(certificationRepository.faceUploadCalls, hasLength(1));
+    final (facePath, livenessId, license, livenessType) =
+        certificationRepository.faceUploadCalls.single;
+    expect(facePath, isNotEmpty);
+    expect(livenessId, 'LIVE-1');
+    expect(license, 'LICENSE-1');
+    expect(livenessType, 7);
     expect(retry.fields[BindCardField.channelKey], 'PAYMAYA');
     expect(retry.fields['firstName'], 'Anna');
 
     expect(productRepository.detailCalls, greaterThan(0));
   });
 
-  testWidgets('绑卡页活体回调只带回 livenessId 时，结果码非通过也补交', (tester) async {
+  testWidgets('放款失败改卡入口提交绑卡成功时不上报埋点 8', (tester) async {
+    final reportClient = _RecordingClient();
+    _useRecordingReportService(reportClient);
+    final certificationRepository = _StubCertificationRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+
+    AppNavigator.push(
+      AppRoutes.bindCard,
+      arguments: const BindCardPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+        isAccountChange: true,
+        reportScene8: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _fillBindCardForm(tester);
+    // 底部固定操作条在测试窗口底部之外时，直接点文字会落在屏幕外；
+    // 点按钮内部的透明 InkWell 热区，才能真实走到 `_submit`。
+    await tester.tap(
+      find.descendant(
+        of: find.byType(UploadButton),
+        matching: find.byType(InkWell),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(certificationRepository.submitBindCardCalls, hasLength(1));
+    expect(
+      reportClient.calls.where((call) => call.$1 == ApiEndpoints.reportRisk),
+      isEmpty,
+    );
+  });
+
+  testWidgets('绑卡页活体未通过时即使带回 livenessId 也不补交', (tester) async {
     _mockCameraPermission(1);
     final certificationRepository = _StubCertificationRepository()
       ..submitBindCardCodes = const [20000, 0];
-    // 结果码判定的通过标记为 false 且没有人脸图，但带回了 liveness_id：
-    // 对齐 dali_cash 后绑卡补交只要求 liveness_id，不能因缺图丢弃结果。
+    // 对齐 peso_shield 的 `_completeLiveness`：绑卡补交要求活体通过
+    // （`success`）且带回 liveness_id；没过就停在第一次提交，不补交。
     final livenessGateway = _StubLivenessGateway(
       outcome: const LivenessOutcome(
         passed: false,
@@ -5992,11 +6771,10 @@ void main() {
     await tester.tap(find.text('Upload'));
     await tester.pumpAndSettle();
 
-    expect(certificationRepository.submitBindCardCalls, hasLength(2));
-    final retry = certificationRepository.submitBindCardCalls.last;
-    expect(retry.faceType, '7');
-    expect(retry.livenessId, 'LIVE-42');
-    expect(productRepository.detailCalls, greaterThan(0));
+    // 只有第一次提交（没有活体参数），不会拿未通过的结果去补交。
+    expect(certificationRepository.submitBindCardCalls, hasLength(1));
+    expect(certificationRepository.submitBindCardCalls.single.faceType, '');
+    expect(productRepository.detailCalls, 0);
   });
 
   testWidgets('绑卡页接口失败给错误态与重试入口', (tester) async {
@@ -6234,13 +7012,35 @@ void main() {
     expect(find.text('Oliver'), findsOneWidget);
     expect(find.text('Mark'), findsOneWidget);
 
-    // 维护中的账户（`catchpenny == 0`）仍可选中，红色提示照设计稿展示。
+    // 维护中的账户（`catchpenny == 0`）仍可选中，文案取后端 `loader`。
+    expect(
+      find.text('Bank temporarily unavailable from server'),
+      findsOneWidget,
+    );
     expect(
       find.text(
         'The bank is under maintenance. Loans may be delayed. '
         'Please wait or choose another option',
       ),
-      findsOneWidget,
+      findsNothing,
+    );
+
+    // 未下发 `salish` 时不留 logo 展示位。
+    expect(find.byKey(const Key('loan-confirm-logo-555')), findsOneWidget);
+    expect(find.byKey(const Key('loan-confirm-logo-556')), findsNothing);
+    final bankCard = tester.getRect(
+      find.byKey(const Key('loan-confirm-card-555')),
+    );
+    final ewalletCard = tester.getRect(
+      find.byKey(const Key('loan-confirm-card-556')),
+    );
+    expect(
+      tester.getTopLeft(find.text('BDO')).dx,
+      closeTo(bankCard.left + (12 + 24 + 7) * _designScale, 0.5),
+    );
+    expect(
+      tester.getTopLeft(find.text('GCash')).dx,
+      closeTo(ewalletCard.left + 12 * _designScale, 0.5),
     );
 
     // 默认选中后端标了 `isMain` 的 Bank 那笔，其余两张是未选中态。
@@ -6335,6 +7135,53 @@ void main() {
       'https://h5.example.com/order/1',
     );
     expect(find.byType(LoanConfirmPage), findsNothing);
+  });
+
+  testWidgets('借款确认页未选账户时点 Upload 提示并停止提交', (tester) async {
+    final certificationRepository = _StubCertificationRepository()
+      ..userAccounts = const LoanConfirmData(
+        groups: [
+          LoanAccountGroup(
+            title: 'Bank',
+            accounts: [
+              LoanAccount(
+                id: '555',
+                name: 'BDO',
+                receiptAccount: '5490163575561234',
+              ),
+            ],
+          ),
+        ],
+      );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      certificationRepository: certificationRepository,
+    );
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORD-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('BDO'), findsOneWidget);
+    final upload = find.byKey(const Key('loan-confirm-upload'));
+    final uploadTap = find.descendant(
+      of: upload,
+      matching: find.byType(InkWell),
+    );
+    expect(tester.widget<InkWell>(uploadTap).onTap, isNotNull);
+    await tester.tap(uploadTap);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Please select a payment method'), findsOneWidget);
+    expect(find.byType(LoanConfirmPage), findsOneWidget);
+    expect(certificationRepository.changeBankCardCalls, isEmpty);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('借款确认页账户列表失败时展示错误态并可重试', (tester) async {
@@ -6540,6 +7387,8 @@ void main() {
               ApiFields.loanAccountBindId: 555,
               ApiFields.loanAccountName: 'BDO',
               ApiFields.loanAccountStatus: 0,
+              ApiFields.loanAccountMaintenanceHint:
+                  'Temporarily unavailable from backend',
               ApiFields.loanAccountIsMain: 1,
               ApiFields.loanAccountNumber: '5490163575561234',
               ApiFields.loanAccountLogo: 'https://x/bdo.png',
@@ -6600,6 +7449,7 @@ void main() {
     // `catchpenny == 0` 是维护中，但仍能选中，页面只补提示。
     expect(bank.first.available, isFalse);
     expect(bank.first.underMaintenance, isTrue);
+    expect(bank.first.maintenanceHint, 'Temporarily unavailable from backend');
     expect(bank[1].available, isTrue);
     expect(bank[1].underMaintenance, isFalse);
     // 默认选中后端标了 `isMain` 的那笔。
