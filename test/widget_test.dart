@@ -2547,7 +2547,7 @@ void main() {
     expect(submit.onPressed, isNull);
   });
 
-  testWidgets('登录页手机号或验证码没填完时不发登录请求', (tester) async {
+  testWidgets('登录页验证码没填完时不发登录请求', (tester) async {
     final auth = _StubAuthRepository();
     await _pumpApp(
       tester,
@@ -2562,7 +2562,7 @@ void main() {
       find.byKey(const Key('login-phone-field')),
       '917123456',
     );
-    // 差一位：按钮保持禁用，也不会触发自动登录。
+    // 验证码未填满：按钮保持禁用，也不会触发自动登录。
     await tester.enterText(find.byKey(const Key('login-code-field')), '12345');
     await tester.pump();
 
@@ -2575,7 +2575,7 @@ void main() {
     expect(auth.loginCalls, 0);
   });
 
-  testWidgets('登录手机号输入框排除国家码并保持完整号码 12~16 位', (tester) async {
+  testWidgets('登录手机号不做本地校验并原样交给服务端', (tester) async {
     final auth = _StubAuthRepository();
     await _pumpApp(
       tester,
@@ -2586,16 +2586,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final phone = find.byKey(const Key('login-phone-field'));
-    await tester.enterText(phone, '917123456');
-    await tester.pump();
-    expect(
-      tester
-          .widget<TextButton>(find.byKey(const Key('login-send-code-button')))
-          .onPressed,
-      isNull,
-    );
-
-    await tester.enterText(phone, '9171234567');
+    await tester.enterText(phone, '1');
     await tester.pump();
     expect(
       tester
@@ -2603,17 +2594,27 @@ void main() {
           .onPressed,
       isNotNull,
     );
+    await tester.tap(find.byKey(const Key('login-send-code-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(auth.sendCodePhones, ['1']);
 
-    await tester.enterText(phone, '639171234567');
+    await tester.enterText(phone, '63917-123456');
     await tester.pump();
     expect(
       _loginFieldValue(tester, const Key('login-phone-field')),
-      '9171234567',
+      '63917-123456',
     );
 
-    await tester.enterText(phone, '917123456789012345');
+    await tester.enterText(phone, '91712345678901234567890');
     await tester.pump();
-    expect(_loginFieldValue(tester, const Key('login-phone-field')).length, 14);
+    expect(
+      _loginFieldValue(tester, const Key('login-phone-field')),
+      '91712345678901234567890',
+    );
+
+    // 收掉发码倒计时，避免测试结束时还有未完成的计时器。
+    await tester.pump(const Duration(seconds: 61));
   });
 
   testWidgets('登录页验证码填满 6 位自动提交，登录成功后关掉登录页', (tester) async {
@@ -2635,7 +2636,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(auth.loginCalls, 1);
-    expect(auth.loginPhones, ['9171234567']);
+    expect(auth.loginPhones, ['639171234567']);
     expect(find.byKey(const Key('login-phone-field')), findsNothing);
   });
 
