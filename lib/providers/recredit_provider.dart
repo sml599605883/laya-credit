@@ -31,11 +31,7 @@ final recreditPollingCoordinatorProvider = Provider<RecreditPollingCoordinator>(
       refreshHome: () => ref.read(homeDataProvider.notifier).refresh(),
       runAdmission: (productId) async {
         final flow = await ref.read(productApplicationFlowProvider.future);
-        await flow.applyProduct(productId: productId);
-      },
-      ensureLocationAccess: () async {
-        final flow = await ref.read(productApplicationFlowProvider.future);
-        return flow.ensureLocationAccess(allowDismissWithoutPermission: false);
+        await flow.applyProductAfterRecredit(productId: productId);
       },
       logger: debugPrint,
     );

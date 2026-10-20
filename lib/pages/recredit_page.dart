@@ -4,8 +4,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/navigation/app_navigator.dart';
 import '../providers/recredit_provider.dart';
 import '../theme/theme.dart';
+import '../widgets/back_nav_bar.dart';
 
 /// 等待授信 loading 页（蓝湖稿 `04-02 - 等待授信`，路由 `/recredit`）。
 ///
@@ -69,30 +71,45 @@ class _RecreditPageState extends ConsumerState<RecreditPage> {
     return Scaffold(
       // 设计稿 `page` 底色 rgba(236,250,220,1)，与进度列表页同一色。
       backgroundColor: AppColors.surfaceMint,
-      body: SingleChildScrollView(
-        // 设计稿内容区上边距 290pt：整块内容（209pt 高）在 812pt 画布上略高于中线。
-        padding: layout.edgeInsets(top: 290, bottom: 313),
-        // SingleChildScrollView 在纵轴无界时，Column 会按最宽子项收缩到左侧。
-        // 这里显式撑满横向宽度并按设计稿居中，避免插画、文案和进度槽整体左偏。
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: Column(
-            children: [
-              Image.asset(
-                AppAssets.recreditIllustration,
-                key: const Key('recredit-illustration'),
-                // 设计稿 `box_1` 为 138x102。
-                width: layout.px(138),
-                height: layout.px(102),
-                fit: BoxFit.fill,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            // 设计稿内容区上边距 290pt：整块内容（209pt 高）在 812pt 画布上略高于中线。
+            padding: layout.edgeInsets(top: 290, bottom: 313),
+            // SingleChildScrollView 在纵轴无界时，Column 会按最宽子项收缩到左侧。
+            // 这里显式撑满横向宽度并按设计稿居中。
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Column(
+                children: [
+                  Image.asset(
+                    AppAssets.recreditIllustration,
+                    key: const Key('recredit-illustration'),
+                    // 设计稿 `box_1` 为 138x102。
+                    width: layout.px(138),
+                    height: layout.px(102),
+                    fit: BoxFit.fill,
+                  ),
+                  SizedBox(height: layout.px(18)),
+                  _RecreditMessage(layout: layout),
+                  SizedBox(height: layout.px(11)),
+                  _RecreditProgress(layout: layout, progress: _progress),
+                ],
               ),
-              SizedBox(height: layout.px(18)),
-              _RecreditMessage(layout: layout),
-              SizedBox(height: layout.px(11)),
-              _RecreditProgress(layout: layout, progress: _progress),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: BackNavBar(
+              key: const Key('recredit-back'),
+              layout: layout,
+              title: '',
+              onBack: AppNavigator.pop,
+            ),
+          ),
+        ],
       ),
     );
   }

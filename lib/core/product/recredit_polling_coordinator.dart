@@ -14,9 +14,6 @@ typedef RecreditHomeRefresher = Future<void> Function();
 /// 授信完成时，如果用户仍停留在等待授信页，用产品 id 重新走一次准入。
 typedef RecreditAdmissionRunner = Future<void> Function(String productId);
 
-/// 授信完成且仍停留在等待页时，先补做准入所需的位置权限检查。
-typedef RecreditLocationGate = Future<bool> Function();
-
 typedef RecreditLogger = void Function(String message);
 
 /// 等待授信页的轮询器。
@@ -36,7 +33,6 @@ class RecreditPollingCoordinator {
     required this._currentRoute,
     required this._refreshHome,
     required this._runAdmission,
-    this._ensureLocationAccess,
     RecreditLogger? logger,
     this.interval = const Duration(seconds: 10),
   }) : _logger = logger ?? _noopLogger;
@@ -45,7 +41,6 @@ class RecreditPollingCoordinator {
   final RecreditRouteReader _currentRoute;
   final RecreditHomeRefresher _refreshHome;
   final RecreditAdmissionRunner _runAdmission;
-  final RecreditLocationGate? _ensureLocationAccess;
   final RecreditLogger _logger;
 
   /// 两次轮询之间的间隔。
@@ -115,11 +110,7 @@ class RecreditPollingCoordinator {
       if (route == AppRoutes.root || route == AppRoutes.home) {
         await _refreshHome();
       } else if (route == AppRoutes.recredit) {
-        // 等待页本身不弹定位权限，授信成功后重走准入时必须先补这一步，
-        // 否则准入接口会在无定位上下文下直接发出。
-        if (_ensureLocationAccess != null && !await _ensureLocationAccess()) {
-          return;
-        }
+        // 授信成功后直接重走准入。该自动入口不允许再触发定位弹窗。
         await _runAdmission(productId);
       }
     } catch (error) {

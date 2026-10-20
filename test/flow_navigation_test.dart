@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:laya_credit/core/navigation/app_deep_link.dart';
 import 'package:laya_credit/core/navigation/app_navigator.dart';
+import 'package:laya_credit/core/navigation/app_route_generator.dart';
 import 'package:laya_credit/core/navigation/app_routes.dart';
 
 /// 用一个占位路由表承载真实导航栈，验证栈清理行为而无需渲染真实页面。
@@ -17,10 +18,7 @@ Widget _harness() {
       // 登录页按真实路由生成器返回 `MaterialPageRoute<bool>`，其余页面返回
       // `MaterialPageRoute<void>`，避免 `pushNamed<bool>` 的泛型强转失败。
       if (name == AppRoutes.login) {
-        return MaterialPageRoute<bool>(
-          settings: settings,
-          builder: buildPage,
-        );
+        return MaterialPageRoute<bool>(settings: settings, builder: buildPage);
       }
       return MaterialPageRoute<void>(settings: settings, builder: buildPage);
     },
@@ -79,5 +77,22 @@ void main() {
     AppNavigator.pop<void>();
     await tester.pumpAndSettle();
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('生成的页面路由统一禁用 iOS 侧滑返回', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: AppNavigator.navigatorKey,
+        onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+        home: const Scaffold(body: Text('home')),
+      ),
+    );
+
+    unawaited(AppNavigator.push<void>('/no-swipe-test').then<void>((_) {}));
+    await tester.pumpAndSettle();
+
+    final route = ModalRoute.of(tester.element(find.text('Page not found')));
+    expect(route, isA<PageRoute<void>>());
+    expect(route!.popGestureEnabled, isFalse);
   });
 }

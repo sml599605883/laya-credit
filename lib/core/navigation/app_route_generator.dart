@@ -345,15 +345,23 @@ class AppRouteGenerator {
     }
   }
 
-  /// 统一使用 [MaterialPageRoute]：iOS 上会自动带侧滑返回手势。
-  /// 若某个流程（如认证资料填写）需要禁止用户中途返回，
-  /// 给该 case 换成禁止手势的 Route 实现即可，不要全局修改。
+  /// 统一使用禁用侧滑返回的路由。
+  ///
+  /// 业务流程依赖明确的返回按钮和页面栈管理；系统侧滑会绕过部分中间状态，
+  /// 因此全局关闭，物理返回键和页面内的返回按钮仍正常可用。
   static MaterialPageRoute<T> _route<T>(
     RouteSettings settings,
     WidgetBuilder builder,
   ) {
-    return MaterialPageRoute<T>(builder: builder, settings: settings);
+    return _NoSwipeMaterialPageRoute<T>(builder: builder, settings: settings);
   }
+}
+
+class _NoSwipeMaterialPageRoute<T> extends MaterialPageRoute<T> {
+  _NoSwipeMaterialPageRoute({required super.builder, super.settings});
+
+  @override
+  bool get popGestureEnabled => false;
 }
 
 /// 未注册路由的兜底页。出现在这里说明跳转用错了路由名。

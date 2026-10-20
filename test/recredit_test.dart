@@ -73,16 +73,12 @@ void main() {
       expect(attempts, 2);
     });
 
-    test('授信成功且仍在等待页时先检查位置权限，再重走准入', () async {
+    test('授信成功且仍在等待页时直接重走准入，不再走定位门', () async {
       final calls = <String>[];
       final coordinator = RecreditPollingCoordinator(
         readStatus: () async => true,
         currentRoute: () => AppRoutes.recredit,
         refreshHome: () async => calls.add('home'),
-        ensureLocationAccess: () async {
-          calls.add('location');
-          return true;
-        },
         runAdmission: (productId) async => calls.add('admission:$productId'),
         interval: Duration.zero,
       );
@@ -90,27 +86,8 @@ void main() {
       coordinator.start('P-1');
       await _settleUntil(() => calls.isNotEmpty);
 
-      expect(calls, ['location', 'admission:P-1']);
-    });
-
-    test('位置权限检查不通过时不自动准入', () async {
-      final calls = <String>[];
-      final coordinator = RecreditPollingCoordinator(
-        readStatus: () async => true,
-        currentRoute: () => AppRoutes.recredit,
-        refreshHome: () async => calls.add('home'),
-        ensureLocationAccess: () async {
-          calls.add('location');
-          return false;
-        },
-        runAdmission: (productId) async => calls.add('admission:$productId'),
-        interval: Duration.zero,
-      );
-
-      coordinator.start('P-1');
-      await _settleUntil(() => !coordinator.isRunning);
-
-      expect(calls, ['location']);
+      expect(calls, ['admission:P-1']);
+      expect(coordinator.isRunning, isFalse);
     });
 
     test('授信完成时用户已回到容器页则刷新首页', () async {
@@ -234,6 +211,8 @@ void main() {
     testWidgets('按设计稿渲染插画、两行文案与进度槽', (tester) async {
       await pumpPage(tester, 'P-1');
 
+      expect(find.byKey(const Key('recredit-back')), findsOneWidget);
+      expect(find.bySemanticsLabel('Back'), findsOneWidget);
       expect(find.byKey(const Key('recredit-illustration')), findsOneWidget);
       expect(
         tester
@@ -264,6 +243,42 @@ void main() {
         AppColors.recreditProgressText,
       );
       expect(find.text('0%'), findsOneWidget);
+    });
+
+    testWidgets('等待授信页返回按钮可正常关闭页面', (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          recreditPollingCoordinatorProvider.overrideWithValue(
+            _idleCoordinator(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            navigatorKey: AppNavigator.navigatorKey,
+            onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+            home: const Scaffold(body: Text('home')),
+          ),
+        ),
+      );
+      unawaited(
+        AppNavigator.push<void>(
+          AppRoutes.recredit,
+          arguments: const RecreditPageArguments(productId: 'P-1'),
+        ).then<void>((_) {}),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RecreditPage), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RecreditPage), findsNothing);
+      expect(find.text('home'), findsOneWidget);
     });
 
     testWidgets('插画、文案与进度槽在设计宽度内水平居中', (tester) async {

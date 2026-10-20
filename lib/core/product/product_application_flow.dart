@@ -71,16 +71,6 @@ class ProductApplicationFlow {
   static Future<CertificationLocationDecision> _defaultLocationChecker() =>
       PermissionCoordinator.instance.requestCertificationLocation();
 
-  /// 授信完成后的自动准入也复用同一套定位检查，避免系统权限弹窗和业务准入并发。
-  ///
-  /// 自动准入没有用户再次点击的入口，因此权限不可用时不能在用户点 `Later`
-  /// 后放行；普通「立即申请」仍沿用 Dali 的宽松口径，避免误伤已有申请入口。
-  Future<bool> ensureLocationAccess({
-    bool allowDismissWithoutPermission = true,
-  }) => _ensureLocationAccess(
-    allowDismissWithoutPermission: allowDismissWithoutPermission,
-  );
-
   /// 执行产品申请流程。
   ///
   /// [apiRemind] 来源标识（0 默认，1 首页 banner，2 首页弹窗 ...）。
@@ -89,7 +79,24 @@ class ProductApplicationFlow {
     int apiRemind = 0,
   }) async {
     if (_isProcessing) return;
-    await _applyProduct(productId: productId, apiRemind: apiRemind);
+    await _applyProduct(
+      productId: productId,
+      apiRemind: apiRemind,
+      checkLocationAccess: true,
+    );
+  }
+
+  /// 重新授信完成后自动重走准入。
+  ///
+  /// 用户已经从等待授信页发起了授信轮询，授信成功后只需继续业务准入；
+  /// 这个入口不能再弹定位权限，否则用户取消后会让等待页停在成功后的半流程。
+  Future<void> applyProductAfterRecredit({required String productId}) async {
+    if (_isProcessing) return;
+    await _applyProduct(
+      productId: productId,
+      apiRemind: 0,
+      checkLocationAccess: false,
+    );
   }
 
   /// 深链 / 推荐页再次准入时使用。
@@ -104,6 +111,7 @@ class ProductApplicationFlow {
       productId: productId,
       apiRemind: apiRemind,
       bypassProcessingLock: true,
+      checkLocationAccess: true,
     );
   }
 
@@ -111,6 +119,7 @@ class ProductApplicationFlow {
     required String productId,
     required int apiRemind,
     bool bypassProcessingLock = false,
+    required bool checkLocationAccess,
   }) async {
     final normalizedProductId = productId.trim();
     if (normalizedProductId.isEmpty) {
@@ -126,9 +135,9 @@ class ProductApplicationFlow {
       return;
     }
 
-    // 对齐 dali：点击「立即申请」时先做定位检查（系统授权弹窗与「去设置」引导
-    // 只在这里出现），拿不到定位就中止本次申请，别去打扰后端。
-    if (!await _ensureLocationAccess()) return;
+    // 普通申请入口先做定位检查；重新授信完成后的自动准入已经越过这个入口，
+    // 不再重复弹定位权限。
+    if (checkLocationAccess && !await _ensureLocationAccess()) return;
 
     _isProcessing = true;
     try {
@@ -165,9 +174,7 @@ class ProductApplicationFlow {
   ///
   /// 返回 false 表示中止本次申请：本次拒绝授权、服务关闭或永久拒绝后选择
   /// 去设置。用户取消「去设置」引导时按 dali 口径放行，保证不误伤申请。
-  Future<bool> _ensureLocationAccess({
-    bool allowDismissWithoutPermission = true,
-  }) async {
+  Future<bool> _ensureLocationAccess() async {
     final decision = await locationChecker();
     if (decision == CertificationLocationDecision.granted) return true;
     if (decision == CertificationLocationDecision.denied) return false;
@@ -182,7 +189,7 @@ class ProductApplicationFlow {
       await openAppSettings();
       return false;
     }
-    return allowDismissWithoutPermission;
+    return true;
   }
 
   /// 定位不可用时的系统设置引导框（标题 / 按钮 / 文案取设计稿）。

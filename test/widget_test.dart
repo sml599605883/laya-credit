@@ -2080,42 +2080,29 @@ void main() {
     expect(productRepository.applyCalls, isEmpty);
   });
 
-  testWidgets('自动重走准入时定位权限未授予不能点 Later 放行', (tester) async {
-    final previousLocationChecker = ProductApplicationFlow.locationChecker;
-    addTearDown(
-      () => ProductApplicationFlow.locationChecker = previousLocationChecker,
+  testWidgets('重新授信完成后的自动准入跳过定位检查', (tester) async {
+    var locationChecks = 0;
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
     );
-    ProductApplicationFlow.locationChecker = () async =>
-        CertificationLocationDecision.settingsRequired;
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final flow = ProductApplicationFlow(
-      repository: _StubProductRepository(),
-      isLoggedIn: () => true,
-      sessionStore: container.read(sessionStoreProvider),
-    );
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          navigatorKey: AppNavigator.navigatorKey,
-          home: const Scaffold(body: SizedBox.shrink()),
-        ),
-      ),
-    );
+    ProductApplicationFlow.locationChecker = () async {
+      locationChecks++;
+      return CertificationLocationDecision.settingsRequired;
+    };
 
-    final granted = flow.ensureLocationAccess(
-      allowDismissWithoutPermission: false,
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Location Access Needed'), findsOneWidget);
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProductAfterRecredit(productId: '7'));
+    await _pumpFrames(tester);
 
-    await tester.tap(find.text('Later'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(await granted, isFalse);
+    expect(locationChecks, 0);
+    expect(productRepository.applyCalls, [('7', 0)]);
+    expect(find.text('Location Access Needed'), findsNothing);
   });
 
   testWidgets('定位授权弹窗关闭时的恢复不刷新首页', (tester) async {
