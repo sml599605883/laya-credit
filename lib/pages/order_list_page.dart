@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/navigation/app_deep_link.dart';
 import '../core/navigation/app_navigator.dart';
+import '../core/navigation/app_route_observer.dart';
 import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/order_list_data.dart';
 import '../providers/order_list_provider.dart';
+import '../providers/product_flow_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
 import '../widgets/remote_image.dart';
@@ -26,12 +28,19 @@ class OrderListPage extends ConsumerStatefulWidget {
   ConsumerState<OrderListPage> createState() => _OrderListPageState();
 }
 
-class _OrderListPageState extends ConsumerState<OrderListPage> {
+class _OrderListPageState extends ConsumerState<OrderListPage> with RouteAware {
   late OrderFilterStatus _status = widget.initialStatus;
 
   /// 用 [ScrollController] 而不是 `NotificationListener`：滚动监听在 layout 阶段
   /// 之外触发，触底时改 provider 状态不会撞上「build 期间改状态」。
   final _scrollController = ScrollController();
+
+  /// 返回当前页时重新拉列表的防抖标记：`didPopNext` 可能前后脚触发，
+  /// 帧末确认本页仍在栈顶后只刷新一次。
+  bool _refreshScheduled = false;
+
+  /// 已订阅的路由，避免 `didChangeDependencies` 反复触发时重复订阅。
+  PageRoute<dynamic>? _route;
 
   /// 距列表底部还剩这么多像素时预取下一页（约半屏）。
   static const _loadMoreThreshold = 120.0;
@@ -46,11 +55,40 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute && route != _route) {
+      if (_route != null) appRouteObserver.unsubscribe(this);
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+
+  /// 订单详情 / 认证 / 准入 / H5 返回时统一在这里刷新，避免每个跳转分支
+  /// 各写一遍刷新，也避免「点准入进认证」时与认证页初始化并发多打列表接口。
+  @override
+  void didPopNext() => _scheduleRefreshAfterReturn();
+
+  void _scheduleRefreshAfterReturn() {
+    if (_refreshScheduled) return;
+    _refreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshScheduled = false;
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      _refreshAfterTargetReturns();
+    });
   }
 
   void _onScroll() {
@@ -192,7 +230,6 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       // 不能把正常业务场景当成错误 URL。
       if (productId.trim().isNotEmpty) {
         await AppNavigator.applyProduct(productId: productId);
-        await _refreshAfterTargetReturns();
         return;
       }
       ToastHelper.showError('Order link is unavailable');
@@ -202,12 +239,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     final uri = AppNavigator.webViewUri(value);
     if (uri != null) {
       await AppNavigator.toWebView<void>(url: uri.toString());
-      await _refreshAfterTargetReturns();
       return;
     }
     if (value.startsWith('/')) {
       await AppNavigator.toWebPath<void>(path: value);
-      await _refreshAfterTargetReturns();
       return;
     }
 
@@ -215,12 +250,37 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     if (link.kind != AppDeepLinkKind.unsupported) {
       await AppNavigator.openDeepLink(
         link,
-        onUnhandled: (unhandled) =>
-            ToastHelper.showMessage('Order target: ${unhandled.raw}'),
+        onUnhandled: _handleUnhandledDeepLink,
       );
       return;
     }
     ToastHelper.showMessage('Order target: $value');
+  }
+
+  /// 订单卡片下发的准入 / 产品详情深链，按统一流程继续推进，
+  /// 不能像未知地址一样只弹提示（对齐 peso_shield 的 `navigateRawTarget`）。
+  Future<void> _handleUnhandledDeepLink(AppDeepLink link) async {
+    switch (link.kind) {
+      case AppDeepLinkKind.admission:
+        await AppNavigator.applyProduct(
+          productId: link.productId,
+          apiRemind: link.apiRemind,
+        );
+      case AppDeepLinkKind.productDetail:
+        final flow = await ref.read(productApplicationFlowProvider.future);
+        await flow.continueProductDetailFlow(link.productId);
+      case AppDeepLinkKind.settings:
+        ToastHelper.showMessage('Settings page is not available yet');
+      case AppDeepLinkKind.unsupported:
+        ToastHelper.showMessage('Order target: ${link.raw}');
+      case AppDeepLinkKind.webView:
+      case AppDeepLinkKind.home:
+      case AppDeepLinkKind.login:
+      case AppDeepLinkKind.order:
+      case AppDeepLinkKind.recredit:
+        // 已由 AppNavigator.openDeepLink 处理，不会走到这里。
+        break;
+    }
   }
 
   /// 订单详情 / 还款页返回列表时重新拉当前筛选，避免展示离开前的旧状态。

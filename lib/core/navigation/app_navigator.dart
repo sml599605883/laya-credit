@@ -174,7 +174,10 @@ class AppNavigator {
       case AppDeepLinkKind.home:
         popToRoot();
       case AppDeepLinkKind.login:
-        await toLogin();
+        // H5 判定登录态失效后下发的 login 深链：先清掉旧 WebView / 认证页等
+        // 会话栈，再压登录页，这样从登录页返回或登录成功后都不会再落到已失效
+        // 的 H5（对齐 peso_shield `toLogin` 的 popToRoot 口径）。
+        await toLogin(clearSessionStack: true);
       case AppDeepLinkKind.order:
         await openOrderList<void>(status: link.orderStatus);
       case AppDeepLinkKind.recredit:
@@ -242,9 +245,14 @@ class AppNavigator {
   ///
   /// 与进入认证流程一致，会清掉返回栈里已有的认证页：用户从 H5 返回时
   /// 直接回到入口页，而不是上一个半完成的认证页。
+  ///
+  /// [removeWebViewPages] 为 true 时同时清掉返回栈里已存在的 WebView 页面，
+  /// 用于从订单详情 / 推荐列表等 H5 进入确认用款页等后续 H5 时关闭来源 H5，
+  /// 避免退出后续页面又回到来源 H5（对齐 peso_shield 的 `removeWebViewPages`）。
   static Future<T?>? toWebView<T extends Object?>({
     required String url,
     String? title,
+    bool removeWebViewPages = false,
   }) {
     final uri = webViewUri(url);
     if (uri == null) {
@@ -256,10 +264,14 @@ class AppNavigator {
       pageRoute,
     ) {
       final name = pageRoute.settings.name;
-      // 保留非认证流程的页面（首页 / 登录等）。
-      return name != null &&
-          name.isNotEmpty &&
-          !_certificationRoutes.contains(name);
+      // 未命名的过渡路由不保留。
+      if (name == null || name.isEmpty) return false;
+      // 认证流程 / 等待授信页始终清掉。
+      if (_certificationRoutes.contains(name)) return false;
+      // 需要关闭来源 H5 时，把栈里已有的 WebView 页也清掉。
+      if (removeWebViewPages && name == AppRoutes.webView) return false;
+      // 保留第一个非流程页面（首页 / 登录等）。
+      return true;
     }, arguments: WebViewPageArguments(url: uri.toString(), title: title));
   }
 
@@ -284,6 +296,7 @@ class AppNavigator {
   static Future<T?>? toWebPath<T extends Object?>({
     required String path,
     String? title,
+    bool removeWebViewPages = false,
   }) {
     final base = Uri.tryParse(ApiEnvironment.h5Base);
     if (base == null || base.host.isEmpty) {
@@ -293,6 +306,7 @@ class AppNavigator {
     return toWebView<T>(
       url: base.resolve(path.trim()).toString(),
       title: title,
+      removeWebViewPages: removeWebViewPages,
     );
   }
 

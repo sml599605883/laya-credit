@@ -325,10 +325,12 @@ class ReportService {
   ///
   /// 对齐 peso_shield：同一 token 在一个 App 进程内只成功上报一次；
   /// 登录成功通过 [force] 再补报一次。原生事件、启动补报和并发调用共享去重状态。
-  /// token 为空时先等 [appleTokenEmptyTokenDelay] 再读一次；仍为空则跳过，
-  /// 由后续原生 `push_token` 事件上报真值，避免一次授权产生「空值 + 真值」两条记录。
+  /// token 为空（通知权限被拒绝，或 APNs 注册尚未返回）时先等
+  /// [appleTokenEmptyTokenDelay] 再读一次：读到真 token 就用真值上报；仍为空也
+  /// 照常上报一次空 token，保证「拒绝」场景同样只调用一次接口。
   Future<void> reportAppleToken({bool force = false}) async {
     String? reserved;
+    var claimed = false;
     try {
       reserved = (await _pushBridge.getPushToken()).trim();
 
@@ -339,19 +341,17 @@ class ReportService {
           reserved = latest;
         }
       }
-      if (reserved.isEmpty) return;
 
-      if ((!force && _reportedAppleTokens.contains(reserved)) ||
-          !_reportingAppleTokens.add(reserved)) {
-        return;
-      }
+      if (!force && _reportedAppleTokens.contains(reserved)) return;
+      if (!_reportingAppleTokens.add(reserved)) return;
+      claimed = true;
 
       final response = await repository.reportApplePushToken(token: reserved);
       if (response.isSuccess) _reportedAppleTokens.add(reserved);
     } catch (error) {
       _log(error);
     } finally {
-      if (reserved != null) _reportingAppleTokens.remove(reserved);
+      if (claimed) _reportingAppleTokens.remove(reserved);
     }
   }
 

@@ -13,13 +13,14 @@ void main() {
   setUp(ReportService.reset);
   tearDown(ReportService.reset);
 
-  test('Apple 推送 token 仍为空时跳过，等待真值事件上报', () async {
+  test('拒绝后空 token 只报一次', () async {
     final repository = _RecordingRepository();
     final service = _service(repository, pushToken: '');
 
     await service.reportAppleToken();
+    await service.reportAppleToken();
 
-    expect(repository.appleTokens, isEmpty);
+    expect(repository.appleTokens, ['']);
   });
 
   test('同一 token 进程内只成功上报一次，登录成功强制补报', () async {
@@ -84,6 +85,38 @@ void main() {
     await pumpEventQueue();
 
     expect(repository.appleTokens, ['token-2']);
+    await service.dispose();
+  });
+
+  test('允许后 push_token 事件与启动补报重叠只报一次真 token', () async {
+    final repository = _RecordingRepository();
+    final pushBridge = _StubPushBridge('');
+    final events = StreamController<PushEvent>.broadcast();
+    addTearDown(events.close);
+    final delayGate = Completer<void>();
+    final service = _service(
+      repository,
+      pushToken: '',
+      pushBridge: pushBridge,
+      events: events.stream,
+      delay: (_) => delayGate.future,
+    );
+
+    await service.start();
+    // 启动权限流程结束时先读到空 token（APNs 注册还没回来），进入等待。
+    final pending = service.startupPermissionsResolved();
+    await pumpEventQueue();
+    // 等待期间原生推出 push_token 事件，真 token 到了。
+    pushBridge.setToken('token-real');
+    events.add(const {'type': 'push_token', 'token': 'token-real'});
+    await pumpEventQueue();
+    // 放行启动补报的等待，让它读到真 token 后按去重跳过。
+    delayGate.complete();
+    await pending;
+    await pumpEventQueue();
+
+    // 同一次突发只发一条请求，且带的是真 token。
+    expect(repository.appleTokens, ['token-real']);
     await service.dispose();
   });
 
@@ -189,6 +222,7 @@ ReportService _service(
   Stream<PushEvent>? events,
   int Function()? nowMillis,
   PushBridge? pushBridge,
+  Future<void> Function(Duration duration)? delay,
   Duration locationTimeout = ReportService.defaultLocationTimeout,
 }) {
   return ReportService(
@@ -203,7 +237,7 @@ ReportService _service(
     nowMillis: nowMillis,
     locationTimeout: locationTimeout,
     // 空 token 的等待在单测里收敛掉，不真的等 500ms。
-    delay: (duration) async {},
+    delay: delay ?? (duration) async {},
   );
 }
 

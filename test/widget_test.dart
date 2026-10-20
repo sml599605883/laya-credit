@@ -82,6 +82,9 @@ class _StubAppRepository extends AppRepository {
   /// 首页接口调用次数：用于断言刷新时机（首屏、退出登录回落首页等）。
   int homeCalls = 0;
 
+  /// banner 点击上报的 banner id，用于断言「空 jumpUrl 不上报点击」。
+  final List<String> bannerClickCalls = [];
+
   @override
   Future<ApiResponse<HomeData>> getHomePage() async {
     homeCalls++;
@@ -93,6 +96,12 @@ class _StubAppRepository extends AppRepository {
           home ??
           const HomeData(banners: [], product: null, orders: [], notices: []),
     );
+  }
+
+  @override
+  Future<ApiResponse<void>> recordBannerClick(String bannerId) async {
+    bannerClickCalls.add(bannerId);
+    return const ApiResponse<void>(code: 0, message: 'success', data: null);
   }
 }
 
@@ -2034,6 +2043,43 @@ void main() {
     expect(productRepository.applyCalls, isEmpty);
   });
 
+  testWidgets('定位服务关闭时用服务关闭文案并引导开启', (tester) async {
+    final productRepository = _StubProductRepository();
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(
+        home: const HomeData(
+          banners: [],
+          product: _productCard,
+          orders: [],
+          notices: [],
+        ),
+      ),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'test-session', userId: '1', phone: '9171234567'),
+    );
+    // 定位服务被系统关闭（区别于授权被拒）。
+    ProductApplicationFlow.locationChecker = () async =>
+        CertificationLocationDecision.serviceDisabled;
+
+    await tester.tap(find.byKey(const Key('home-apply-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your Location Is Off'), findsOneWidget);
+    expect(find.text('Later'), findsOneWidget);
+    expect(find.text('Turn It On'), findsOneWidget);
+    expect(
+      find.text(
+        'Turn on location services to continue with the information '
+        'required for your application.',
+      ),
+      findsOneWidget,
+    );
+    expect(productRepository.applyCalls, isEmpty);
+  });
+
   testWidgets('自动重走准入时定位权限未授予不能点 Later 放行', (tester) async {
     final previousLocationChecker = ProductApplicationFlow.locationChecker;
     addTearDown(
@@ -2372,6 +2418,48 @@ void main() {
 
     // 卸载页面，取消轮播定时器，避免测试结束时留下 pending timer。
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('banner 空跳转链接静默返回，不上报点击也不 toast', (tester) async {
+    final repository = _StubAppRepository(
+      home: const HomeData(
+        banners: [
+          HomeBanner(
+            id: 'b1',
+            imageUrl: 'https://cdn.example.com/a.png',
+            jumpUrl: '',
+          ),
+        ],
+        product: null,
+        orders: [],
+        notices: [],
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: repository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-banner-b1')));
+    await tester.pumpAndSettle();
+
+    expect(repository.bannerClickCalls, isEmpty);
+    expect(find.byType(WebViewPage), findsNothing);
+    expect(find.text('Link is unavailable'), findsNothing);
+  });
+
+  testWidgets('首页客服图标打开客服 H5', (tester) async {
+    await _pumpApp(tester, repository: _StubAppRepository());
+
+    await tester.tap(find.byKey(const Key('home-customer-service')));
+    await _pumpFrames(tester);
+
+    final page = tester.widget<WebViewPage>(find.byType(WebViewPage));
+    expect(page.initialUrl, contains(AppNavigator.customerServicePath));
+    expect(page.initialTitle, 'Customer Service');
   });
 
   testWidgets('首页接口失败时展示错误态而不是闪退', (tester) async {
@@ -3960,6 +4048,38 @@ void main() {
     // 跳转页是准入流程终点：H5 仍在前台时也要释放流程锁，
     // 否则 H5 内下一次产品准入会被 _isProcessing 静默吞掉。
     expect(completed, isTrue);
+  });
+
+  testWidgets('jumpType=1 的 ph 产品详情深链不被误判成 H5', (tester) async {
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 200,
+        jumpUrl: 'ph://laya-credit/ios/UnworshippingPigeonberries',
+        jumpType: 1,
+        message: '',
+      ),
+      detail: const ProductDetail(
+        resultCode: 200,
+        basicInfo: ProductBasicInfo(orderNo: 'ORDER-1'),
+        nextStep: ProductNextStep(taskType: 'UnhandledStep', title: 'Next'),
+      ),
+    );
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      productRepository: productRepository,
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+
+    // 深链按原生产品详情继续（拉产品详情），而不是被 jumpType=1 误判成 H5。
+    expect(productRepository.detailCalls, 1);
+    expect(find.byType(WebViewPage), findsNothing);
   });
 
   testWidgets('准入成功下发相对 URL 且未给跳转类型时仍打开 H5', (tester) async {

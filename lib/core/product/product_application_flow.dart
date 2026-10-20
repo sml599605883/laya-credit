@@ -172,7 +172,12 @@ class ProductApplicationFlow {
     if (decision == CertificationLocationDecision.granted) return true;
     if (decision == CertificationLocationDecision.denied) return false;
 
-    final openSettings = await _showLocationSettingsPrompt();
+    // 定位服务关闭与授权被拒是两个不同状态：服务关闭要引导用户去系统里
+    // 打开定位开关（文案取服务关闭设计稿），授权被拒则沿用现有授权引导文案。
+    final openSettings = await _showLocationSettingsPrompt(
+      serviceDisabled:
+          decision == CertificationLocationDecision.serviceDisabled,
+    );
     if (openSettings) {
       await openAppSettings();
       return false;
@@ -181,19 +186,28 @@ class ProductApplicationFlow {
   }
 
   /// 定位不可用时的系统设置引导框（标题 / 按钮 / 文案取设计稿）。
-  Future<bool> _showLocationSettingsPrompt() async {
+  ///
+  /// [serviceDisabled] 为 true 时是「定位服务被关闭」，文案为
+  /// `Your Location Is Off / Turn It On`；否则是「定位授权被拒」，沿用现有
+  /// `Location Access Needed / Allow Location` 文案。
+  Future<bool> _showLocationSettingsPrompt({
+    required bool serviceDisabled,
+  }) async {
     final context = AppNavigator.navigatorKey.currentContext;
     if (context == null) return false;
     try {
       final result = await showCupertinoDialog<bool>(
         context: context,
         builder: (dialogContext) => CupertinoAlertDialog(
-          // 定位服务关闭与授权被拒在设计稿里是同一个提示框：标题 / 按钮 / 文案
-          // 不分叉，两个分支都引导去系统设置。
-          title: const Text('Location Access Needed'),
-          content: const Text(
-            'Location access is currently unavailable. Enable it to continue '
-            'the credit review and related checks.',
+          title: Text(
+            serviceDisabled ? 'Your Location Is Off' : 'Location Access Needed',
+          ),
+          content: Text(
+            serviceDisabled
+                ? 'Turn on location services to continue with the information '
+                      'required for your application.'
+                : 'Location access is currently unavailable. Enable it to '
+                      'continue the credit review and related checks.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -207,7 +221,7 @@ class ProductApplicationFlow {
               textStyle: const TextStyle(color: AppColors.primary),
               isDefaultAction: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Allow Location'),
+              child: Text(serviceDisabled ? 'Turn It On' : 'Allow Location'),
             ),
           ],
         ),
@@ -526,11 +540,17 @@ class ProductApplicationFlow {
   ///
   /// `jumpType` 缺失时只看地址本身；明确 `0` 才保留原生深链语义。
   bool _isWebJump(String target, int? jumpType) {
-    if (jumpType == 1) return true;
-    if (jumpType != null) return false;
     final value = target.trim();
-    if (value.startsWith('/')) return true;
     final uri = Uri.tryParse(value);
+    // ph:// 是 App 专属原生深链：即使后端误标成 `jumpType=1`（H5），也不能按
+    // H5 打开，否则会落到 `_openWebPage` 的兜底分支被当成「无效链接」吞掉，
+    // 从而丢掉 `UnworshippingPigeonberries` 这类产品详情深链的后续准入动作。
+    final isNativeDeepLink = uri != null && uri.scheme == 'ph';
+    if (jumpType == 1) {
+      return !isNativeDeepLink;
+    }
+    if (jumpType != null) return false;
+    if (value.startsWith('/')) return true;
     return uri != null &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
         uri.host.isNotEmpty;
@@ -544,12 +564,18 @@ class ProductApplicationFlow {
       return;
     }
     if (target.startsWith('/')) {
-      await AppNavigator.toWebPath<void>(path: target);
+      await AppNavigator.toWebPath<void>(
+        path: target,
+        removeWebViewPages: true,
+      );
       return;
     }
     final uri = AppNavigator.webViewUri(target);
     if (uri != null) {
-      await AppNavigator.toWebView<void>(url: uri.toString());
+      await AppNavigator.toWebView<void>(
+        url: uri.toString(),
+        removeWebViewPages: true,
+      );
       return;
     }
     await AppNavigator.openDeepLink(

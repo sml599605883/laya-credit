@@ -239,10 +239,18 @@ class _Greeting extends StatelessWidget {
         ),
         Align(
           alignment: Alignment.centerRight,
-          child: Image.asset(
-            AppAssets.homeMessage,
-            width: layout.px(24),
-            height: layout.px(24),
+          child: GestureDetector(
+            key: const Key('home-customer-service'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => AppNavigator.toWebPath<void>(
+              path: AppNavigator.customerServicePath,
+              title: 'Customer Service',
+            ),
+            child: Image.asset(
+              AppAssets.homeMessage,
+              width: layout.px(24),
+              height: layout.px(24),
+            ),
           ),
         ),
       ],
@@ -1041,7 +1049,7 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
     // 文档场景：有登录态且跳转链接不为空时才上报点击记录。
     final target = banner.jumpUrl.trim();
     if (target.isEmpty) {
-      ToastHelper.showMessage('Link is unavailable');
+      // 跳转链接为空时静默返回：不弹 toast，也不上报点击记录。
       return;
     }
 

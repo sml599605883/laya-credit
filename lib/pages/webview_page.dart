@@ -287,10 +287,19 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
             );
           },
       openWebView: (url) async {
-        unawaited(AppNavigator.toWebView<void>(url: url));
+        // H5 通过桥接打开新的 H5 页面（订单详情 → 订单详情等）：移除来源 H5，
+        // 避免退出新页面时又回到旧 H5（对齐 peso_shield 的 `openH5WebView`）。
+        unawaited(
+          AppNavigator.toWebView<void>(url: url, removeWebViewPages: true),
+        );
       },
       openWebPath: (path) async {
-        unawaited(AppNavigator.toWebPath<void>(path: path));
+        unawaited(
+          AppNavigator.toWebPath<void>(
+            path: path,
+            removeWebViewPages: true,
+          ),
+        );
       },
       navigateInternal: _navigateInternal,
       openExternal: _openExternal,
@@ -694,6 +703,10 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
         useShouldOverrideUrlLoading: true,
         useHybridComposition: true,
         isInspectable: true,
+        // 禁用 WKWebView 自带的边缘滑动前进 / 后退手势，让 iOS 的侧滑返回
+        // 统一走 Flutter 的 PopScope → _handleBack（单次历史回退），避免
+        // WKWebView 原生手势与 Flutter 返回栈各退各的、层级不一致。
+        allowsBackForwardNavigationGestures: false,
         disableContextMenu: shouldDisableWebViewContextMenu(
           defaultTargetPlatform,
         ),

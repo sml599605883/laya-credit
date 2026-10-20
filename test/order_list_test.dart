@@ -7,12 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:laya_credit/core/navigation/app_deep_link.dart';
 import 'package:laya_credit/core/navigation/app_navigator.dart';
+import 'package:laya_credit/core/navigation/app_route_observer.dart';
 import 'package:laya_credit/core/navigation/app_route_generator.dart';
 import 'package:laya_credit/core/navigation/app_routes.dart';
 import 'package:laya_credit/core/network/api_response.dart';
 import 'package:laya_credit/core/product/recredit_polling_coordinator.dart';
 import 'package:laya_credit/data/models/order_list_data.dart';
+import 'package:laya_credit/data/models/product_apply_result.dart';
+import 'package:laya_credit/data/models/product_detail.dart';
+import 'package:laya_credit/data/models/recredit_result.dart';
 import 'package:laya_credit/data/repositories/order_repository.dart';
+import 'package:laya_credit/data/repositories/product_repository.dart';
 import 'package:laya_credit/pages/order_list_page.dart';
 import 'package:laya_credit/pages/recredit_page.dart';
 import 'package:laya_credit/pages/webview_page.dart';
@@ -94,6 +99,51 @@ class _FakeOrderRepository implements OrderRepository {
         totalPages: pages.isEmpty ? 1 : pages.length,
       ),
     );
+  }
+}
+
+/// 只关心产品详情请求是否被打到、并返回业务失败让流程在此结束，
+/// 其余产品接口本用例不触发。
+class _FakeProductRepository implements ProductRepository {
+  final List<String> detailProductIds = [];
+
+  @override
+  Future<ApiResponse<ProductApplyResult>> applyProduct({
+    required String productId,
+    int apiRemind = 0,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ApiResponse<ProductDetail>> getProductDetail({
+    required String productId,
+  }) async {
+    detailProductIds.add(productId);
+    return const ApiResponse(
+      code: 500,
+      message: 'Server error',
+      data: ProductDetail(
+        resultCode: 0,
+        basicInfo: ProductBasicInfo(),
+        nextStep: ProductNextStep(),
+      ),
+    );
+  }
+
+  @override
+  Future<ApiResponse<RecreditResult>> recredit() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ApiResponse<String>> getOrderPushUrl({
+    required String orderNo,
+    required String amount,
+    required String loanTerm,
+    required String termType,
+  }) {
+    throw UnimplementedError();
   }
 }
 
@@ -400,6 +450,7 @@ void main() {
         repository,
         child: MaterialApp(
           navigatorKey: AppNavigator.navigatorKey,
+          navigatorObservers: [appRouteObserver],
           onGenerateRoute: AppRouteGenerator.onGenerateRoute,
           builder: BotToastInit(),
           home: const OrderListPage(),
@@ -522,6 +573,107 @@ void main() {
       expect(find.text('Order link is unavailable'), findsNothing);
     });
 
+    testWidgets('进入准入时订单列表不立即刷新，认证页 pop 后刷新一次', (tester) async {
+      final repository = _FakeOrderRepository([
+        [_item(productId: '77', cardTarget: '', legacyTarget: '')],
+      ]);
+      final applies = <(String, int)>[];
+      final container = ProviderContainer(
+        overrides: [
+          orderRepositoryProvider.overrideWith((ref) async => repository),
+          productDeepLinkAdmissionProvider.overrideWith(
+            (ref) async => (productId, apiRemind) async {
+              applies.add((productId, apiRemind));
+              // 模拟准入流程推进到认证页。
+              AppNavigator.navigatorKey.currentState?.push(
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/certification'),
+                  builder: (_) => const Scaffold(body: Text('Certification')),
+                ),
+              );
+            },
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final previousContainer = AppNavigator.providerContainer;
+      AppNavigator.providerContainer = container;
+      addTearDown(() {
+        if (identical(AppNavigator.providerContainer, container)) {
+          AppNavigator.providerContainer = previousContainer;
+        }
+      });
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            navigatorKey: AppNavigator.navigatorKey,
+            navigatorObservers: [appRouteObserver],
+            onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+            builder: BotToastInit(),
+            home: const OrderListPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.requestedStatuses, ['4']);
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump();
+
+      // 点击后先进入认证页，列表不能在这里抢跑刷新。
+      expect(applies, [('77', 0)]);
+      expect(find.text('Certification'), findsOneWidget);
+      expect(repository.requestedStatuses, ['4']);
+
+      // 从认证页返回列表时才刷新一次。
+      AppNavigator.pop<void>();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Certification'), findsNothing);
+      expect(repository.requestedStatuses, ['4', '4']);
+    });
+
+    testWidgets('认证页 pop 返回订单列表只刷新一次', (tester) async {
+      final repository = _FakeOrderRepository([
+        [_item()],
+      ]);
+      await _pumpWithRepository(
+        tester,
+        repository,
+        child: MaterialApp(
+          navigatorKey: AppNavigator.navigatorKey,
+          navigatorObservers: [appRouteObserver],
+          onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+          builder: BotToastInit(),
+          home: const OrderListPage(),
+        ),
+      );
+      expect(repository.requestedStatuses, ['4']);
+
+      AppNavigator.navigatorKey.currentState?.push(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/certification'),
+          builder: (_) => const Scaffold(body: Text('Certification')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Certification'), findsOneWidget);
+      expect(repository.requestedStatuses, ['4']);
+
+      AppNavigator.pop<void>();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('Certification'), findsNothing);
+      expect(repository.requestedStatuses, ['4', '4']);
+    });
+
     testWidgets('卡片原生深链目标分发到等待授信页', (tester) async {
       final container = ProviderContainer(
         overrides: [
@@ -567,6 +719,100 @@ void main() {
 
       final page = tester.widget<RecreditPage>(find.byType(RecreditPage));
       expect(page.productId, 'P-3');
+    });
+
+    testWidgets('卡片下发准入深链时走产品准入而不是弹未知地址提示', (tester) async {
+      final applies = <(String, int)>[];
+      final container = ProviderContainer(
+        overrides: [
+          orderRepositoryProvider.overrideWith(
+            (ref) async => _FakeOrderRepository([
+              [
+                _item(
+                  cardTarget: 'ph://laya-credit/ios/Isaria'
+                      '?tartarizing=77&dirdum=8',
+                ),
+              ],
+            ]),
+          ),
+          productDeepLinkAdmissionProvider.overrideWith(
+            (ref) async =>
+                (productId, apiRemind) async =>
+                    applies.add((productId, apiRemind)),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final previousContainer = AppNavigator.providerContainer;
+      AppNavigator.providerContainer = container;
+      addTearDown(() {
+        if (identical(AppNavigator.providerContainer, container)) {
+          AppNavigator.providerContainer = previousContainer;
+        }
+      });
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            navigatorKey: AppNavigator.navigatorKey,
+            onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+            builder: BotToastInit(),
+            home: const OrderListPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(applies, [('77', 8)]);
+      expect(find.textContaining('Order target:'), findsNothing);
+    });
+
+    testWidgets('卡片下发产品详情深链时继续认证流程', (tester) async {
+      final productRepository = _FakeProductRepository();
+      final container = ProviderContainer(
+        overrides: [
+          orderRepositoryProvider.overrideWith(
+            (ref) async => _FakeOrderRepository([
+              [
+                _item(
+                  cardTarget:
+                      'ph://laya-credit/ios/UnworshippingPigeonberries'
+                      '?tartarizing=88',
+                ),
+              ],
+            ]),
+          ),
+          productRepositoryProvider.overrideWith(
+            (ref) async => productRepository,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            navigatorKey: AppNavigator.navigatorKey,
+            onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+            builder: BotToastInit(),
+            home: const OrderListPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(productRepository.detailProductIds, ['88']);
+      expect(find.textContaining('Order target:'), findsNothing);
     });
   });
 
