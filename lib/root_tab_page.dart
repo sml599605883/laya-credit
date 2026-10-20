@@ -195,6 +195,10 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
     if (_requiresLogin(index) && !ref.read(userSessionProvider).isLoggedIn) {
       final loggedIn = await _openLogin();
       if (!loggedIn || !mounted) return;
+      // 从受保护 Tab 拉起登录时，登录页关闭后统一回首页；不要继续落到
+      // 用户刚才点击的 Progress / 个人中心，避免不同入口登录后的落点不一致。
+      _returnToHome();
+      return;
     }
 
     setState(() => _currentIndex = index);

@@ -2450,6 +2450,48 @@ void main() {
     expect(find.text('Please enter mobile number'), findsOneWidget);
   });
 
+  testWidgets('从 Progress 登录成功后统一回到首页', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: _StubAuthRepository(),
+    );
+
+    await tester.tap(find.byKey(const Key('tab-progress')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '917123456789',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await _pumpFrames(tester);
+
+    expect(find.byType(LoginPage), findsNothing);
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 0);
+    expect(find.byType(HomePage), findsOneWidget);
+  });
+
+  testWidgets('从个人中心登录成功后统一回到首页', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: _StubAuthRepository(),
+    );
+
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '917123456789',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await _pumpFrames(tester);
+
+    expect(find.byType(LoginPage), findsNothing);
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 0);
+    expect(find.byType(HomePage), findsOneWidget);
+  });
+
   testWidgets('H5 会话失效会清掉旧页面，登录后直接回到首页', (tester) async {
     final productRepository = _StubProductRepository(
       applyResult: const ProductApplyResult(
