@@ -642,9 +642,9 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
       },
       child: Scaffold(
         backgroundColor: AppColors.surfaceMint,
-        // 第三方还款页等 H5 的输入框依赖容器让出键盘高度；关闭后页面会收缩，
-        // WebView 内部聚焦的元素才能自动滚到键盘上方。
-        resizeToAvoidBottomInset: true,
+        // 交给 WKWebView 原生处理键盘避让：Flutter 侧再压缩一次会与 WebKit
+        // 自身的输入框滚动互相打断，最终表现为页面抖动且键盘遮住输入框。
+        resizeToAvoidBottomInset: false,
         body: Column(
           children: [
             BackNavBar(layout: layout, title: _title, onBack: _handleBack),

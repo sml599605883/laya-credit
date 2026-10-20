@@ -381,7 +381,7 @@ void main() {
     });
   });
 
-  testWidgets('WebView 容器启用键盘避让，第三方还款输入框不会被遮挡', (tester) async {
+  testWidgets('WebView 交给 WKWebView 处理键盘，不让 Flutter 二次收缩页面', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
@@ -399,6 +399,6 @@ void main() {
         matching: find.byType(Scaffold),
       ),
     );
-    expect(scaffold.resizeToAvoidBottomInset, isTrue);
+    expect(scaffold.resizeToAvoidBottomInset, isFalse);
   });
 }

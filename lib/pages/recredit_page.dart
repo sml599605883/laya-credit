@@ -72,22 +72,26 @@ class _RecreditPageState extends ConsumerState<RecreditPage> {
       body: SingleChildScrollView(
         // 设计稿内容区上边距 290pt：整块内容（209pt 高）在 812pt 画布上略高于中线。
         padding: layout.edgeInsets(top: 290, bottom: 313),
-        child: Column(
-          children: [
-            Image.asset(
-              AppAssets.recreditIllustration,
-              key: const Key('recredit-illustration'),
-              // 设计稿 `box_1` 为 138x102；提供的切图是 120x102，
-              // 按设计稿宽度铺开，避免整块内容比蓝稿窄 18pt。
-              width: layout.px(138),
-              height: layout.px(102),
-              fit: BoxFit.contain,
-            ),
-            SizedBox(height: layout.px(18)),
-            _RecreditMessage(layout: layout),
-            SizedBox(height: layout.px(11)),
-            _RecreditProgress(layout: layout, progress: _progress),
-          ],
+        // SingleChildScrollView 在纵轴无界时，Column 会按最宽子项收缩到左侧。
+        // 这里显式撑满横向宽度并按设计稿居中，避免插画、文案和进度槽整体左偏。
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Column(
+            children: [
+              Image.asset(
+                AppAssets.recreditIllustration,
+                key: const Key('recredit-illustration'),
+                // 设计稿 `box_1` 为 138x102。
+                width: layout.px(138),
+                height: layout.px(102),
+                fit: BoxFit.fill,
+              ),
+              SizedBox(height: layout.px(18)),
+              _RecreditMessage(layout: layout),
+              SizedBox(height: layout.px(11)),
+              _RecreditProgress(layout: layout, progress: _progress),
+            ],
+          ),
         ),
       ),
     );

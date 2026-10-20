@@ -10,7 +10,6 @@ import '../core/navigation/navigation.dart';
 import '../core/network/api_exception.dart';
 import '../core/report/report.dart';
 import '../core/ui/toast_helper.dart';
-import '../providers/home_provider.dart';
 import '../providers/login_provider.dart';
 import '../providers/session_provider.dart';
 import '../theme/theme.dart';
@@ -279,8 +278,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         );
       }
 
-      // 登录后首页数据（额度/订单）会变，先刷一遍。
-      unawaited(ref.read(homeDataProvider.notifier).refresh());
+      // 登录页关闭后由根 Tab 的路由返回刷新统一处理；这里再刷一次会与
+      // didPopNext 前后脚重叠，导致首页接口重复调用。
       final onLoginSuccess = widget.onLoginSuccess;
       if (onLoginSuccess != null) await onLoginSuccess();
       if (mounted) AppNavigator.pop(true);

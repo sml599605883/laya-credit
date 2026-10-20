@@ -235,6 +235,12 @@ void main() {
       await pumpPage(tester, 'P-1');
 
       expect(find.byKey(const Key('recredit-illustration')), findsOneWidget);
+      expect(
+        tester
+            .widget<Image>(find.byKey(const Key('recredit-illustration')))
+            .fit,
+        BoxFit.fill,
+      );
       final scale = AppLayout.of(tester.element(find.byType(RecreditPage)))
           .scale;
       expect(
@@ -258,6 +264,33 @@ void main() {
         AppColors.recreditProgressText,
       );
       expect(find.text('0%'), findsOneWidget);
+    });
+
+    testWidgets('插画、文案与进度槽在设计宽度内水平居中', (tester) async {
+      await pumpPage(tester, 'P-1');
+
+      final screenWidth =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+      final centerX = screenWidth / 2;
+      expect(
+        tester.getCenter(find.byKey(const Key('recredit-illustration'))).dx,
+        closeTo(centerX, 0.1),
+      );
+      expect(
+        tester
+            .getCenter(
+              find.text(
+                'Calculating your credit limit, just 30 seconds',
+                findRichText: true,
+              ),
+            )
+            .dx,
+        closeTo(centerX, 0.1),
+      );
+      expect(
+        tester.getCenter(find.byKey(const Key('recredit-progress-track'))).dx,
+        closeTo(centerX, 0.1),
+      );
     });
 
     testWidgets('进度动画会向上推进且不超过 99%', (tester) async {

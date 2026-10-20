@@ -35,7 +35,7 @@ final recreditPollingCoordinatorProvider = Provider<RecreditPollingCoordinator>(
       },
       ensureLocationAccess: () async {
         final flow = await ref.read(productApplicationFlowProvider.future);
-        return flow.ensureLocationAccess();
+        return flow.ensureLocationAccess(allowDismissWithoutPermission: false);
       },
       logger: debugPrint,
     );

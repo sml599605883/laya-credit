@@ -72,7 +72,14 @@ class ProductApplicationFlow {
       PermissionCoordinator.instance.requestCertificationLocation();
 
   /// 授信完成后的自动准入也复用同一套定位检查，避免系统权限弹窗和业务准入并发。
-  Future<bool> ensureLocationAccess() => _ensureLocationAccess();
+  ///
+  /// 自动准入没有用户再次点击的入口，因此权限不可用时不能在用户点 `Later`
+  /// 后放行；普通「立即申请」仍沿用 Dali 的宽松口径，避免误伤已有申请入口。
+  Future<bool> ensureLocationAccess({
+    bool allowDismissWithoutPermission = true,
+  }) => _ensureLocationAccess(
+    allowDismissWithoutPermission: allowDismissWithoutPermission,
+  );
 
   /// 执行产品申请流程。
   ///
@@ -158,7 +165,9 @@ class ProductApplicationFlow {
   ///
   /// 返回 false 表示中止本次申请：本次拒绝授权、服务关闭或永久拒绝后选择
   /// 去设置。用户取消「去设置」引导时按 dali 口径放行，保证不误伤申请。
-  Future<bool> _ensureLocationAccess() async {
+  Future<bool> _ensureLocationAccess({
+    bool allowDismissWithoutPermission = true,
+  }) async {
     final decision = await locationChecker();
     if (decision == CertificationLocationDecision.granted) return true;
     if (decision == CertificationLocationDecision.denied) return false;
@@ -168,7 +177,7 @@ class ProductApplicationFlow {
       await openAppSettings();
       return false;
     }
-    return true;
+    return allowDismissWithoutPermission;
   }
 
   /// 定位不可用时的系统设置引导框（标题 / 按钮 / 文案取设计稿）。
@@ -468,38 +477,49 @@ class ProductApplicationFlow {
   /// 在这里补后续动作。
   Future<void> _openJump(String target, int? jumpType, String productId) async {
     if (_isWebJump(target, jumpType)) {
-      await _openWebPage(target);
+      // 跳转页面是准入流程的终点，不等待目标页关闭，否则 H5 内的下一次
+      // 产品准入会一直命中外层防连点锁。
+      _dispatchPage(_openWebPage(target));
       return;
     }
 
-    await AppNavigator.openDeepLink(
-      const AppDeepLinkParser().parse(target),
-      onUnhandled: (link) async {
-        switch (link.kind) {
-          case AppDeepLinkKind.productDetail:
-            await continueProductDetailFlow(
-              link.productId.isNotEmpty ? link.productId : productId,
-            );
-          case AppDeepLinkKind.admission:
-            await applyProductFromDeepLink(
-              productId: link.productId.isNotEmpty ? link.productId : productId,
-              apiRemind: link.apiRemind,
-            );
-          case AppDeepLinkKind.settings:
-            // TODO(页面): 设置页尚未搭建。
-            ToastHelper.showMessage('Settings page is not available yet');
-          case AppDeepLinkKind.unsupported:
-            ToastHelper.showError('Invalid link');
-          case AppDeepLinkKind.webView:
-          case AppDeepLinkKind.home:
-          case AppDeepLinkKind.login:
-          case AppDeepLinkKind.order:
-          case AppDeepLinkKind.recredit:
-            // 已由 AppNavigator.openDeepLink 处理，不会回调到这里。
-            break;
-        }
-      },
+    _dispatchPage(
+      AppNavigator.openDeepLink(
+        const AppDeepLinkParser().parse(target),
+        onUnhandled: (link) async {
+          switch (link.kind) {
+            case AppDeepLinkKind.productDetail:
+              await continueProductDetailFlow(
+                link.productId.isNotEmpty ? link.productId : productId,
+              );
+            case AppDeepLinkKind.admission:
+              await applyProductFromDeepLink(
+                productId: link.productId.isNotEmpty
+                    ? link.productId
+                    : productId,
+                apiRemind: link.apiRemind,
+              );
+            case AppDeepLinkKind.settings:
+              // TODO(页面): 设置页尚未搭建。
+              ToastHelper.showMessage('Settings page is not available yet');
+            case AppDeepLinkKind.unsupported:
+              ToastHelper.showError('Invalid link');
+            case AppDeepLinkKind.webView:
+            case AppDeepLinkKind.home:
+            case AppDeepLinkKind.login:
+            case AppDeepLinkKind.order:
+            case AppDeepLinkKind.recredit:
+              // 已由 AppNavigator.openDeepLink 处理，不会回调到这里。
+              break;
+          }
+        },
+      ),
     );
+  }
+
+  /// 页面跳转不阻塞准入流程的完成；异常由目标页自己的错误态处理。
+  void _dispatchPage(Future<void> navigation) {
+    unawaited(navigation.catchError((Object _) {}));
   }
 
   /// 是否应按 H5 打开。

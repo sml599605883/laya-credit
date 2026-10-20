@@ -118,10 +118,14 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
                                     child: _OrderCard(
                                       layout: layout,
                                       item: item,
-                                      onTap: () =>
-                                          _openTarget(item.detailTarget),
-                                      onAction: () =>
-                                          _openTarget(item.actionTarget),
+                                      onTap: () => _openTarget(
+                                        item.detailTarget,
+                                        productId: item.productId,
+                                      ),
+                                      onAction: () => _openTarget(
+                                        item.actionTarget,
+                                        productId: item.productId,
+                                      ),
                                     ),
                                   ),
                                 if (data.isLoadingMore || data.loadMoreFailed)
@@ -181,9 +185,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   /// 绝对地址直接进 WebView，相对地址拼 H5 站点根地址；剩下的原生深链
   /// （`ph://laya-credit/ios/<别名>`）交给统一分发器，订单卡片可能直接下发
   /// 重新授信等待页这类原生目标。
-  Future<void> _openTarget(String target) async {
+  Future<void> _openTarget(String target, {String productId = ''}) async {
     final value = target.trim();
     if (value.isEmpty) {
+      // 订单列表卡可能只下发产品信息、没有详情地址；此时按产品准入处理，
+      // 不能把正常业务场景当成错误 URL。
+      if (productId.trim().isNotEmpty) {
+        await AppNavigator.applyProduct(productId: productId);
+        await _refreshAfterTargetReturns();
+        return;
+      }
       ToastHelper.showError('Order link is unavailable');
       return;
     }
@@ -191,12 +202,12 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     final uri = AppNavigator.webViewUri(value);
     if (uri != null) {
       await AppNavigator.toWebView<void>(url: uri.toString());
-      _refreshAfterTargetReturns();
+      await _refreshAfterTargetReturns();
       return;
     }
     if (value.startsWith('/')) {
       await AppNavigator.toWebPath<void>(path: value);
-      _refreshAfterTargetReturns();
+      await _refreshAfterTargetReturns();
       return;
     }
 
@@ -207,16 +218,24 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
         onUnhandled: (unhandled) =>
             ToastHelper.showMessage('Order target: ${unhandled.raw}'),
       );
-      _refreshAfterTargetReturns();
       return;
     }
     ToastHelper.showMessage('Order target: $value');
   }
 
   /// 订单详情 / 还款页返回列表时重新拉当前筛选，避免展示离开前的旧状态。
-  void _refreshAfterTargetReturns() {
+  Future<void> _refreshAfterTargetReturns() async {
     if (!mounted) return;
-    ref.invalidate(orderListProvider(_status.value));
+    final provider = orderListProvider(_status.value);
+    final closeLoading = ToastHelper.showLoading();
+    ref.invalidate(provider);
+    try {
+      await ref.read(provider.future);
+    } catch (_) {
+      // ErrorView 会展示接口错误，这里只负责收起刷新遮罩。
+    } finally {
+      closeLoading();
+    }
   }
 }
 

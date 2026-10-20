@@ -13,13 +13,13 @@ void main() {
   setUp(ReportService.reset);
   tearDown(ReportService.reset);
 
-  test('Apple 推送 token 为空时照常上报', () async {
+  test('Apple 推送 token 仍为空时跳过，等待真值事件上报', () async {
     final repository = _RecordingRepository();
     final service = _service(repository, pushToken: '');
 
     await service.reportAppleToken();
 
-    expect(repository.appleTokens, ['']);
+    expect(repository.appleTokens, isEmpty);
   });
 
   test('同一 token 进程内只成功上报一次，登录成功强制补报', () async {

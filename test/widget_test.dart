@@ -2034,6 +2034,44 @@ void main() {
     expect(productRepository.applyCalls, isEmpty);
   });
 
+  testWidgets('自动重走准入时定位权限未授予不能点 Later 放行', (tester) async {
+    final previousLocationChecker = ProductApplicationFlow.locationChecker;
+    addTearDown(
+      () => ProductApplicationFlow.locationChecker = previousLocationChecker,
+    );
+    ProductApplicationFlow.locationChecker = () async =>
+        CertificationLocationDecision.settingsRequired;
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final flow = ProductApplicationFlow(
+      repository: _StubProductRepository(),
+      isLoggedIn: () => true,
+      sessionStore: container.read(sessionStoreProvider),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          navigatorKey: AppNavigator.navigatorKey,
+          home: const Scaffold(body: SizedBox.shrink()),
+        ),
+      ),
+    );
+
+    final granted = flow.ensureLocationAccess(
+      allowDismissWithoutPermission: false,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Location Access Needed'), findsOneWidget);
+
+    await tester.tap(find.text('Later'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(await granted, isFalse);
+  });
+
   testWidgets('定位授权弹窗关闭时的恢复不刷新首页', (tester) async {
     final repository = _StubAppRepository();
     final coordinator = _StubPermissionCoordinator()..requestingLocation = true;
@@ -2452,6 +2490,116 @@ void main() {
     expect(find.byType(LoginPage), findsNothing);
     expect(find.byType(WebViewPage), findsNothing);
     expect(find.byType(HomePage), findsOneWidget);
+  });
+
+  testWidgets('H5 会话失效后重新登录也不会回到旧页面', (tester) async {
+    final auth = _StubAuthRepository();
+    final productRepository = _StubProductRepository(
+      applyResult: const ProductApplyResult(
+        statusCode: 302,
+        jumpUrl: 'https://h5.example.com/expired',
+        jumpType: 1,
+        message: '',
+      ),
+    );
+    late ProviderContainer container;
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: auth,
+      productRepository: productRepository,
+      setUp: (value) async {
+        container = value;
+        await container
+            .read(userSessionProvider.notifier)
+            .setSession(token: 'token', userId: '1', phone: '855123456');
+      },
+    );
+
+    final flow = await containerFlow(tester);
+    unawaited(flow.applyProduct(productId: '7'));
+    await _pumpFrames(tester);
+    expect(find.byType(WebViewPage), findsOneWidget);
+
+    await container.read(userSessionProvider.notifier).clearSession();
+    container.read(sessionExpirySignalProvider).notifyExpired();
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginPage), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '917123456789',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await _pumpFrames(tester);
+
+    expect(auth.loginCalls, 1);
+    expect(find.byType(LoginPage), findsNothing);
+    expect(find.byType(WebViewPage), findsNothing);
+    expect(find.byType(HomePage), findsOneWidget);
+  });
+
+  testWidgets('账户列表提交成功直接跳订单页时不补刷首页', (tester) async {
+    final repository = _StubAppRepository();
+    await _pumpApp(
+      tester,
+      repository: repository,
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+    expect(repository.homeCalls, 1);
+
+    AppNavigator.push(
+      AppRoutes.loanConfirm,
+      arguments: const LoanConfirmPageArguments(
+        productId: '7',
+        orderNo: 'ORDER-1',
+      ),
+    );
+    await tester.pumpAndSettle();
+    AppNavigator.pop<LoanConfirmResult>(
+      const LoanConfirmAccountChanged('https://h5.example.com/order/1'),
+    );
+    unawaited(
+      AppNavigator.toWebView<void>(url: 'https://h5.example.com/order/1'),
+    );
+    await _pumpFrames(tester);
+
+    expect(find.byType(WebViewPage), findsOneWidget);
+    expect(repository.homeCalls, 1);
+  });
+
+  testWidgets('新增绑卡提交成功直接跳订单页时不补刷首页', (tester) async {
+    final repository = _StubAppRepository();
+    await _pumpApp(
+      tester,
+      repository: repository,
+      certificationRepository: _StubCertificationRepository(),
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'token', userId: '1', phone: '855123456'),
+    );
+    expect(repository.homeCalls, 1);
+
+    AppNavigator.push(
+      AppRoutes.bindCard,
+      arguments: const BindCardPageArguments(
+        productId: '7',
+        orderNo: 'ORDER-1',
+        isAccountChange: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    AppNavigator.pop<String>('https://h5.example.com/order/1');
+    unawaited(
+      AppNavigator.toWebView<void>(url: 'https://h5.example.com/order/1'),
+    );
+    await _pumpFrames(tester);
+
+    expect(find.byType(WebViewPage), findsOneWidget);
+    expect(repository.homeCalls, 1);
   });
 
   testWidgets('切到进度 Tab 会刷新首页数据源', (tester) async {
@@ -3761,11 +3909,15 @@ void main() {
     );
 
     final flow = await containerFlow(tester);
-    unawaited(flow.applyProduct(productId: '7'));
+    var completed = false;
+    unawaited(flow.applyProduct(productId: '7').then((_) => completed = true));
     await _pumpFrames(tester);
 
     expect(productRepository.detailCalls, 0);
     expect(find.byType(WebViewPage), findsOneWidget);
+    // 跳转页是准入流程终点：H5 仍在前台时也要释放流程锁，
+    // 否则 H5 内下一次产品准入会被 _isProcessing 静默吞掉。
+    expect(completed, isTrue);
   });
 
   testWidgets('准入成功下发相对 URL 且未给跳转类型时仍打开 H5', (tester) async {

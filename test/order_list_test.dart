@@ -17,12 +17,14 @@ import 'package:laya_credit/pages/order_list_page.dart';
 import 'package:laya_credit/pages/recredit_page.dart';
 import 'package:laya_credit/pages/webview_page.dart';
 import 'package:laya_credit/providers/order_list_provider.dart';
+import 'package:laya_credit/providers/product_flow_provider.dart';
 import 'package:laya_credit/providers/recredit_provider.dart';
 import 'package:laya_credit/providers/repository_provider.dart';
 import 'package:laya_credit/theme/app_colors.dart';
 
 OrderListItem _item({
   int orderId = 4,
+  String productId = '1',
   String productName = 'PG Finance',
   int statusCode = OrderStatusCode.pendingRepay,
   String statusText = 'Outstanding',
@@ -33,7 +35,7 @@ OrderListItem _item({
   return OrderListItem(
     orderId: orderId,
     orderNo: '672024120400405591971039',
-    productId: '1',
+    productId: productId,
     productName: productName,
     productLogo: '',
     statusCode: statusCode,
@@ -62,6 +64,8 @@ class _FakeOrderRepository implements OrderRepository {
 
   final List<int> requestedPages = [];
   final List<String> requestedStatuses = [];
+  int _firstPageRequests = 0;
+  Completer<void>? blockNextFirstPage;
 
   @override
   Future<ApiResponse<OrderListResult>> getOrderList({
@@ -71,6 +75,10 @@ class _FakeOrderRepository implements OrderRepository {
   }) async {
     requestedPages.add(page);
     requestedStatuses.add(status);
+    if (page == 1 && ++_firstPageRequests > 1) {
+      final gate = blockNextFirstPage;
+      if (gate != null) await gate.future;
+    }
     if (failPages.contains(page)) {
       return const ApiResponse(
         code: 500,
@@ -381,16 +389,19 @@ void main() {
       expect(repository.requestedStatuses, ['4', '4']);
     });
 
-    testWidgets('从订单详情返回列表时重新请求当前筛选', (tester) async {
+    testWidgets('从订单详情返回列表时显示 loading 并等待刷新接口完成', (tester) async {
       final repository = _FakeOrderRepository([
         [_item(cardTarget: 'https://h5.example.com/order/detail')],
       ]);
+      final refreshGate = Completer<void>();
+      repository.blockNextFirstPage = refreshGate;
       await _pumpWithRepository(
         tester,
         repository,
         child: MaterialApp(
           navigatorKey: AppNavigator.navigatorKey,
           onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+          builder: BotToastInit(),
           home: const OrderListPage(),
         ),
       );
@@ -402,10 +413,17 @@ void main() {
       expect(find.byType(WebViewPage), findsOneWidget);
 
       AppNavigator.pop<void>();
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(WebViewPage), findsNothing);
       expect(repository.requestedStatuses, ['4', '4']);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      refreshGate.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
     testWidgets('退出后再次进入订单列表会重新请求当前筛选', (tester) async {
@@ -445,7 +463,7 @@ void main() {
       await _pumpWithRepository(
         tester,
         _FakeOrderRepository([
-          [_item(cardTarget: '', legacyTarget: '')],
+          [_item(productId: '', cardTarget: '', legacyTarget: '')],
         ]),
         child: MaterialApp(
           builder: BotToastInit(),
@@ -458,6 +476,50 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
 
       expect(find.text('Order link is unavailable'), findsOneWidget);
+    });
+
+    testWidgets('卡片地址为空但下发产品 id 时改走产品准入', (tester) async {
+      final applies = <(String, int)>[];
+      final container = ProviderContainer(
+        overrides: [
+          orderRepositoryProvider.overrideWith(
+            (ref) async => _FakeOrderRepository([
+              [_item(productId: '77', cardTarget: '', legacyTarget: '')],
+            ]),
+          ),
+          productDeepLinkAdmissionProvider.overrideWith(
+            (ref) async =>
+                (productId, apiRemind) async =>
+                    applies.add((productId, apiRemind)),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final previousContainer = AppNavigator.providerContainer;
+      AppNavigator.providerContainer = container;
+      addTearDown(() {
+        if (identical(AppNavigator.providerContainer, container)) {
+          AppNavigator.providerContainer = previousContainer;
+        }
+      });
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            builder: BotToastInit(),
+            home: const OrderListPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('PG Finance'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(applies, [('77', 0)]);
+      expect(find.text('Order link is unavailable'), findsNothing);
     });
 
     testWidgets('卡片原生深链目标分发到等待授信页', (tester) async {
@@ -492,6 +554,7 @@ void main() {
           child: MaterialApp(
             navigatorKey: AppNavigator.navigatorKey,
             onGenerateRoute: AppRouteGenerator.onGenerateRoute,
+            builder: BotToastInit(),
             home: const OrderListPage(),
           ),
         ),

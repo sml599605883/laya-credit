@@ -49,6 +49,11 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// （对齐 dali_cash 的 `_ignoreLocationPermissionResume`）。
   bool _ignoreLocationPermissionResume = false;
 
+  /// 路由返回后延迟到下一帧再刷新：账户列表 / 绑卡页提交成功时，返回根页
+  /// 的下一拍会立刻进入新的订单 WebView。此时根页并未真正可见，不能多打一次
+  /// 首页接口；等帧末确认根页仍在栈顶后再刷新。
+  bool _returnRefreshScheduled = false;
+
   /// 首页允许游客浏览，其余 Tab 需要登录。
   static bool _requiresLogin(int index) => index != 0;
 
@@ -117,7 +122,17 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// 从子页面（认证流程 / 产品详情等）返回根容器时刷新首页数据，
   /// 对齐 dali_cash 的 `onRouteChanged`。
   @override
-  void didPopNext() => _refreshHomeData();
+  void didPopNext() => _scheduleRefreshAfterReturn();
+
+  void _scheduleRefreshAfterReturn() {
+    if (_returnRefreshScheduled) return;
+    _returnRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _returnRefreshScheduled = false;
+      if (!mounted || !_isTopRoute) return;
+      _refreshHomeData();
+    });
+  }
 
   /// 本路由是否处于最上层。
   bool get _isTopRoute => ModalRoute.of(context)?.isCurrent ?? true;

@@ -325,8 +325,8 @@ class ReportService {
   ///
   /// 对齐 peso_shield：同一 token 在一个 App 进程内只成功上报一次；
   /// 登录成功通过 [force] 再补报一次。原生事件、启动补报和并发调用共享去重状态。
-  /// token 为空也照常上报（原生还没拿到 deviceToken 时同样发一次），只是先等
-  /// [appleTokenEmptyTokenDelay] 再读一次，别让「空值 + 真值」在一次突发里各报一次。
+  /// token 为空时先等 [appleTokenEmptyTokenDelay] 再读一次；仍为空则跳过，
+  /// 由后续原生 `push_token` 事件上报真值，避免一次授权产生「空值 + 真值」两条记录。
   Future<void> reportAppleToken({bool force = false}) async {
     String? reserved;
     try {
@@ -339,6 +339,7 @@ class ReportService {
           reserved = latest;
         }
       }
+      if (reserved.isEmpty) return;
 
       if ((!force && _reportedAppleTokens.contains(reserved)) ||
           !_reportingAppleTokens.add(reserved)) {
