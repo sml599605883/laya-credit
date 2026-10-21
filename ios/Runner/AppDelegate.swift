@@ -20,6 +20,12 @@ import UserNotifications
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    // ATT 可能在系统设置中变化。重新激活时主动同步一次状态，Flutter 侧据此补报。
+    ReportRegistrar.shared.publishTrackingStatus()
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 

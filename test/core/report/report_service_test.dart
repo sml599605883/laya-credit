@@ -10,6 +10,8 @@ import 'package:laya_credit/core/report/report.dart';
 import 'package:laya_credit/data/repositories/report_repository.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(ReportService.reset);
   tearDown(ReportService.reset);
 
@@ -81,6 +83,72 @@ void main() {
     events.add(const {'type': 'push_token', 'token': 'token-after-startup'});
     await pumpEventQueue();
     expect(repository.appleTokens, ['token-latest']);
+    await service.dispose();
+  });
+
+  test('ATT 状态延迟变化后由 tracking_status_changed 补报 Market', () async {
+    final repository = _RecordingRepository();
+    final reportEvents = StreamController<ReportEvent>.broadcast();
+    addTearDown(reportEvents.close);
+    final bridge = _StubReportBridge(
+      trackingStatus: 'not_determined',
+      idfv: 'idfv-1',
+    );
+    final service = _service(
+      repository,
+      pushToken: 'token-1',
+      bridge: bridge,
+      reportEvents: reportEvents.stream,
+    );
+
+    await service.start();
+    await service.startupPermissionsResolved();
+    expect(repository.marketCalls, 0);
+    expect(repository.appleTokens, ['token-1']);
+
+    // 故意保留旧的 not_determined：事件里的最终状态应当直接驱动上报，
+    // 不能再次查询时被旧值挡住。
+    reportEvents.add(const {
+      'type': 'tracking_status_changed',
+      'status': 'authorized',
+    });
+    await pumpEventQueue();
+
+    expect(repository.marketCalls, 1);
+    expect(repository.marketIdfvs, ['idfv-1']);
+
+    reportEvents.add(const {
+      'type': 'tracking_status_changed',
+      'status': 'authorized',
+    });
+    await pumpEventQueue();
+    expect(repository.marketCalls, 1);
+
+    await service.dispose();
+  });
+
+  test('Market 网络和业务失败后自动重试，成功前不记为完成', () async {
+    final repository = _RecordingRepository()
+      ..marketFailuresToThrow = 1
+      ..marketResponseCodes.addAll([400, 0]);
+    final bridge = _StubReportBridge(
+      trackingStatus: 'authorized',
+      idfv: 'idfv-retry',
+    );
+    final service = _service(
+      repository,
+      pushToken: 'token-1',
+      bridge: bridge,
+      googleMarketRetryDelay: Duration.zero,
+    );
+
+    await service.start();
+    await service.startupPermissionsResolved();
+    await pumpEventQueue();
+
+    expect(repository.marketCalls, 3);
+    expect(repository.marketIdfvs, ['idfv-retry', 'idfv-retry', 'idfv-retry']);
+
     await service.dispose();
   });
 
@@ -230,9 +298,12 @@ ReportService _service(
   ReportStore? store,
   String accessToken = 'token',
   Stream<PushEvent>? events,
+  Stream<ReportEvent>? reportEvents,
   int Function()? nowMillis,
   PushBridge? pushBridge,
   Duration locationTimeout = ReportService.defaultLocationTimeout,
+  Duration googleMarketRetryDelay = ReportService.defaultGoogleMarketRetryDelay,
+  Future<void> Function(String token)? initializeAdjust,
 }) {
   return ReportService(
     repository,
@@ -243,16 +314,31 @@ ReportService _service(
     encryptIv: '0123456789abcdef',
     accessToken: () => accessToken,
     pushEvents: events,
+    reportEvents: reportEvents,
     nowMillis: nowMillis,
     locationTimeout: locationTimeout,
+    googleMarketRetryDelay: googleMarketRetryDelay,
+    initializeAdjust: initializeAdjust ?? (_) async {},
   );
 }
 
 class _StubReportBridge extends ReportBridge {
+  _StubReportBridge({this.trackingStatus = '', this.idfv = ''});
+
+  String trackingStatus;
+  final String idfv;
+
   @override
   Future<ReportDeviceSnapshot> getReportDeviceSnapshot() async {
-    return const ReportDeviceSnapshot(model: 'iPhone11,8');
+    return ReportDeviceSnapshot(
+      model: 'iPhone11,8',
+      idfv: idfv,
+      idfa: idfv.isEmpty ? '' : 'idfa-1',
+    );
   }
+
+  @override
+  Future<String> getTrackingStatus() async => trackingStatus;
 }
 
 class _SlowReportBridge extends ReportBridge {
@@ -296,9 +382,13 @@ class _RecordingRepository extends ReportRepository {
   _RecordingRepository() : super(_StubHttpClient());
 
   final List<String> appleTokens = [];
+  final List<String> marketIdfvs = [];
+  final List<int> marketResponseCodes = [];
   final List<String> deviceLookups = [];
   final List<String> riskEndTimes = [];
   bool appleReportSucceeds = true;
+  int marketCalls = 0;
+  int marketFailuresToThrow = 0;
 
   /// 非空时第一条上报会等它完成，用来构造并发场景。
   Completer<void>? releaseFirstCall;
@@ -337,6 +427,27 @@ class _RecordingRepository extends ReportRepository {
       code: appleReportSucceeds ? 0 : 400,
       message: '',
       data: null,
+    );
+  }
+
+  @override
+  Future<ApiResponse<String>> reportGoogleMarket({
+    required String idfv,
+    required String idfa,
+  }) async {
+    marketCalls++;
+    marketIdfvs.add(idfv);
+    if (marketFailuresToThrow > 0) {
+      marketFailuresToThrow--;
+      throw StateError('market network failed');
+    }
+    final code = marketResponseCodes.isEmpty
+        ? 0
+        : marketResponseCodes.removeAt(0);
+    return ApiResponse<String>(
+      code: code,
+      message: code == 0 ? '' : 'market failed',
+      data: code == 0 ? 'adjust-token' : '',
     );
   }
 

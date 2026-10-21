@@ -16,16 +16,22 @@ import UIKit
 /// 与推送（`laya_credit/push`）、评分（`laya_credit/app_review`）、风控活体
 /// （`laya_credit/client_bridge`）分开，避免把定位 / 设备采集混进其它通道。
 /// 推送 token 由 `PushNotificationRegistrar` 负责，不在这里重复。
-final class ReportRegistrar: NSObject, CLLocationManagerDelegate {
+final class ReportRegistrar:
+  NSObject,
+  CLLocationManagerDelegate,
+  FlutterStreamHandler
+{
   static let shared = ReportRegistrar()
 
   private static let channelName = "laya_credit/report"
+  private static let eventChannelName = "laya_credit/report_events"
 
   private let deviceSnapshotCollector = ReportDeviceSnapshotCollector()
   private var locationManager: CLLocationManager?
   private var locationResult: FlutterResult?
   private var locationPermissionManager: CLLocationManager?
   private var locationPermissionResult: FlutterResult?
+  private var eventSink: FlutterEventSink?
 
   private override init() {
     super.init()
@@ -64,6 +70,34 @@ final class ReportRegistrar: NSObject, CLLocationManagerDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+    let eventChannel = FlutterEventChannel(
+      name: Self.eventChannelName,
+      binaryMessenger: binaryMessenger
+    )
+    eventChannel.setStreamHandler(self)
+  }
+
+  func onListen(
+    withArguments arguments: Any?,
+    eventSink events: @escaping FlutterEventSink
+  ) -> FlutterError? {
+    eventSink = events
+    publishTrackingStatus()
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    eventSink = nil
+    return nil
+  }
+
+  /// ATT 决策完成或 App 重新激活时主动推送当前状态，避免 Flutter 侧在
+  /// `requestTrackingAuthorization` 返回后的瞬间读到尚未稳定的值。
+  func publishTrackingStatus() {
+    eventSink?([
+      "type": "tracking_status_changed",
+      "status": trackingStatus(),
+    ])
   }
 
   // MARK: - 定位
@@ -249,12 +283,20 @@ final class ReportRegistrar: NSObject, CLLocationManagerDelegate {
       return
     }
     if ATTrackingManager.trackingAuthorizationStatus != .notDetermined {
-      result(trackingStatus())
+      let status = trackingStatus()
+      result(status)
+      publishTrackingStatus()
       return
     }
     ATTrackingManager.requestTrackingAuthorization { [weak self] _ in
       DispatchQueue.main.async {
-        result(self?.trackingStatus() ?? "unknown")
+        guard let self else {
+          result("unknown")
+          return
+        }
+        let status = self.trackingStatus()
+        result(status)
+        self.publishTrackingStatus()
       }
     }
   }

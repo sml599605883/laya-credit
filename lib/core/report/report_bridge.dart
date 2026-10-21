@@ -5,6 +5,12 @@ import 'package:flutter/services.dart';
 
 import 'report_data.dart';
 
+/// 数据上报原生事件。
+///
+/// 目前只有 ATT 状态变化：
+/// `{type: 'tracking_status_changed', status: String}`。
+typedef ReportEvent = Map<String, Object?>;
+
 /// 上报采集项的原生桥。
 ///
 /// 原生实现见 `ios/Runner/ReportRegistrar.swift`，独立 channel
@@ -14,10 +20,12 @@ import 'report_data.dart';
 /// 所有方法都做降级：方法缺失（未集成原生 / 单元测试）或不支持平台时返回空值，
 /// 绝不让上报把业务流程拖崩。
 class ReportBridge {
-  ReportBridge({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(channelName);
+  ReportBridge({MethodChannel? channel, EventChannel? eventChannel})
+    : _channel = channel ?? const MethodChannel(channelName),
+      _eventChannel = eventChannel ?? const EventChannel(eventChannelName);
 
   static const channelName = 'laya_credit/report';
+  static const eventChannelName = 'laya_credit/report_events';
 
   static const getReportLocationMethod = 'getReportLocation';
   static const requestLocationPermissionMethod = 'requestLocationPermission';
@@ -30,6 +38,8 @@ class ReportBridge {
   static final shared = ReportBridge();
 
   final MethodChannel _channel;
+  final EventChannel _eventChannel;
+  Stream<ReportEvent>? _events;
 
   bool get _supported => Platform.isIOS;
 
@@ -71,6 +81,30 @@ class ReportBridge {
   /// 拉起 ATT 授权弹窗（未决定时才有弹窗），返回授权后的状态。
   Future<String> requestTrackingAuthorization() =>
       _safeInvokeString(requestTrackingAuthorizationMethod);
+
+  /// ATT 状态变化事件。iOS 在授权回调及 App 重新激活时主动发送。
+  Stream<ReportEvent> events() {
+    if (!_supported) return const Stream<ReportEvent>.empty();
+    final events = _events;
+    if (events != null) return events;
+    try {
+      return _events = _eventChannel
+          .receiveBroadcastStream()
+          .map(_toEvent)
+          .handleError((_) {})
+          .asBroadcastStream();
+    } catch (error) {
+      debugPrint('[ReportBridge] 监听原生事件失败: $error');
+      return const Stream<ReportEvent>.empty();
+    }
+  }
+
+  static ReportEvent _toEvent(Object? raw) {
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return const <String, Object?>{};
+  }
 
   Future<Map<Object?, Object?>?> _safeInvokeMap(String method) async {
     if (!_supported) return null;

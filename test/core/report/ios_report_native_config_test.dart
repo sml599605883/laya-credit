@@ -37,4 +37,23 @@ void main() {
         .readAsStringSync();
     expect(deviceParams, contains('getStableDeviceId'));
   });
+
+  test('ATT 决策和 App 重新激活都会广播 tracking_status_changed', () {
+    final registrar = File('ios/Runner/ReportRegistrar.swift')
+        .readAsStringSync();
+    final appDelegate = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+    final reportBridge = File('lib/core/report/report_bridge.dart')
+        .readAsStringSync();
+
+    expect(registrar, contains('laya_credit/report_events'));
+    expect(registrar, contains('FlutterStreamHandler'));
+    expect(registrar, contains('"tracking_status_changed"'));
+    expect(registrar, contains('self.publishTrackingStatus()'));
+    expect(appDelegate, contains('applicationDidBecomeActive'));
+    expect(
+      appDelegate,
+      contains('ReportRegistrar.shared.publishTrackingStatus()'),
+    );
+    expect(reportBridge, contains('laya_credit/report_events'));
+  });
 }

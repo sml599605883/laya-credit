@@ -33,12 +33,15 @@ class ReportService {
     required this.encryptIv,
     required this.accessToken,
     Stream<PushEvent>? pushEvents,
+    Stream<ReportEvent>? reportEvents,
     int Function()? nowMillis,
     this.locationTimeout = defaultLocationTimeout,
+    this.googleMarketRetryDelay = defaultGoogleMarketRetryDelay,
     Future<void> Function(String token)? initializeAdjust,
   }) : store = store ?? ReportStore(),
        _pushBridge = pushBridge ?? PushBridge.shared,
        _events = pushEvents,
+       _reportEventStream = reportEvents,
        _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
        _initializeAdjust = initializeAdjust ?? _startAdjust;
 
@@ -53,8 +56,10 @@ class ReportService {
     required String encryptKey,
     required String encryptIv,
     required String? Function() accessToken,
+    Stream<ReportEvent>? reportEvents,
     int Function()? nowMillis,
     Duration locationTimeout = defaultLocationTimeout,
+    Duration googleMarketRetryDelay = defaultGoogleMarketRetryDelay,
     Future<void> Function(String token)? initializeAdjust,
   }) {
     return current ??= ReportService(
@@ -65,8 +70,10 @@ class ReportService {
       encryptKey: encryptKey,
       encryptIv: encryptIv,
       accessToken: accessToken,
+      reportEvents: reportEvents,
       nowMillis: nowMillis,
       locationTimeout: locationTimeout,
+      googleMarketRetryDelay: googleMarketRetryDelay,
       initializeAdjust: initializeAdjust,
     );
   }
@@ -85,22 +92,33 @@ class ReportService {
   final String? Function() accessToken;
   final int Function() _nowMillis;
   final Duration locationTimeout;
+  final Duration googleMarketRetryDelay;
   final Future<void> Function(String token) _initializeAdjust;
 
   final PushBridge _pushBridge;
   final Stream<PushEvent>? _events;
+  final Stream<ReportEvent>? _reportEventStream;
 
   /// 读取定位的兜底时长，对齐 peso_shield。
   static const defaultLocationTimeout = Duration(seconds: 3);
 
+  /// Market 请求失败后的自动重试间隔。
+  static const defaultGoogleMarketRetryDelay = Duration(seconds: 1);
+  static const _maxGoogleMarketRetries = 2;
+
   bool _started = false;
   bool _starting = false;
-  bool _marketReporting = false;
-  bool _startupGoogleReportTriggered = false;
+  bool _googleMarketReportSucceeded = false;
+  bool _waitingForTrackingDecision = false;
+  bool _marketRetryPending = false;
+  int _marketRetryAttempt = 0;
   bool _adjustInitializing = false;
   Future<ReportLocationSnapshot?>? _pendingLocation;
   Future<void>? _deviceInfoSync;
+  Future<bool>? _marketReportInFlight;
+  Timer? _marketRetryTimer;
   StreamSubscription<PushEvent>? _pushSubscription;
+  StreamSubscription<ReportEvent>? _reportSubscription;
   final Set<String> _reportingAppleTokens = <String>{};
   final Set<String> _reportedAppleTokens = <String>{};
   Future<void>? _startupAppleTokenReport;
@@ -117,7 +135,9 @@ class ReportService {
     try {
       await store.clearSessionReportState();
       final isFirstLaunch = await store.markAppOpened();
+      _waitingForTrackingDecision = isFirstLaunch;
       _listenToPushEvents();
+      _listenToReportEvents();
       _started = true;
       if (!isFirstLaunch) unawaited(_reportStartupGoogleMarket());
       // 设备信息已在网络探测（`StartupNetworkGate`）时串行查过一次并落库 / 落缓存，
@@ -130,8 +150,15 @@ class ReportService {
     }
   }
 
-  /// App 回到前台。对齐 Dali：没有必须重做的上报，ATT 重试由权限协调器负责。
-  Future<void> resumed() async {}
+  /// App 回到前台：ATT 重试仍由权限协调器负责，这里只补报待完成事项。
+  Future<void> resumed() async {
+    if (_marketRetryPending) {
+      await reportGoogleMarket();
+      return;
+    }
+    if (!_waitingForTrackingDecision) return;
+    await _reportStartupGoogleMarket();
+  }
 
   /// 启动权限流程（通知 + ATT）完成后调用：补一轮 google_market 与 Apple token 上报。
   ///
@@ -214,53 +241,121 @@ class ReportService {
   ///
   /// 与 Dali 一致：**只读**ATT 状态，未决定就直接跳过——ATT 弹窗由
   /// 启动权限流程（`PermissionCoordinator.requestStartupPermissions`）负责，
-  /// 上报路径不主动弹窗。没拿到 IDFV 或 adjust_token 时跳过，Adjust 只初始化
-  /// 一次（跨启动用 [ReportStore.isAdjustInitialized] 去重）。
+  /// 上报路径不主动弹窗。没拿到 IDFV 时跳过；adjust_token 为空时不初始化
+  /// Adjust（跨启动用 [ReportStore.isAdjustInitialized] 去重）。
   Future<void> reportGoogleMarket() async {
     final status = await bridge.getTrackingStatus();
-    if (!_isResolvedTrackingStatus(status)) return;
-    await _reportResolvedGoogleMarket();
+    if (!_isResolvedTrackingStatus(status)) {
+      _waitingForTrackingDecision = true;
+      _logMarketSkip('ATT status is unresolved', status);
+      return;
+    }
+    _waitingForTrackingDecision = false;
+    await _attemptResolvedGoogleMarket();
   }
 
-  /// 启动时的一次性归因上报：每次启动最多触发一次，避免和
-  /// [startupPermissionsResolved] 重复请求。
+  /// 启动归因上报。只有业务成功后才记为完成，失败后仍允许
+  /// [tracking_status_changed]、登录和前台恢复继续重试。
   Future<void> _reportStartupGoogleMarket() async {
-    if (_startupGoogleReportTriggered) return;
+    if (_googleMarketReportSucceeded) return;
     final status = await bridge.getTrackingStatus();
-    if (!_isResolvedTrackingStatus(status)) return;
-    _startupGoogleReportTriggered = true;
-    await _reportResolvedGoogleMarket();
+    if (!_isResolvedTrackingStatus(status)) {
+      _waitingForTrackingDecision = true;
+      _logMarketSkip('ATT status is unresolved', status);
+      return;
+    }
+    _waitingForTrackingDecision = false;
+    await _attemptResolvedGoogleMarket();
   }
 
-  Future<void> _reportResolvedGoogleMarket() async {
-    if (_marketReporting) return;
-    _marketReporting = true;
+  Future<void> _attemptResolvedGoogleMarket() async {
+    final succeeded = await _reportResolvedGoogleMarket();
+    if (succeeded) {
+      // 任一触发点的成功结果都能满足启动上报；登录触发的报错后重试成功时，
+      // 后续权限完成事件也不应再发一条。
+      _googleMarketReportSucceeded = true;
+      _marketRetryPending = false;
+      _marketRetryAttempt = 0;
+      _marketRetryTimer?.cancel();
+      _marketRetryTimer = null;
+      return;
+    }
+    _marketRetryPending = true;
+    _scheduleGoogleMarketRetry();
+  }
+
+  /// 同一次 Market 请求在多个触发点重叠时共享同一个 Future，避免后到的
+  /// 登录 / 权限事件直接放弃上报。
+  Future<bool> _reportResolvedGoogleMarket() {
+    final pending = _marketReportInFlight;
+    if (pending != null) return pending;
+
+    late final Future<bool> request;
+    request = _performGoogleMarketReport().whenComplete(() {
+      if (identical(_marketReportInFlight, request)) {
+        _marketReportInFlight = null;
+      }
+    });
+    _marketReportInFlight = request;
+    return request;
+  }
+
+  Future<bool> _performGoogleMarketReport() async {
     try {
       final snapshot = await bridge.getReportDeviceSnapshot();
       final idfv = reportText(snapshot.idfv);
-      if (idfv.isEmpty) return;
+      if (idfv.isEmpty) {
+        _logMarketSkip('IDFV is empty');
+        return false;
+      }
       final response = await repository.reportGoogleMarket(
         idfv: idfv,
         idfa: reportText(snapshot.idfa),
       );
+      if (!response.isSuccess) {
+        debugPrint(
+          '[Report] google_market failed: '
+          'code=${response.code}, message=${response.message}',
+        );
+        return false;
+      }
       final token = response.data.trim();
-      if (token.isEmpty ||
-          _adjustInitializing ||
-          await store.isAdjustInitialized()) {
-        return;
+      if (token.isNotEmpty &&
+          !_adjustInitializing &&
+          !await store.isAdjustInitialized()) {
+        _adjustInitializing = true;
+        try {
+          await _initializeAdjust(token);
+          await store.markAdjustInitialized();
+        } catch (error) {
+          _log(error);
+        } finally {
+          _adjustInitializing = false;
+        }
       }
-      _adjustInitializing = true;
-      try {
-        await _initializeAdjust(token);
-        await store.markAdjustInitialized();
-      } finally {
-        _adjustInitializing = false;
-      }
+      return true;
     } catch (error) {
       _log(error);
-    } finally {
-      _marketReporting = false;
+      return false;
     }
+  }
+
+  void _scheduleGoogleMarketRetry() {
+    if (_marketRetryTimer != null ||
+        _marketRetryAttempt >= _maxGoogleMarketRetries) {
+      return;
+    }
+    _marketRetryAttempt++;
+    _marketRetryTimer = Timer(googleMarketRetryDelay, () {
+      _marketRetryTimer = null;
+      if (!_started || !_marketRetryPending) return;
+      unawaited(reportGoogleMarket());
+    });
+  }
+
+  void _logMarketSkip(String reason, [String status = '']) {
+    final suffix = status.trim().isEmpty ? '' : ', status=$status';
+    debugPrint('[Report] google_market skipped: $reason$suffix');
   }
 
   /// 上报设备信息（AES 加密报文）。
@@ -423,14 +518,38 @@ class ReportService {
     }, onError: _log);
   }
 
+  void _listenToReportEvents() {
+    final events = _reportEventStream ?? bridge.events();
+    _reportSubscription ??= events.listen((event) {
+      final type = event['type']?.toString() ?? '';
+      if (type != 'tracking_status_changed') return;
+
+      final status = event['status']?.toString().trim() ?? '';
+      if (!_isResolvedTrackingStatus(status)) return;
+
+      _waitingForTrackingDecision = false;
+      if (_googleMarketReportSucceeded) {
+        if (_marketRetryPending) unawaited(reportGoogleMarket());
+        return;
+      }
+      // 事件里的 status 是原生刚读到的最终值，直接上报，避免再次查询时
+      // 偶发返回旧的 not_determined 又把本次机会丢掉。
+      unawaited(_attemptResolvedGoogleMarket());
+    }, onError: _log);
+  }
+
   bool _isResolvedTrackingStatus(String status) {
     final normalized = status.trim();
     return normalized.isNotEmpty && normalized != 'not_determined';
   }
 
   Future<void> dispose() async {
+    _marketRetryTimer?.cancel();
+    _marketRetryTimer = null;
     await _pushSubscription?.cancel();
     _pushSubscription = null;
+    await _reportSubscription?.cancel();
+    _reportSubscription = null;
   }
 
   /// 用接口下发的 adjust_token 初始化 Adjust 归因 SDK（与 Dali 一致）。
