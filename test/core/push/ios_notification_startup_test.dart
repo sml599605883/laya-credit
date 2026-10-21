@@ -43,6 +43,10 @@ void main() {
     );
     expect(
       content,
+      contains('PushNotificationRegistrar.shared.registrationDidFail'),
+    );
+    expect(
+      content,
       isNot(contains('application.registerForRemoteNotifications()')),
     );
   });
@@ -58,6 +62,9 @@ void main() {
       expect(content, contains('userInfo["url"]'));
       expect(content, contains('userInfo["params"]'));
       expect(content, contains('JSONSerialization.jsonObject'));
+      expect(content, contains('UserDefaults.standard.set(newValue'));
+      expect(content, contains('pendingRegistrationResult'));
+      expect(content, contains('registrationTimeoutWorkItem'));
     },
   );
 }

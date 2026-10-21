@@ -15,6 +15,9 @@ abstract final class AppRoutes {
   /// 个人中心 Tab。
   static const mine = '/mine';
 
+  /// 设置页。
+  static const settings = '/settings';
+
   /// 登录页。
   static const login = '/login';
 
@@ -60,6 +63,7 @@ abstract final class AppRoutes {
     home,
     progress,
     mine,
+    settings,
     login,
     idVerification,
     idUpload,

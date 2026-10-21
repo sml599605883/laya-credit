@@ -13,6 +13,7 @@ import 'pages/widgets/app_marketing_popup.dart';
 import 'pages/widgets/app_upgrade_popup.dart';
 import 'providers/home_provider.dart';
 import 'providers/popup_provider.dart';
+import 'providers/root_tab_provider.dart';
 import 'providers/session_provider.dart';
 import 'theme/theme.dart';
 import 'widgets/tab_bar/app_tab_bar.dart';
@@ -31,8 +32,6 @@ class RootTabPage extends ConsumerStatefulWidget {
 
 class _RootTabPageState extends ConsumerState<RootTabPage>
     with WidgetsBindingObserver, RouteAware {
-  int _currentIndex = 0;
-
   /// 防止连点 Tab 叠加打开多个登录页。
   bool _openingLogin = false;
 
@@ -66,7 +65,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
         .events
         .listen((_) => _handleSessionExpired());
     // 首帧就停在首页，对齐 dali_cash 的 onReady：拉一次首页弹窗（场景 1）。
-    _requestTabPopup(_currentIndex);
+    _requestTabPopup(ref.read(rootTabIndexProvider));
   }
 
   @override
@@ -143,7 +142,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// 首页接口的 `PROCESS_LIST` 模块），所以这两个 Tab 可见时都要刷；
   /// 个人中心（2）是纯本地内容，不拉首页接口，只在可见时请求弹窗（场景 2）。
   void _refreshHomeData() {
-    final index = _currentIndex;
+    final index = ref.read(rootTabIndexProvider);
     if (index == 0 || index == 1) {
       unawaited(ref.read(homeDataProvider.notifier).refresh());
     }
@@ -185,12 +184,12 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
   /// 登录态变化后额度、订单都会变，这里必须重新拉一次，
   /// 对齐 dali_cash 的 `returnToHomeTab`。
   void _returnToHome() {
-    if (_currentIndex != 0) setState(() => _currentIndex = 0);
+    ref.read(rootTabIndexProvider.notifier).selectHome();
     _refreshHomeData();
   }
 
   Future<void> _selectTab(int index) async {
-    if (index == _currentIndex) return;
+    if (index == ref.read(rootTabIndexProvider)) return;
 
     if (_requiresLogin(index) && !ref.read(userSessionProvider).isLoggedIn) {
       final loggedIn = await _openLogin();
@@ -201,7 +200,7 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
       return;
     }
 
-    setState(() => _currentIndex = index);
+    ref.read(rootTabIndexProvider.notifier).select(index);
     // 切到首页 / 进度时刷新它们共用的数据源，对齐 dali_cash 的 `selectTab`。
     _refreshHomeData();
   }
@@ -226,11 +225,13 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = ref.watch(rootTabIndexProvider);
+
     // 退出登录后，当前停在不允许游客访问的 Tab 上时回落到首页。
     ref.listen(userSessionProvider, (previous, next) {
       if (previous?.isLoggedIn == true &&
           !next.isLoggedIn &&
-          _requiresLogin(_currentIndex)) {
+          _requiresLogin(ref.read(rootTabIndexProvider))) {
         _returnToHome();
       }
     });
@@ -248,15 +249,15 @@ class _RootTabPageState extends ConsumerState<RootTabPage>
       // 各页自己用 `AppTabBar.overlapHeight` 预留底部内边距。
       extendBody: true,
       body: IndexedStack(
-        index: _currentIndex,
+        index: currentIndex,
         children: [
-          HomePage(isActive: _currentIndex == 0),
+          HomePage(isActive: currentIndex == 0),
           const ProgressPage(),
-          MinePage(isActive: _currentIndex == 2),
+          MinePage(isActive: currentIndex == 2),
         ],
       ),
       bottomNavigationBar: AppTabBar(
-        currentIndex: _currentIndex,
+        currentIndex: currentIndex,
         onSelected: _selectTab,
       ),
     );

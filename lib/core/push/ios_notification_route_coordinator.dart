@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart';
 
 import '../navigation/app_deep_link.dart';
 import '../navigation/app_navigator.dart';
-import '../ui/toast_helper.dart';
 import 'push_bridge.dart';
 
 typedef PushEventSource = Stream<PushEvent> Function();
@@ -91,10 +90,5 @@ class IosNotificationRouteCoordinator {
 Future<void> openPushTarget(String route) async {
   final value = route.trim();
   if (value.isEmpty) return;
-  await AppNavigator.openDeepLink(
-    const AppDeepLinkParser().parse(value),
-    onUnhandled: (link) {
-      ToastHelper.showMessage('Notification target: ${link.raw}');
-    },
-  );
+  await AppNavigator.openDeepLink(const AppDeepLinkParser().parse(value));
 }

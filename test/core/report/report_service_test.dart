@@ -51,20 +51,37 @@ void main() {
     expect(repository.appleTokens, ['token-1']);
   });
 
-  test('空 token 上报前拿到真 token 时只报真值', () async {
+  test('启动权限完成前的 token 事件不单独上报，只报最终真值', () async {
     final repository = _RecordingRepository();
     final pushBridge = _StubPushBridge('');
-    final service = _service(repository, pushToken: '', pushBridge: pushBridge);
+    final events = StreamController<PushEvent>.broadcast();
+    addTearDown(events.close);
+    final service = _service(
+      repository,
+      pushToken: '',
+      pushBridge: pushBridge,
+      events: events.stream,
+    );
 
-    // 启动权限流程先读到空 token（APNs 注册还没回来）。
-    final pending = service.reportAppleToken();
-    // 紧接着原生推出 `push_token` 事件，这时真 token 已经到了。
-    pushBridge.setToken('token-real');
-    await service.reportAppleToken();
-    await pending;
+    await service.start();
+    pushBridge.setToken('token-early');
+    events.add(const {'type': 'push_token', 'token': 'token-early'});
+    await pumpEventQueue();
+    expect(repository.appleTokens, isEmpty);
 
-    // 同一次突发只发一条请求，且带的是真 token。
-    expect(repository.appleTokens, ['token-real']);
+    pushBridge.setToken('token-latest');
+    events.add(const {'type': 'push_token', 'token': 'token-latest'});
+    await pumpEventQueue();
+    expect(repository.appleTokens, isEmpty);
+
+    await service.startupPermissionsResolved();
+    expect(repository.appleTokens, ['token-latest']);
+
+    pushBridge.setToken('token-after-startup');
+    events.add(const {'type': 'push_token', 'token': 'token-after-startup'});
+    await pumpEventQueue();
+    expect(repository.appleTokens, ['token-latest']);
+    await service.dispose();
   });
 
   test('push_token 事件与启动补报重叠时只上报一次', () async {
@@ -88,35 +105,28 @@ void main() {
     await service.dispose();
   });
 
-  test('允许后 push_token 事件与启动补报重叠只报一次真 token', () async {
+  test('启动上报业务失败后，后续 token 事件可以重试', () async {
     final repository = _RecordingRepository();
-    final pushBridge = _StubPushBridge('');
+    repository.appleReportSucceeds = false;
+    final pushBridge = _StubPushBridge('token-retry');
     final events = StreamController<PushEvent>.broadcast();
     addTearDown(events.close);
-    final delayGate = Completer<void>();
     final service = _service(
       repository,
-      pushToken: '',
+      pushToken: 'token-retry',
       pushBridge: pushBridge,
       events: events.stream,
-      delay: (_) => delayGate.future,
     );
 
     await service.start();
-    // 启动权限流程结束时先读到空 token（APNs 注册还没回来），进入等待。
-    final pending = service.startupPermissionsResolved();
-    await pumpEventQueue();
-    // 等待期间原生推出 push_token 事件，真 token 到了。
-    pushBridge.setToken('token-real');
-    events.add(const {'type': 'push_token', 'token': 'token-real'});
-    await pumpEventQueue();
-    // 放行启动补报的等待，让它读到真 token 后按去重跳过。
-    delayGate.complete();
-    await pending;
+    await service.startupPermissionsResolved();
+    expect(repository.appleTokens, ['token-retry']);
+
+    repository.appleReportSucceeds = true;
+    events.add(const {'type': 'push_token', 'token': 'token-retry'});
     await pumpEventQueue();
 
-    // 同一次突发只发一条请求，且带的是真 token。
-    expect(repository.appleTokens, ['token-real']);
+    expect(repository.appleTokens, ['token-retry', 'token-retry']);
     await service.dispose();
   });
 
@@ -222,7 +232,6 @@ ReportService _service(
   Stream<PushEvent>? events,
   int Function()? nowMillis,
   PushBridge? pushBridge,
-  Future<void> Function(Duration duration)? delay,
   Duration locationTimeout = ReportService.defaultLocationTimeout,
 }) {
   return ReportService(
@@ -236,8 +245,6 @@ ReportService _service(
     pushEvents: events,
     nowMillis: nowMillis,
     locationTimeout: locationTimeout,
-    // 空 token 的等待在单测里收敛掉，不真的等 500ms。
-    delay: delay ?? (duration) async {},
   );
 }
 

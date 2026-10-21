@@ -8,7 +8,6 @@ import '../core/network/api_exception.dart';
 import '../core/ui/toast_helper.dart';
 import '../data/models/order_list_data.dart';
 import '../providers/order_list_provider.dart';
-import '../providers/product_flow_provider.dart';
 import '../theme/theme.dart';
 import '../widgets/back_nav_bar.dart';
 import '../widgets/remote_image.dart';
@@ -248,39 +247,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> with RouteAware {
 
     final link = const AppDeepLinkParser().parse(value);
     if (link.kind != AppDeepLinkKind.unsupported) {
-      await AppNavigator.openDeepLink(
-        link,
-        onUnhandled: _handleUnhandledDeepLink,
-      );
+      await AppNavigator.openDeepLink(link, productId: productId);
       return;
     }
     ToastHelper.showMessage('Order target: $value');
-  }
-
-  /// 订单卡片下发的准入 / 产品详情深链，按统一流程继续推进，
-  /// 不能像未知地址一样只弹提示（对齐 peso_shield 的 `navigateRawTarget`）。
-  Future<void> _handleUnhandledDeepLink(AppDeepLink link) async {
-    switch (link.kind) {
-      case AppDeepLinkKind.admission:
-        await AppNavigator.applyProduct(
-          productId: link.productId,
-          apiRemind: link.apiRemind,
-        );
-      case AppDeepLinkKind.productDetail:
-        final flow = await ref.read(productApplicationFlowProvider.future);
-        await flow.continueProductDetailFlow(link.productId);
-      case AppDeepLinkKind.settings:
-        ToastHelper.showMessage('Settings page is not available yet');
-      case AppDeepLinkKind.unsupported:
-        ToastHelper.showMessage('Order target: ${link.raw}');
-      case AppDeepLinkKind.webView:
-      case AppDeepLinkKind.home:
-      case AppDeepLinkKind.login:
-      case AppDeepLinkKind.order:
-      case AppDeepLinkKind.recredit:
-        // 已由 AppNavigator.openDeepLink 处理，不会走到这里。
-        break;
-    }
   }
 
   /// 订单详情 / 还款页返回列表时重新拉当前筛选，避免展示离开前的旧状态。

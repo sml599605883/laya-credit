@@ -114,6 +114,7 @@ import UserNotifications
     _ application: UIApplication,
     didFailToRegisterForRemoteNotificationsWithError error: Error
   ) {
+    PushNotificationRegistrar.shared.registrationDidFail(error)
     super.application(
       application,
       didFailToRegisterForRemoteNotificationsWithError: error

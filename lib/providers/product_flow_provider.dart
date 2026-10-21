@@ -28,3 +28,11 @@ final productDeepLinkAdmissionProvider =
         apiRemind: apiRemind,
       );
     });
+
+/// 深链产品详情执行器。与准入分开是为了让详情继续认证、准入重新申请
+/// 保持各自业务语义，同时都由统一导航入口调用。
+final productDeepLinkDetailProvider =
+    FutureProvider<Future<void> Function(String productId)>((ref) async {
+      final flow = await ref.watch(productApplicationFlowProvider.future);
+      return flow.continueProductDetailFlow;
+    });

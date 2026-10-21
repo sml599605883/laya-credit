@@ -13,7 +13,7 @@ void main() {
       final coordinator = PermissionCoordinator(
         requestNotificationPermission: () async {
           events.add('notification');
-          return 'denied';
+          return 'authorized';
         },
         requestTrackingPermission: () async {
           events.add('tracking');
@@ -41,6 +41,30 @@ void main() {
       ]);
     },
   );
+
+  test('notification denial still registers APNs and keeps tracking', () async {
+    final events = <String>[];
+    final coordinator = PermissionCoordinator(
+      requestNotificationPermission: () async {
+        events.add('notification');
+        return PermissionStatus.denied;
+      },
+      requestTrackingPermission: () async {
+        events.add('tracking');
+        return 'authorized';
+      },
+      registerForRemoteNotifications: () async {
+        events.add('register');
+      },
+      delay: (_) async {
+        events.add('delay');
+      },
+    );
+
+    await coordinator.requestStartupPermissions();
+
+    expect(events, ['delay', 'notification', 'register', 'delay', 'tracking']);
+  });
 
   test(
     'startup permission failures do not escape nor block tracking',

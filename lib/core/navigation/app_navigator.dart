@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/product_flow_provider.dart';
+import '../../providers/root_tab_provider.dart';
 import '../config/api_environment.dart';
 import '../network/api_exception.dart';
 import '../ui/toast_helper.dart';
@@ -138,7 +139,16 @@ class AppNavigator {
             arguments: arguments,
           )
         : await push<bool>(AppRoutes.login, arguments: arguments);
-    return result ?? false;
+    final loggedIn = result ?? false;
+    // 所有登录入口统一回根首页，不能依赖调用方是否位于 Tab 容器或是否主动
+    // 清理页面栈；同时把底部 Tab 显式切到 Home，避免只回到 RootTabPage 后仍
+    // 停留在登录前的 Progress / Mine。
+    if (loggedIn) {
+      final container = providerContainer ?? _rootProviderContainer();
+      container?.read(rootTabIndexProvider.notifier).selectHome();
+      popToRoot();
+    }
+    return loggedIn;
   }
 
   /// 打开订单列表页。
@@ -160,19 +170,21 @@ class AppNavigator {
   ///
   /// 首页 banner、WebView 桥、准入结果里的跳转地址都从这里走一处，
   /// 避免每个调用点各写一份 switch（漏接页面时各页表现不一致）。
-  ///
-  /// 这里只处理**页面已存在**的目标：H5 / 首页 / 登录 / 订单列表。
-  /// 产品详情、准入、设置等目标的后续动作在各调用点不一样
-  /// （例如准入流程要接着走认证步骤），所以交给 [onUnhandled]。
   static Future<void> openDeepLink(
     AppDeepLink link, {
-    required FutureOr<void> Function(AppDeepLink link) onUnhandled,
+    String productId = '',
+    FutureOr<void> Function(AppDeepLink link)? onUnhandled,
   }) async {
+    final resolvedProductId = link.productId.trim().isNotEmpty
+        ? link.productId.trim()
+        : productId.trim();
     switch (link.kind) {
       case AppDeepLinkKind.webView:
         await toWebView<void>(url: link.url);
       case AppDeepLinkKind.home:
         popToRoot();
+      case AppDeepLinkKind.settings:
+        await push<void>(AppRoutes.settings);
       case AppDeepLinkKind.login:
         // H5 判定登录态失效后下发的 login 深链：先清掉旧 WebView / 认证页等
         // 会话栈，再压登录页，这样从登录页返回或登录成功后都不会再落到已失效
@@ -195,10 +207,41 @@ class AppNavigator {
           ),
         );
       case AppDeepLinkKind.productDetail:
+        await _openProductDetail(resolvedProductId);
       case AppDeepLinkKind.admission:
-      case AppDeepLinkKind.settings:
+        await applyProduct(
+          productId: resolvedProductId,
+          apiRemind: link.apiRemind,
+        );
       case AppDeepLinkKind.unsupported:
-        await onUnhandled(link);
+        if (onUnhandled != null) {
+          await onUnhandled(link);
+        } else {
+          ToastHelper.showError('Unable to open link');
+        }
+    }
+  }
+
+  static Future<void> _openProductDetail(String rawProductId) async {
+    final productId = rawProductId.trim();
+    if (productId.isEmpty) {
+      ToastHelper.showError('Invalid link');
+      return;
+    }
+    final container = providerContainer ?? _rootProviderContainer();
+    if (container == null) {
+      ToastHelper.showError('Unable to open product');
+      return;
+    }
+    try {
+      final openDetail = await container.read(
+        productDeepLinkDetailProvider.future,
+      );
+      await openDetail(productId);
+    } on ApiException catch (error) {
+      ToastHelper.showError(error.message);
+    } catch (_) {
+      ToastHelper.showError('Unable to open product');
     }
   }
 

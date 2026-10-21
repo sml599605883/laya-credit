@@ -295,10 +295,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
       },
       openWebPath: (path) async {
         unawaited(
-          AppNavigator.toWebPath<void>(
-            path: path,
-            removeWebViewPages: true,
-          ),
+          AppNavigator.toWebPath<void>(path: path, removeWebViewPages: true),
         );
       },
       navigateInternal: _navigateInternal,
@@ -409,21 +406,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage>
 
   Future<void> _navigateInternal(String raw) async {
     final link = const AppDeepLinkParser().parse(raw);
-    await AppNavigator.openDeepLink(
-      link,
-      onUnhandled: (target) async {
-        if (target.kind == AppDeepLinkKind.admission) {
-          unawaited(
-            AppNavigator.applyProduct(
-              productId: target.productId,
-              apiRemind: target.apiRemind,
-            ),
-          );
-          return;
-        }
-        debugPrint('[WebView] 暂不支持的内部跳转: ${target.raw}');
-      },
-    );
+    await AppNavigator.openDeepLink(link);
   }
 
   Future<bool> _openExternal(Uri uri) async {

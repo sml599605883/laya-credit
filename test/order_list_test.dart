@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:laya_credit/core/device/device_params.dart';
 import 'package:laya_credit/core/navigation/app_deep_link.dart';
 import 'package:laya_credit/core/navigation/app_navigator.dart';
 import 'package:laya_credit/core/navigation/app_route_observer.dart';
@@ -20,7 +21,9 @@ import 'package:laya_credit/data/repositories/order_repository.dart';
 import 'package:laya_credit/data/repositories/product_repository.dart';
 import 'package:laya_credit/pages/order_list_page.dart';
 import 'package:laya_credit/pages/recredit_page.dart';
+import 'package:laya_credit/pages/settings_page.dart';
 import 'package:laya_credit/pages/webview_page.dart';
+import 'package:laya_credit/providers/network_provider.dart';
 import 'package:laya_credit/providers/order_list_provider.dart';
 import 'package:laya_credit/providers/product_flow_provider.dart';
 import 'package:laya_credit/providers/recredit_provider.dart';
@@ -294,9 +297,30 @@ void main() {
   });
 
   group('订单列表跳转入口', () {
-    Future<void> pumpHarness(WidgetTester tester) async {
+    Future<void> pumpHarness(
+      WidgetTester tester, {
+      Future<void> Function(String productId)? openProductDetail,
+      Future<void> Function(String productId, int apiRemind)? applyAdmission,
+    }) async {
       final container = ProviderContainer(
         overrides: [
+          if (openProductDetail != null)
+            productDeepLinkDetailProvider.overrideWith(
+              (ref) async => openProductDetail,
+            ),
+          if (applyAdmission != null)
+            productDeepLinkAdmissionProvider.overrideWith(
+              (ref) async => applyAdmission,
+            ),
+          deviceParamsProvider.overrideWith(
+            (ref) async => const DeviceParams(
+              deviceId: 'test-device',
+              appVersion: '1.0.0',
+              modelName: 'test',
+              systemVersion: 'test',
+              advertisingId: '',
+            ),
+          ),
           orderRepositoryProvider.overrideWith(
             (ref) async => _FakeOrderRepository(const [[]]),
           ),
@@ -360,18 +384,57 @@ void main() {
       expect(page.initialStatus, OrderFilterStatus.all);
     });
 
-    testWidgets('没有页面承载的目标交回给调用方处理', (tester) async {
-      await pumpHarness(tester);
+    testWidgets('产品详情深链直接继续产品详情流程并回退当前产品 ID', (tester) async {
+      final opened = <String>[];
+      await pumpHarness(
+        tester,
+        openProductDetail: (productId) async => opened.add(productId),
+      );
 
-      AppDeepLink? handled;
       await AppNavigator.openDeepLink(
         const AppDeepLinkParser().parse(
           'ph://laya-credit/ios/UnworshippingPigeonberries',
         ),
-        onUnhandled: (link) async => handled = link,
+        productId: 'fallback-product',
       );
 
-      expect(handled?.kind, AppDeepLinkKind.productDetail);
+      expect(opened, ['fallback-product']);
+      expect(find.byType(OrderListPage), findsNothing);
+    });
+
+    testWidgets('准入深链直接重新走准入并保留来源标识', (tester) async {
+      final admissions = <(String, int)>[];
+      await pumpHarness(
+        tester,
+        applyAdmission: (productId, apiRemind) async =>
+            admissions.add((productId, apiRemind)),
+      );
+
+      await AppNavigator.openDeepLink(
+        const AppDeepLinkParser().parse(
+          'ph://laya-credit/ios/Isaria?tartarizing=77&dirdum=8',
+        ),
+      );
+
+      expect(admissions, [('77', 8)]);
+      expect(find.byType(OrderListPage), findsNothing);
+    });
+
+    testWidgets('设置深链统一打开设置页', (tester) async {
+      await pumpHarness(tester);
+
+      unawaited(
+        AppNavigator.openDeepLink(
+          const AppDeepLinkParser().parse(
+            'ph://laya-credit/ios/MilkwoodSporogenous',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('Log Out'), findsOneWidget);
       expect(find.byType(OrderListPage), findsNothing);
     });
   });
@@ -729,7 +792,8 @@ void main() {
             (ref) async => _FakeOrderRepository([
               [
                 _item(
-                  cardTarget: 'ph://laya-credit/ios/Isaria'
+                  cardTarget:
+                      'ph://laya-credit/ios/Isaria'
                       '?tartarizing=77&dirdum=8',
                 ),
               ],

@@ -114,13 +114,7 @@ class ProgressPage extends ConsumerWidget {
   Future<void> _openOrderDetail(String target) async {
     final value = target.trim();
     if (value.isEmpty) return;
-    await AppNavigator.openDeepLink(
-      const AppDeepLinkParser().parse(value),
-      onUnhandled: (link) {
-        // TODO(页面): 订单详情等目标页面尚未搭建，先提示原始地址。
-        ToastHelper.showMessage('Order target: ${link.raw}');
-      },
-    );
+    await AppNavigator.openDeepLink(const AppDeepLinkParser().parse(value));
   }
 
   /// 状态条按钮分发：`Try again` 走原卡重试确认订单，`Change` 进原生换绑页。

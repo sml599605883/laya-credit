@@ -2567,6 +2567,40 @@ void main() {
     expect(find.byType(HomePage), findsOneWidget);
   });
 
+  testWidgets('从非 Tab 页面登录成功后统一回到首页', (tester) async {
+    await _pumpApp(
+      tester,
+      repository: _StubAppRepository(),
+      authRepository: _StubAuthRepository(),
+      setUp: (container) => container
+          .read(userSessionProvider.notifier)
+          .setSession(token: 'old', userId: '1', phone: '855123456'),
+    );
+
+    await tester.tap(find.byKey(const Key('tab-progress')));
+    await _pumpFrames(tester);
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 1);
+
+    unawaited(AppNavigator.push<void>(AppRoutes.home));
+    await _pumpFrames(tester);
+    expect(AppNavigator.canPop(), isTrue);
+
+    final loginResult = AppNavigator.toLogin();
+    await _pumpFrames(tester);
+    await tester.enterText(
+      find.byKey(const Key('login-phone-field')),
+      '917123456789',
+    );
+    await tester.enterText(find.byKey(const Key('login-code-field')), '123456');
+    await _pumpFrames(tester);
+
+    expect(await loginResult, isTrue);
+    expect(AppNavigator.canPop(), isFalse);
+    expect(find.byType(LoginPage), findsNothing);
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 0);
+    expect(find.byType(HomePage), findsOneWidget);
+  });
+
   testWidgets('H5 会话失效会清掉旧页面，登录后直接回到首页', (tester) async {
     final productRepository = _StubProductRepository(
       applyResult: const ProductApplyResult(

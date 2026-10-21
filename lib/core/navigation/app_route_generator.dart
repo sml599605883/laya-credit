@@ -15,6 +15,7 @@ import '../../pages/order_list_page.dart';
 import '../../pages/personal_info_page.dart';
 import '../../pages/progress_page.dart';
 import '../../pages/recredit_page.dart';
+import '../../pages/settings_page.dart';
 import '../../pages/webview_page.dart';
 import '../../pages/work_information_page.dart';
 import '../../root_tab_page.dart';
@@ -209,6 +210,9 @@ class AppRouteGenerator {
 
       case AppRoutes.mine:
         return _route<void>(settings, (_) => const MinePage());
+
+      case AppRoutes.settings:
+        return _route<void>(settings, (_) => const SettingsPage());
 
       case AppRoutes.idVerification:
         final args = settings.arguments as IdVerificationPageArguments?;

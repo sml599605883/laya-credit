@@ -34,14 +34,12 @@ class ReportService {
     required this.accessToken,
     Stream<PushEvent>? pushEvents,
     int Function()? nowMillis,
-    Future<void> Function(Duration duration)? delay,
     this.locationTimeout = defaultLocationTimeout,
     Future<void> Function(String token)? initializeAdjust,
   }) : store = store ?? ReportStore(),
        _pushBridge = pushBridge ?? PushBridge.shared,
        _events = pushEvents,
        _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
-       _delay = delay ?? Future<void>.delayed,
        _initializeAdjust = initializeAdjust ?? _startAdjust;
 
   static ReportService? current;
@@ -56,7 +54,6 @@ class ReportService {
     required String encryptIv,
     required String? Function() accessToken,
     int Function()? nowMillis,
-    Future<void> Function(Duration duration)? delay,
     Duration locationTimeout = defaultLocationTimeout,
     Future<void> Function(String token)? initializeAdjust,
   }) {
@@ -69,7 +66,6 @@ class ReportService {
       encryptIv: encryptIv,
       accessToken: accessToken,
       nowMillis: nowMillis,
-      delay: delay,
       locationTimeout: locationTimeout,
       initializeAdjust: initializeAdjust,
     );
@@ -88,19 +84,11 @@ class ReportService {
   final String encryptIv;
   final String? Function() accessToken;
   final int Function() _nowMillis;
-  final Future<void> Function(Duration duration) _delay;
   final Duration locationTimeout;
   final Future<void> Function(String token) _initializeAdjust;
 
   final PushBridge _pushBridge;
   final Stream<PushEvent>? _events;
-
-  /// 读到空 token 时的等待时长（见 [reportAppleToken]）。
-  ///
-  /// 权限刚允许时 APNs 注册还没回来，启动权限流程先读到空值；原生随后
-  /// （实测只差两三百毫秒）才推 `push_token` 事件。先等一小段再读一次，
-  /// 能拿到真 token 就用真值上报，别让同一次突发既报空值又报真值。
-  static const appleTokenEmptyTokenDelay = Duration(milliseconds: 500);
 
   /// 读取定位的兜底时长，对齐 peso_shield。
   static const defaultLocationTimeout = Duration(seconds: 3);
@@ -115,6 +103,8 @@ class ReportService {
   StreamSubscription<PushEvent>? _pushSubscription;
   final Set<String> _reportingAppleTokens = <String>{};
   final Set<String> _reportedAppleTokens = <String>{};
+  Future<void>? _startupAppleTokenReport;
+  bool _startupPermissionsResolved = false;
 
   /// App 启动时调用一次：清理会话态、开始监听推送 token、执行首轮上报。
   ///
@@ -148,7 +138,8 @@ class ReportService {
   /// 首次启动的 ATT 弹窗在 `start()` 之后才出现，这里才是真正的「可以上报归因」时机。
   Future<void> startupPermissionsResolved() async {
     await _reportStartupGoogleMarket();
-    await reportAppleToken();
+    _startupPermissionsResolved = true;
+    await _reportStartupAppleToken();
   }
 
   /// 登录成功后调用：记录登录时间，并补一轮定位 / 设备 / 归因 / 推送上报。
@@ -323,35 +314,44 @@ class ReportService {
 
   /// 上报 Apple 推送 token。
   ///
-  /// 对齐 peso_shield：同一 token 在一个 App 进程内只成功上报一次；
-  /// 登录成功通过 [force] 再补报一次。原生事件、启动补报和并发调用共享去重状态。
-  /// token 为空（通知权限被拒绝，或 APNs 注册尚未返回）时先等
-  /// [appleTokenEmptyTokenDelay] 再读一次：读到真 token 就用真值上报；仍为空也
-  /// 照常上报一次空 token，保证「拒绝」场景同样只调用一次接口。
+  /// 启动阶段只允许一个上报批次。权限流程完成后由
+  /// [startupPermissionsResolved] 发一次请求；期间到达的 `push_token` 事件只
+  /// 更新原生缓存，不再独立发请求。登录成功仍通过 [force] 发起独立补报。
   Future<void> reportAppleToken({bool force = false}) async {
-    String? reserved;
+    await _reportAppleToken(force: force);
+  }
+
+  Future<void> _reportStartupAppleToken() {
+    final pending = _startupAppleTokenReport;
+    if (pending != null) return pending;
+
+    final report = _reportAppleToken(force: false).then((success) {
+      if (!success) {
+        // 业务或网络失败不算本批次已完成，后续 token 事件仍可重试。
+        _startupAppleTokenReport = null;
+      }
+    });
+    _startupAppleTokenReport = report;
+    return report;
+  }
+
+  Future<bool> _reportAppleToken({required bool force}) async {
+    final token = (await _pushBridge.getPushToken()).trim();
     var claimed = false;
     try {
-      reserved = (await _pushBridge.getPushToken()).trim();
-
-      if (reserved.isEmpty) {
-        await _delay(appleTokenEmptyTokenDelay);
-        final latest = (await _pushBridge.getPushToken()).trim();
-        if (latest.isNotEmpty && latest != reserved) {
-          reserved = latest;
-        }
-      }
-
-      if (!force && _reportedAppleTokens.contains(reserved)) return;
-      if (!_reportingAppleTokens.add(reserved)) return;
+      if (!force && _reportedAppleTokens.contains(token)) return true;
+      if (!_reportingAppleTokens.add(token)) return false;
       claimed = true;
 
-      final response = await repository.reportApplePushToken(token: reserved);
-      if (response.isSuccess) _reportedAppleTokens.add(reserved);
+      final response = await repository.reportApplePushToken(token: token);
+      if (!response.isSuccess) return false;
+      _reportedAppleTokens.add(token);
+      return true;
     } catch (error) {
       _log(error);
+      return false;
     } finally {
-      if (claimed) _reportingAppleTokens.remove(reserved);
+      if (claimed) _reportingAppleTokens.remove(token);
     }
   }
 
@@ -417,7 +417,9 @@ class ReportService {
     final events = _events ?? _pushBridge.events();
     _pushSubscription ??= events.listen((event) {
       final type = event['type']?.toString() ?? '';
-      if (type == 'push_token') unawaited(reportAppleToken());
+      if (type == 'push_token' && _startupPermissionsResolved) {
+        unawaited(_reportStartupAppleToken());
+      }
     }, onError: _log);
   }
 

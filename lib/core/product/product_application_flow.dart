@@ -507,33 +507,7 @@ class ProductApplicationFlow {
     _dispatchPage(
       AppNavigator.openDeepLink(
         const AppDeepLinkParser().parse(target),
-        onUnhandled: (link) async {
-          switch (link.kind) {
-            case AppDeepLinkKind.productDetail:
-              await continueProductDetailFlow(
-                link.productId.isNotEmpty ? link.productId : productId,
-              );
-            case AppDeepLinkKind.admission:
-              await applyProductFromDeepLink(
-                productId: link.productId.isNotEmpty
-                    ? link.productId
-                    : productId,
-                apiRemind: link.apiRemind,
-              );
-            case AppDeepLinkKind.settings:
-              // TODO(页面): 设置页尚未搭建。
-              ToastHelper.showMessage('Settings page is not available yet');
-            case AppDeepLinkKind.unsupported:
-              ToastHelper.showError('Invalid link');
-            case AppDeepLinkKind.webView:
-            case AppDeepLinkKind.home:
-            case AppDeepLinkKind.login:
-            case AppDeepLinkKind.order:
-            case AppDeepLinkKind.recredit:
-              // 已由 AppNavigator.openDeepLink 处理，不会回调到这里。
-              break;
-          }
-        },
+        productId: productId,
       ),
     );
   }
@@ -585,9 +559,6 @@ class ProductApplicationFlow {
       );
       return;
     }
-    await AppNavigator.openDeepLink(
-      const AppDeepLinkParser().parse(target),
-      onUnhandled: (link) => ToastHelper.showError('Invalid link'),
-    );
+    await AppNavigator.openDeepLink(const AppDeepLinkParser().parse(target));
   }
 }

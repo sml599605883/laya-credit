@@ -1065,13 +1065,7 @@ class _BannerState extends ConsumerState<_Banner> with WidgetsBindingObserver {
 
     // banner 跳转目标可能是 H5 或原生路由，统一走深链解析后再分发。
     final link = const AppDeepLinkParser().parse(target);
-    await AppNavigator.openDeepLink(
-      link,
-      onUnhandled: (unhandled) {
-        // 未识别的原生 Scheme 不能静默，否则 QA 看到的就是“点了没反应”。
-        ToastHelper.showError('Unable to open link');
-      },
-    );
+    await AppNavigator.openDeepLink(link);
   }
 }
 

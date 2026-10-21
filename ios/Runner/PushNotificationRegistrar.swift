@@ -14,10 +14,24 @@ final class PushNotificationRegistrar: NSObject, FlutterStreamHandler {
 
   private static let channelName = "laya_credit/push"
   private static let eventChannelName = "laya_credit/push_events"
+  private static let pushTokenKey = "laya_credit.report.apple_push_token"
+  private static let registrationTimeout: TimeInterval = 5
 
   private var eventSink: FlutterEventSink?
   private var pendingNotificationRoutes: [String] = []
-  private var pushToken = ""
+  private var pendingRegistrationResult: FlutterResult?
+  private var registrationTimeoutWorkItem: DispatchWorkItem?
+
+  /// APNs token 在原生侧持久化，Flutter 冷启动或登录补报时可以直接读取
+  /// 最近一次成功注册的值，不必等待本次 `didRegister` 回调。
+  private var pushToken: String {
+    get {
+      UserDefaults.standard.string(forKey: Self.pushTokenKey) ?? ""
+    }
+    set {
+      UserDefaults.standard.set(newValue, forKey: Self.pushTokenKey)
+    }
+  }
 
   private override init() {
     super.init()
@@ -38,9 +52,18 @@ final class PushNotificationRegistrar: NSObject, FlutterStreamHandler {
       case "getPushToken":
         result(self?.pushToken ?? "")
       case "registerForRemoteNotifications":
-        DispatchQueue.main.async {
-          UIApplication.shared.registerForRemoteNotifications()
-          result(nil)
+        DispatchQueue.main.async { [weak self] in
+          guard let self else {
+            result(
+              FlutterError(
+                code: "push_registrar_unavailable",
+                message: "Push registrar is unavailable",
+                details: nil
+              )
+            )
+            return
+          }
+          self.requestRemoteNotificationRegistration(result: result)
         }
       default:
         result(FlutterMethodNotImplemented)
@@ -70,8 +93,42 @@ final class PushNotificationRegistrar: NSObject, FlutterStreamHandler {
 
   func updatePushToken(_ token: String) {
     pushToken = token
+    finishPendingRegistration()
     guard !token.isEmpty else { return }
     eventSink?(["type": "push_token", "token": token])
+  }
+
+  /// APNs 注册完成前保留 Flutter 的 method result，使 Dart 侧能等到本次
+  /// `didRegister` / `didFail` 回调后再读取 token 并上报。
+  func registrationDidFail(_ error: Error) {
+    finishPendingRegistration()
+  }
+
+  private func requestRemoteNotificationRegistration(
+    result: @escaping FlutterResult
+  ) {
+    // 重复调用时先释放旧 result，避免 Flutter method call 永久挂起。
+    finishPendingRegistration()
+    pendingRegistrationResult = result
+
+    let timeout = DispatchWorkItem { [weak self] in
+      self?.finishPendingRegistration()
+    }
+    registrationTimeoutWorkItem = timeout
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + Self.registrationTimeout,
+      execute: timeout
+    )
+
+    UIApplication.shared.registerForRemoteNotifications()
+  }
+
+  private func finishPendingRegistration() {
+    registrationTimeoutWorkItem?.cancel()
+    registrationTimeoutWorkItem = nil
+    let result = pendingRegistrationResult
+    pendingRegistrationResult = nil
+    result?(nil)
   }
 
   /// 尝试从通知 payload 中取出跳转地址并下发；取不到地址时返回 false，
